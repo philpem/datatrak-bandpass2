@@ -12,6 +12,10 @@ accuracy using the propagation physics model from:
 It is also a teaching tool: map layers can be toggled to show how each physics
 stage contributes to the final result.
 
+F1 and F2 carrier frequencies are fully configurable per-scenario, enabling
+modelling of alternative LF navigation networks (e.g. amateur radio allocations).
+Datatrak standard frequencies (146.4375 kHz / 131.25 kHz) are the defaults.
+
 There is a related signal generator (datatrak_gen.c / datatrak_gen.h, existing
 C code) that generates the raw 1ms-sample-per-slot phase/amplitude buffers a
 Datatrak receiver sees. BANDPASS II computes the per-slot phase values that feed
@@ -78,7 +82,8 @@ bandpass2/
 │   ├── ui/
 │   │   ├── MainFrame.*
 │   │   ├── MapPanel.*          # wxWebView host + JS bridge
-│   │   ├── ParamEditor.*       # Transmitter / receiver forms
+│   │   ├── NetworkConfigPanel.* # F1/F2 freq, mode, grid res, datum — whole-network settings
+│   │   ├── ParamEditor.*       # Per-transmitter / per-receiver forms
 │   │   ├── LayerPanel.*        # Map layer toggles
 │   │   ├── ReceiverPanel.*     # Per-slot phase table + simulator export
 │   │   └── ResultsPanel.*      # Field-strength vs range plots
@@ -152,6 +157,82 @@ brew install wxwidgets gdal sqlite curl
 
 ### Vendored in-repo
 - `src/web/leaflet/` — Leaflet.js ≥ 1.9 + Leaflet.MBTiles plugin
+
+---
+
+## Frequency configuration
+
+F1 and F2 are stored in `Scenario::frequencies` as `double f1_hz` and
+`double f2_hz` (Hz, not kHz). Two derived fields are computed (never stored in
+TOML) on load and on any frequency change:
+
+```cpp
+struct Frequencies {
+    double f1_hz = 146437.5;   // Datatrak default
+    double f2_hz = 131250.0;   // Datatrak default
+
+    // Derived — recomputed whenever f1_hz or f2_hz changes
+    double lane_width_f1_m = 0.0;   // c / f1_hz
+    double lane_width_f2_m = 0.0;   // c / f2_hz
+
+    void recompute() {
+        constexpr double C = 299'792'458.0;
+        lane_width_f1_m = C / f1_hz;
+        lane_width_f2_m = C / f2_hz;
+    }
+};
+```
+
+**Rule: every pipeline function that converts phase to distance or computes a
+lane count must take `const Frequencies&` as a parameter, not hardcode any
+frequency or lane width constant.**
+
+TOML representation (kHz for human readability; converted to Hz on load):
+```toml
+[frequencies]
+f1_khz = 146.4375
+f2_khz = 131.2500
+```
+
+Validation: 30 kHz ≤ f ≤ 300 kHz (hard limits, rejected with error). f1 == f2
+is allowed with a warning. Changing either frequency in the UI triggers a full
+pipeline recompute (no partial recompute path — frequency affects all 11 stages).
+
+### UI location
+
+Frequency is set in a dedicated **Network Configuration panel** (not the
+transmitter/receiver parameter editor). This panel covers the settings that
+apply to the network as a whole rather than to individual stations:
+
+- F1 frequency (kHz) — floating-point field, 4 decimal places, step 0.0001
+- F2 frequency (kHz) — as above
+- Mode (8-slot / interlaced)
+- Grid resolution (km)
+- Receiver model (simple / advanced)
+- Datum transform (Helmert / OSTN15)
+
+The Network Configuration panel is a separate dockable panel accessible via
+View → Network Configuration. It is distinct from `ParamEditor` (which handles
+per-transmitter and per-receiver parameters). Frequency is **not** accessible
+from `ParamEditor` or any command-line interface — UI and TOML only.
+
+On change, frequency fields validate immediately (red highlight if out of range).
+A full pipeline recompute is triggered after a 500 ms debounce. The status bar
+millilane readout updates immediately without waiting for recompute.
+
+### Almanac export at non-standard frequencies
+
+The export header shows computed lane widths and a non-standard warning:
+
+```
+# F1: 137.0000 kHz  lane width: 2187.54 m  (1 ml = 2.188 m)
+# F2: 137.0000 kHz  lane width: 2187.54 m  (1 ml = 2.188 m)
+# WARNING: Non-standard frequencies. po values are in millilanes of the
+#          configured frequencies, not Datatrak-standard millilanes.
+```
+
+The po values are in millilanes of the *configured* frequencies. This is correct
+for a receiver running firmware at those frequencies; it is noted in the header.
 
 ---
 
@@ -613,20 +694,21 @@ build → test → archive artifact.
 | P1-05 | TOML scenario I/O: load/save `Scenario`/`Transmitter`/`ReceiverModel` with round-trip unit tests |
 | P1-06 | `coords/` module: WGS84↔OSGB36 (Helmert), National Grid E/N↔lat/lon, grid ref formatting, OSTN15 loader stub. Regression tests vs known OS benchmark points. |
 | P1-07 | Transmitter placement UI: click map → add/drag transmitters, coordinate display in both systems, sync to Scenario |
-| P1-08 | Parameter editor panel: transmitter + receiver forms, validation, simple/advanced receiver mode toggle |
+| P1-08 | Parameter editor panel (`ParamEditor`): per-transmitter and per-receiver forms, validation, simple/advanced receiver mode toggle |
+| P1-08b | Network Configuration panel (`NetworkConfigPanel`): **F1/F2 frequency fields** (4 dp, 30–300 kHz validation, red highlight on error), mode (8-slot/interlaced), grid resolution, receiver model, datum transform. Dockable via View → Network Configuration. Live ml→m readout in status bar on frequency change. 500 ms debounce → full recompute. |
 | P1-09 | `ComputeGrid` + worker thread: grid definition, worker thread, message queue, cancellation flag, `wxQueueEvent` dispatch, ownership-transfer model. Unit tests. |
 
 ### Phase 2 — Core propagation
 
 | Task | Description |
 |---|---|
-| P2-01 | ITU P.368 groundwave attenuation curves (polynomial, parameterised by conductivity + frequency). Validate against ITU published values. |
+| P2-01 | ITU P.368 groundwave attenuation curves (polynomial, parameterised by **conductivity + configured frequency**). All curve evaluations use `scenario.frequencies.f1_hz` / `f2_hz`. Validate against ITU published values at both standard and non-standard frequencies. |
 | P2-02 | Millington mixed-path extension over land/sea boundaries |
 | P2-03 | Conductivity raster: GDAL GeoTIFF load, bilinear interpolation at lat/lon. Built-in synthetic test values. ITU P.832 importer. |
 | P2-04 | Terrain raster: SRTM tile load, mosaic, height profile along path |
 | P2-05 | **Monteath terrain method** — most complex sub-module. Surface impedance integration along terrain profile. Phase delay + field strength correction. Validate against Williams Ch.10. |
-| P2-06 | ITU P.684 skywave: median night-time, sea gain, geomagnetic latitude correction (Eq. 5.3–5.5). Validate against Williams figures. |
-| P2-07 | ITU P.372 atmospheric noise: Fam table interpolation, annual median |
+| P2-06 | ITU P.684 skywave: median night-time, sea gain, geomagnetic latitude correction (Eq. 5.3–5.5). Uses **configured frequencies**. Validate against Williams figures. |
+| P2-07 | ITU P.372 atmospheric noise: Fam table interpolation at **configured frequencies**, annual median |
 | P2-08 | Groundwave layer render: first visible map layer, GeoJSON colour ramp to Leaflet |
 
 ### Phase 3 — SNR, geometry, repeatable, virtual receiver
@@ -669,7 +751,7 @@ build → test → archive artifact.
 | P5-10 | **Pattern offset reference UI**: Mode 1/2/3 selector, reference marker placement (map click or OSGB entry), multiple markers → least-squares composite, RMS residual display. |
 | P5-11 | **ASF gradient map layer**: spatial gradient magnitude of ASF grid per pattern pair [ml/km]. Monitor siting planning layer. |
 | P5-12 | **Pattern offset computation (Po)**: ASF at reference point(s) in millilanes, clip negative→0 + flag, store in scenario. |
-| P5-13 | **Almanac text export (V7 + V16)**: Sg, Stxs, Zp, Po commands in both formats. Header block with generation params, RMS residuals, warnings (negative clips, coverage gaps). Plain ASCII. |
+| P5-13 | **Almanac text export (V7 + V16)**: Sg, Stxs, Zp, Po commands in both formats. Header block: generation params, configured frequencies + derived lane widths + ml→m conversion, RMS residuals, warnings (non-standard frequencies, negative po clips, coverage gaps). Plain ASCII. |
 | P5-14 | **Monitor station calibration import**: manual delta entry UI + CSV/JSON import. Apply corrections to `po` store. Multi-monitor consistency check (default threshold 20 ml). Delta-error map overlay. |
 | P5-15 | **Model vs measurement diagnostic**: corrected vs predicted absolute accuracy comparison, pattern-pair divergence table, divergence classification (uniform / specific pair / temporal / single-monitor). |
 
@@ -707,11 +789,16 @@ the interface is a text/serial protocol.
 - G1 guard: 40 ms
 - F2 navslots: after G1, same structure
 - G2 guard: 20 ms
-- f1 frequency: **146.4375 kHz** (lane width ≈ 2047 m)
-- f2 frequency: **131.25 kHz** (lane width ≈ 2286 m)
+- f1 frequency: **configurable, default 146.4375 kHz**; lane width = c / f1_hz
+- f2 frequency: **configurable, default 131.2500 kHz**; lane width = c / f2_hz
+- Frequency range: **30–300 kHz** (full LF band). Hard limits — rejected outside
+  this range. Warning (not error) if f1 == f2.
+- Lane widths at defaults: f1 ≈ 2047.14 m, f2 ≈ 2284.59 m
 - Pattern offset unit: **millilane (ml)** = 1/1000 lane
-  - f1: 1 ml ≈ 2.0 m
-  - f2: 1 ml ≈ 2.3 m
+  - At defaults: f1: 1 ml ≈ 2.047 m; f2: 1 ml ≈ 2.285 m
+  - At custom frequencies: recomputed from lane_width = c / f
+- **All pipeline code uses `scenario.frequencies.f1_hz` / `f2_hz`. No hardcoded
+  frequency values anywhere.**
 - Almanac radiated every **third** cycle (shared with FUT and specific vehicle data)
 - Full almanac broadcast time: **> 1 hour**
 - Zone count: **32** zones over UK coverage area
@@ -723,6 +810,11 @@ the interface is a text/serial protocol.
 
 ## Things to avoid
 
+- **Do not hardcode any frequency value or lane width constant in pipeline code.**
+  Every calculation involving carrier frequency, wavelength, or lane width must
+  use `scenario.frequencies.f1_hz` / `f2_hz` / `lane_width_f1_m` /
+  `lane_width_f2_m`. This includes ITU P.368, P.684, P.372, phase-to-distance
+  conversions, millilane computations, and the almanac export header.
 - Do not use `std::async` for the compute pipeline (see Threading section).
 - Do not fetch map tiles from a CDN — Leaflet.js must be vendored.
 - Do not store WGS84 coordinates as OSGB or vice versa without explicit
