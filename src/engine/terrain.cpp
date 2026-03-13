@@ -1,5 +1,6 @@
 #include "terrain.h"
 #include <GeographicLib/Geodesic.hpp>
+#include <GeographicLib/GeodesicLine.hpp>
 #include <stdexcept>
 #include <cmath>
 #include <cstdio>
