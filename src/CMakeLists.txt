@@ -9,6 +9,7 @@ set(BP_SOURCES
     engine/noise.cpp
     engine/snr.cpp
     engine/whdop.cpp
+    engine/monteath.cpp
     engine/asf.cpp
     engine/conductivity.cpp
     engine/terrain.cpp

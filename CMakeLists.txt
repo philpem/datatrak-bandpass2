@@ -45,7 +45,9 @@ if(MSVC)
     add_compile_definitions(_USE_MATH_DEFINES)
 endif()
 
-add_subdirectory(src)
+if(NOT BP_TESTS_ONLY)
+    add_subdirectory(src)
+endif()
 add_subdirectory(tests)
 
 # Install web assets alongside the binary
