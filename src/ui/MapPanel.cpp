@@ -149,6 +149,22 @@ void MapPanel::ClearLayer(const std::string& layer_name) {
     RunScript(wxString::Format("clearLayer('%s');", layer_name).ToStdString());
 }
 
+void MapPanel::UpdateLegend(const std::string& name, double vmin, double vmax,
+                             const std::string& units) {
+    // Escape single-quotes just in case
+    auto escape = [](std::string s) {
+        for (auto& c : s) if (c == '\'' || c == '\\') c = '_';
+        return s;
+    };
+    RunScript(wxString::Format("updateLegend('%s', %g, %g, '%s');",
+                               escape(name), vmin, vmax,
+                               escape(units)).ToStdString());
+}
+
+void MapPanel::ClearLegend() {
+    RunScript("clearLegend();");
+}
+
 void MapPanel::SetPlacementMode(bool enabled) {
     RunScript(wxString::Format("setPlacementMode(%s);", enabled ? "true" : "false").ToStdString());
 }

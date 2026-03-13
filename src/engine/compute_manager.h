@@ -25,8 +25,10 @@ struct ComputeResult {
     std::string                     error;   // empty on success
 };
 
-// Custom wxEvent that carries a ComputeResult
-wxDECLARE_EVENT(EVT_COMPUTE_RESULT, wxCommandEvent);
+// Custom wxEvents for worker → UI communication
+wxDECLARE_EVENT(EVT_COMPUTE_RESULT,   wxCommandEvent);
+// EVT_COMPUTE_PROGRESS: GetString() = stage name, GetInt() = percent 0–100
+wxDECLARE_EVENT(EVT_COMPUTE_PROGRESS, wxCommandEvent);
 
 class ComputeManager {
 public:
@@ -41,6 +43,7 @@ private:
     void WorkerLoop();
     ComputeResult RunPipeline(const Scenario& scenario,
                               const std::atomic<bool>& cancel);
+    void PostProgress(const char* stage, int pct);
 
     std::queue<ComputeRequest> queue_;
     std::mutex                 queue_mutex_;

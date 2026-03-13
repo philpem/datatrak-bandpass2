@@ -1,9 +1,9 @@
 #pragma once
 #include <functional>
-#include <map>
 #include <string>
+#include <vector>
 #include <wx/scrolwin.h>
-#include <wx/checkbox.h>
+#include <wx/radiobut.h>
 #include <wx/sizer.h>
 
 namespace bp {
@@ -12,19 +12,23 @@ class LayerPanel : public wxScrolledWindow {
 public:
     explicit LayerPanel(wxWindow* parent);
 
-    std::function<void(const std::string& layer, bool visible)> on_toggle;
+    // Fired when the user selects a different layer.
+    // layer is the layer key (e.g. "groundwave"); empty string means "None".
+    std::function<void(const std::string& layer)> on_select;
 
-    // Returns a map of layer name → current visibility
-    std::map<std::string, bool> GetVisibleLayers() const;
+    // Returns the currently selected layer key, or "" if None is selected.
+    std::string GetSelectedLayer() const;
 
 private:
-    void OnToggle(wxCommandEvent& evt);
+    void OnSelect(wxCommandEvent& evt);
 
     struct LayerEntry {
-        std::string  name;
-        wxCheckBox*  checkbox = nullptr;
+        std::string    name;
+        wxRadioButton* radio = nullptr;
     };
+    wxRadioButton*          none_radio_ = nullptr;
     std::vector<LayerEntry> layers_;
+    std::string             selected_;   // "" = None
 };
 
 } // namespace bp

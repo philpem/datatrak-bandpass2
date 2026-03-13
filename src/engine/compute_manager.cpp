@@ -9,7 +9,8 @@
 
 namespace bp {
 
-wxDEFINE_EVENT(EVT_COMPUTE_RESULT, wxCommandEvent);
+wxDEFINE_EVENT(EVT_COMPUTE_RESULT,   wxCommandEvent);
+wxDEFINE_EVENT(EVT_COMPUTE_PROGRESS, wxCommandEvent);
 
 ComputeManager::ComputeManager(wxEvtHandler* result_sink)
     : result_sink_(result_sink)
@@ -48,6 +49,14 @@ void ComputeManager::Shutdown() {
     if (worker_.joinable()) worker_.join();
 }
 
+void ComputeManager::PostProgress(const char* stage, int pct) {
+    if (!result_sink_) return;
+    auto* evt = new wxCommandEvent(EVT_COMPUTE_PROGRESS);
+    evt->SetString(wxString::FromUTF8(stage));
+    evt->SetInt(pct);
+    wxQueueEvent(result_sink_, evt);
+}
+
 void ComputeManager::WorkerLoop() {
     uint64_t current_id = 0;
     while (true) {
@@ -68,7 +77,6 @@ void ComputeManager::WorkerLoop() {
 
         if (!cancel_flag_.load() && result_sink_) {
             auto* evt = new wxCommandEvent(EVT_COMPUTE_RESULT);
-            // Pack result into a shared_ptr stored as client data
             auto* heap_result = new ComputeResult(std::move(result));
             evt->SetClientData(heap_result);
             wxQueueEvent(result_sink_, evt);
@@ -90,19 +98,18 @@ ComputeResult ComputeManager::RunPipeline(const Scenario& scenario,
         return result;
     }
 
-    // Nothing to compute without transmitters
     if (scenario.transmitters.empty()) return result;
-
     if (cancel.load()) return result;
 
-    // Build grid (cancel-aware; returns empty vector if cancelled mid-build)
+    // Stage 0 – grid build
+    PostProgress("Building grid", 0);
     auto grid_pts = buildGrid(scenario.grid, cancel);
     if (cancel.load() || grid_pts.empty()) return result;
+    PostProgress("Building grid", 5);
 
     auto data = std::make_shared<GridData>();
     data->request_id = 0;
 
-    // Register all standard layer keys with pre-filled grid points
     static const char* LAYERS[] = {
         "groundwave", "skywave", "atm_noise", "snr", "sgr", "gdr",
         "whdop", "repeatable", "asf", "asf_gradient", "absolute_accuracy",
@@ -121,33 +128,44 @@ ComputeResult ComputeManager::RunPipeline(const Scenario& scenario,
         data->layers[name] = std::move(arr);
     }
 
-    // --- Phase 2: propagation stages ---
-    // Stage 1: Groundwave field strength (ITU P.368)
+    // Stage 1 – Groundwave (ITU P.368)
+    PostProgress("Groundwave (P.368)", 5);
     computeGroundwave(*data, scenario, cancel);
     if (cancel.load()) return result;
+    PostProgress("Groundwave (P.368)", 20);
 
-    // Stage 2: Skywave field strength (ITU P.684, night-time median)
+    // Stage 2 – Skywave (ITU P.684)
+    PostProgress("Skywave (P.684)", 20);
     computeSkywave(*data, scenario, cancel);
     if (cancel.load()) return result;
+    PostProgress("Skywave (P.684)", 35);
 
-    // Stage 3: Atmospheric noise (ITU P.372)
+    // Stage 3 – Atmospheric noise (ITU P.372)
+    PostProgress("Noise (P.372)", 35);
     computeAtmNoise(*data, scenario, cancel);
     if (cancel.load()) return result;
+    PostProgress("Noise (P.372)", 45);
 
-    // Stage 4-6: SNR, GDR, SGR
+    // Stages 4–6 – SNR / GDR / SGR
+    PostProgress("SNR / GDR", 45);
     computeSNR(*data, scenario, cancel);
     if (cancel.load()) return result;
+    PostProgress("SNR / GDR", 60);
 
-    // Stage 7-9: WHDOP and repeatable accuracy
+    // Stages 7–9 – WHDOP and repeatable accuracy
+    PostProgress("WHDOP / repeatable", 60);
     computeWHDOP(*data, scenario, cancel);
     if (cancel.load()) return result;
+    PostProgress("WHDOP / repeatable", 75);
 
-    // Stages 10-11: ASF and absolute accuracy
+    // Stages 10–11 – ASF, absolute accuracy, confidence
+    PostProgress("ASF / accuracy", 75);
     computeASF(*data, scenario, cancel);
     if (cancel.load()) return result;
-    if (cancel.load()) return result;
+    PostProgress("ASF / accuracy", 95);
 
     result.data = std::move(data);
+    PostProgress("Done", 100);
     return result;
 }
 

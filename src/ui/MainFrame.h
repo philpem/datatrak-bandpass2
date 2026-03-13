@@ -37,8 +37,9 @@ private:
     void OnHelpAbout(wxCommandEvent& evt);
     void OnClose(wxCloseEvent& evt);
 
-    // Compute result event
+    // Compute events
     void OnComputeResult(wxCommandEvent& evt);
+    void OnComputeProgress(wxCommandEvent& evt);
 
     // Map / scenario callbacks
     void OnMapClick(double lat, double lon);

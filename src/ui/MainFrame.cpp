@@ -104,9 +104,15 @@ MainFrame::MainFrame()
         map_panel_->LockReceiver(locked);
     };
 
-    layer_panel_->on_toggle = [this](const std::string& layer, bool visible) {
-        if (visible) PushLayerToMap(layer);
-        else         map_panel_->ClearLayer(layer);
+    layer_panel_->on_select = [this](const std::string& layer) {
+        // Clear all overlay layers and the legend first
+        for (const char* n : {"groundwave","skywave","atm_noise","snr","sgr","gdr",
+                               "whdop","repeatable","asf","asf_gradient",
+                               "absolute_accuracy","absolute_accuracy_corrected","confidence"}) {
+            map_panel_->ClearLayer(n);
+        }
+        map_panel_->ClearLegend();
+        if (!layer.empty()) PushLayerToMap(layer);
     };
 
     // AUI layout
@@ -139,7 +145,8 @@ MainFrame::MainFrame()
 
     // Compute manager
     compute_mgr_ = std::make_unique<ComputeManager>(this);
-    Bind(EVT_COMPUTE_RESULT, &MainFrame::OnComputeResult, this);
+    Bind(EVT_COMPUTE_RESULT,   &MainFrame::OnComputeResult,   this);
+    Bind(EVT_COMPUTE_PROGRESS, &MainFrame::OnComputeProgress, this);
 
     // Initial recompute
     scenario_.frequencies.recompute();
@@ -266,25 +273,31 @@ void MainFrame::OnComputeResult(wxCommandEvent& evt) {
     SetStatusText("Ready", SB_STATUS);
 }
 
+void MainFrame::OnComputeProgress(wxCommandEvent& evt) {
+    SetStatusText(wxString::Format("Computing %s... %d%%",
+                                   evt.GetString(), evt.GetInt()), SB_STATUS);
+}
+
 void MainFrame::ApplyComputeResult(const ComputeResult& result) {
     if (!result.data) return;
     last_grid_data_ = result.data;
 
-    const auto& visible = layer_panel_->GetVisibleLayers();
-    for (const auto& [name, arr] : result.data->layers) {
-        // Skip layers that are hidden
-        if (visible.count(name) && !visible.at(name)) {
-            map_panel_->ClearLayer(name);
-            continue;
-        }
-        // Skip layers with uniform (meaningless) values — nothing to display
-        if (arr.values.empty()) continue;
-        double vmin = *std::min_element(arr.values.begin(), arr.values.end());
-        double vmax = *std::max_element(arr.values.begin(), arr.values.end());
-        if (vmax == vmin) continue;   // all-zero or all-same → nothing to show
+    std::string selected = layer_panel_->GetSelectedLayer();
+    if (selected.empty()) return;   // "None" selected — nothing to push
+    PushLayerToMap(selected);
+}
 
-        map_panel_->UpdateLayer(name, arr.to_geojson());
-    }
+static const char* LayerUnits(const std::string& layer) {
+    if (layer == "groundwave" || layer == "skywave" || layer == "atm_noise")
+        return "dB\xc2\xb5V/m";          // dBµV/m (UTF-8)
+    if (layer == "snr" || layer == "gdr" || layer == "sgr")
+        return "dB";
+    if (layer == "repeatable" || layer == "absolute_accuracy" ||
+        layer == "absolute_accuracy_corrected")
+        return "m";
+    if (layer == "asf")            return "ml";
+    if (layer == "asf_gradient")   return "ml/km";
+    return "";   // whdop, confidence — dimensionless
 }
 
 void MainFrame::PushLayerToMap(const std::string& name) {
@@ -297,6 +310,7 @@ void MainFrame::PushLayerToMap(const std::string& name) {
     double vmax = *std::max_element(arr.values.begin(), arr.values.end());
     if (vmax == vmin) return;
     map_panel_->UpdateLayer(name, arr.to_geojson());
+    map_panel_->UpdateLegend(name, vmin, vmax, LayerUnits(name));
 }
 
 void MainFrame::OnMapClick(double lat, double lon) {

@@ -14,10 +14,40 @@
   #map {
     width: 100%; height: 100%;
   }
+  #legend {
+    position: absolute;
+    bottom: 30px;
+    right: 10px;
+    z-index: 1000;
+    background: rgba(255,255,255,0.92);
+    padding: 8px 10px;
+    border-radius: 4px;
+    box-shadow: 0 1px 5px rgba(0,0,0,0.35);
+    font-family: sans-serif;
+    font-size: 11px;
+    display: none;
+    min-width: 130px;
+  }
+  #legend-title { font-weight: bold; margin-bottom: 5px; }
+  #legend-bar {
+    width: 110px; height: 14px;
+    background: linear-gradient(to right, #0000ff, #00ff80 33%, #ffff00 67%, #ff0000);
+    border-radius: 2px;
+    margin-bottom: 3px;
+  }
+  #legend-labels { display: flex; justify-content: space-between; }
 </style>
 </head>
 <body>
 <div id="map"></div>
+<div id="legend">
+  <div id="legend-title"></div>
+  <div id="legend-bar"></div>
+  <div id="legend-labels">
+    <span id="legend-min"></span>
+    <span id="legend-max"></span>
+  </div>
+</div>
 <script src="leaflet/leaflet.js"></script>
 <script src="bridge.js"></script>
 <script>
@@ -174,6 +204,24 @@
     receiverMode = enabled;
     if (enabled) placementMode = false;
     map._container.style.cursor = (placementMode || receiverMode) ? 'crosshair' : '';
+  };
+
+  // ── Legend ────────────────────────────────────────────────────────────────
+
+  window.updateLegend = function (name, vmin, vmax, units) {
+    var fmt = function (v) {
+      return (Math.abs(v) >= 1000 || (Math.abs(v) < 0.01 && v !== 0))
+        ? v.toExponential(1) : v.toFixed(1);
+    };
+    document.getElementById('legend-title').textContent =
+      name + (units ? '  (' + units + ')' : '');
+    document.getElementById('legend-min').textContent  = fmt(vmin);
+    document.getElementById('legend-max').textContent  = fmt(vmax);
+    document.getElementById('legend').style.display = 'block';
+  };
+
+  window.clearLegend = function () {
+    document.getElementById('legend').style.display = 'none';
   };
 
   // ── JS → C++ ──────────────────────────────────────────────────────────────

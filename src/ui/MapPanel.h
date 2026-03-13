@@ -24,6 +24,9 @@ public:
     void LockReceiver(bool locked);
     void UpdateLayer(const std::string& layer_name, const std::string& geojson);
     void ClearLayer(const std::string& layer_name);
+    void UpdateLegend(const std::string& name, double vmin, double vmax,
+                      const std::string& units);
+    void ClearLegend();
     void SetPlacementMode(bool enabled);
     void SetReceiverPlacementMode(bool enabled);
 
