@@ -1,0 +1,119 @@
+#include "compute_manager.h"
+#include <wx/app.h>
+
+namespace bp {
+
+wxDEFINE_EVENT(EVT_COMPUTE_RESULT, wxCommandEvent);
+
+ComputeManager::ComputeManager(wxEvtHandler* result_sink)
+    : result_sink_(result_sink)
+{
+    worker_ = std::thread([this]{ WorkerLoop(); });
+}
+
+ComputeManager::~ComputeManager() {
+    Shutdown();
+}
+
+void ComputeManager::PostRequest(std::shared_ptr<const Scenario> scenario) {
+    cancel_flag_.store(true);
+    uint64_t id = ++request_counter_;
+    {
+        std::lock_guard<std::mutex> lock(queue_mutex_);
+        while (!queue_.empty()) queue_.pop();  // discard stale requests
+        cancel_flag_.store(false);
+        ComputeRequest req;
+        req.scenario   = std::move(scenario);
+        req.request_id = id;
+        queue_.push(std::move(req));
+    }
+    queue_cv_.notify_one();
+}
+
+void ComputeManager::Shutdown() {
+    cancel_flag_.store(true);
+    {
+        std::lock_guard<std::mutex> lock(queue_mutex_);
+        ComputeRequest shutdown;
+        shutdown.is_shutdown = true;
+        queue_.push(shutdown);
+    }
+    queue_cv_.notify_one();
+    if (worker_.joinable()) worker_.join();
+}
+
+void ComputeManager::WorkerLoop() {
+    uint64_t current_id = 0;
+    while (true) {
+        ComputeRequest req;
+        {
+            std::unique_lock<std::mutex> lock(queue_mutex_);
+            queue_cv_.wait(lock, [this]{ return !queue_.empty(); });
+            req = queue_.front();
+            queue_.pop();
+        }
+
+        if (req.is_shutdown) break;
+        if (req.request_id < current_id) continue;  // superseded
+        current_id = req.request_id;
+
+        ComputeResult result = RunPipeline(*req.scenario, cancel_flag_);
+        result.request_id = req.request_id;
+
+        if (!cancel_flag_.load() && result_sink_) {
+            auto* evt = new wxCommandEvent(EVT_COMPUTE_RESULT);
+            // Pack result into a shared_ptr stored as client data
+            auto* heap_result = new ComputeResult(std::move(result));
+            evt->SetClientData(heap_result);
+            wxQueueEvent(result_sink_, evt);
+        }
+    }
+}
+
+ComputeResult ComputeManager::RunPipeline(const Scenario& scenario,
+                                           const std::atomic<bool>& cancel) {
+    ComputeResult result;
+
+    // Validate frequencies
+    if (scenario.frequencies.f1_hz < 30e3 || scenario.frequencies.f1_hz > 300e3) {
+        result.error = "F1 frequency out of range (30-300 kHz)";
+        return result;
+    }
+    if (scenario.frequencies.f2_hz < 30e3 || scenario.frequencies.f2_hz > 300e3) {
+        result.error = "F2 frequency out of range (30-300 kHz)";
+        return result;
+    }
+
+    if (cancel.load()) return result;
+
+    // Phase 1 stub: build grid, return empty layer data
+    auto grid_pts = buildGrid(scenario.grid);
+    if (cancel.load()) return result;
+
+    auto data = std::make_shared<GridData>();
+    data->request_id = 0;  // will be overwritten by caller
+
+    // Register all standard layer keys (empty arrays for Phase 1)
+    static const char* LAYERS[] = {
+        "groundwave", "skywave", "atm_noise", "snr", "sgr", "gdr",
+        "whdop", "repeatable", "asf", "asf_gradient", "absolute_accuracy",
+        "absolute_accuracy_corrected", "confidence"
+    };
+    for (const char* name : LAYERS) {
+        GridArray arr;
+        arr.layer_name    = name;
+        arr.points        = grid_pts;
+        arr.values.assign(grid_pts.size(), 0.0);
+        arr.lat_min       = scenario.grid.lat_min;
+        arr.lat_max       = scenario.grid.lat_max;
+        arr.lon_min       = scenario.grid.lon_min;
+        arr.lon_max       = scenario.grid.lon_max;
+        arr.resolution_km = scenario.grid.resolution_km;
+        data->layers[name] = std::move(arr);
+    }
+
+    result.data = std::move(data);
+    return result;
+}
+
+} // namespace bp
