@@ -12,14 +12,17 @@ networks, based on the propagation physics model from Williams (2004).
 All dependencies are available as system packages on Ubuntu 22.04 / 24.04, Debian
 12+, and Linux Mint 21+. **vcpkg is not needed on Linux.**
 
+toml++ is vendored in `third_party/` as a single header — no package needed on
+any platform.
+
 ```bash
-# Ubuntu 24.04 / Debian 12 / Mint 22
+# Ubuntu 22.04+ / Debian 12+ / Mint 21+
 sudo apt-get install -y \
     build-essential cmake ninja-build \
     libwxgtk3.2-dev libwxgtk-webview3.2-dev \
     libsqlite3-dev libcurl4-gnutls-dev \
     libgeographiclib-dev nlohmann-json3-dev \
-    libtomlplusplus-dev catch2
+    catch2
 
 git clone https://github.com/philpem/datatrak-bandpass2.git
 cd datatrak-bandpass2
@@ -29,14 +32,6 @@ ctest --test-dir build --output-on-failure
 ```
 
 The resulting binary is `build/src/bandpass2`.
-
-#### Ubuntu 22.04 note
-
-`libtomlplusplus-dev` is not in 22.04 repos. Either:
-- Use the vendored single-header: copy `toml.hpp` from the
-  [toml++ releases page](https://github.com/marzer/tomlplusplus/releases)
-  into `src/` and add `-DCMAKE_PREFIX_PATH=src` to the cmake line, or
-- Upgrade to 24.04 where the package is available.
 
 #### Docker (any Linux distro / CI)
 
@@ -59,7 +54,7 @@ The binary appears in `build/src/bandpass2` on your host.
 
 ```bash
 brew install wxwidgets sqlite curl geographiclib \
-             nlohmann-json tomlplusplus catch2 cmake ninja
+             nlohmann-json catch2 cmake ninja
 
 git clone https://github.com/philpem/datatrak-bandpass2.git
 cd datatrak-bandpass2

@@ -19,8 +19,13 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
     include(cmake/deps_windows.cmake)
 endif()
 
-# Common vcpkg/system packages
-find_package(tomlplusplus CONFIG REQUIRED)
+# toml++ — vendored single-header, no external package needed
+add_library(tomlplusplus INTERFACE)
+target_include_directories(tomlplusplus INTERFACE
+    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/tomlplusplus)
+add_library(tomlplusplus::tomlplusplus ALIAS tomlplusplus)
+
+# Common packages
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(Catch2 3 CONFIG REQUIRED)
 
