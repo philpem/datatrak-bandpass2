@@ -4,6 +4,7 @@
 #include "noise.h"
 #include "snr.h"
 #include "whdop.h"
+#include "asf.h"
 #include <wx/app.h>
 
 namespace bp {
@@ -136,6 +137,10 @@ ComputeResult ComputeManager::RunPipeline(const Scenario& scenario,
 
     // Stage 7-9: WHDOP and repeatable accuracy
     computeWHDOP(*data, scenario, cancel);
+    if (cancel.load()) return result;
+
+    // Stages 10-11: ASF and absolute accuracy
+    computeASF(*data, scenario, cancel);
     if (cancel.load()) return result;
     if (cancel.load()) return result;
 

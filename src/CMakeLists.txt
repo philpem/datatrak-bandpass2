@@ -9,6 +9,7 @@ set(BP_SOURCES
     engine/noise.cpp
     engine/snr.cpp
     engine/whdop.cpp
+    engine/asf.cpp
     engine/compute_manager.cpp
     ui/MainFrame.cpp
     ui/MapPanel.cpp
