@@ -106,34 +106,6 @@ The resulting binary is `build\src\Release\bandpass2.exe` together with a
 
 ---
 
-## CI / GitHub Actions
-
-Three workflows run on every push:
-
-| Workflow | Runner | Dependencies |
-|---|---|---|
-| `build_linux.yml` | `ubuntu-24.04` | apt system packages |
-| `build_macos.yml` | `macos-14` | Homebrew |
-| `build_windows.yml` | `windows-latest` | vcpkg (manifest mode) |
-
-Each workflow uploads a binary artifact (zip) containing the compiled binary
-and the `web/` assets needed to run it. To download:
-
-1. Go to the **Actions** tab of the repository
-2. Click the workflow run you want (e.g. "Build (Linux)")
-3. Scroll to the **Artifacts** section at the bottom of the summary page
-4. Click the artifact name to download the zip
-
-| Artifact name | Contents |
-|---|---|
-| `bandpass2-linux-x86_64` | ELF binary + `web/` |
-| `bandpass2-macos-arm64` | Mach-O binary + `web/` |
-| `bandpass2-windows-x64` | `bandpass2.exe` + `web/` |
-
-Artifacts are retained for 30 days. You must be signed in to GitHub to download them.
-
----
-
 ## Running
 
 ```
