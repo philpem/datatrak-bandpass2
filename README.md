@@ -140,3 +140,7 @@ first run.
 ## Licence
 
 GPLv3 — see [LICENSE](LICENSE).
+
+Third-party component licences (toml++, wxWidgets, nlohmann/json,
+GeographicLib, SQLite, libcurl, Catch2, Leaflet, OSM tile data) are
+documented in [THIRD_PARTY.md](THIRD_PARTY.md).
