@@ -5,6 +5,9 @@
   "dependencies": [
     "nlohmann-json",
     "geographiclib",
-    "catch2"
+    "catch2",
+    { "name": "wxwidgets", "features": ["webview"], "platform": "windows" },
+    { "name": "sqlite3",                             "platform": "windows" },
+    { "name": "curl",                                "platform": "windows" }
   ]
 }
