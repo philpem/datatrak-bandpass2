@@ -17,6 +17,7 @@ struct Transmitter {
     int    master_slot      = 0;     // 0 = none
     double spo_us           = 0.0;
     double station_delay_us = 0.0;
+    bool   locked           = false;  // position locked — not draggable on map
 };
 
 } // namespace bp

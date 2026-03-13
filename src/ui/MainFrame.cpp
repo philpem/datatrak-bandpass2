@@ -29,6 +29,7 @@ enum {
     ID_VIEW_LAYERS,
     ID_VIEW_PARAMS,
     ID_TOOL_PLACE_TX,
+    ID_TOOL_PLACE_RX,
     ID_EXPORT_ALMANAC_V7,
     ID_EXPORT_ALMANAC_V16,
     SB_WGS84   = 0,
@@ -61,8 +62,10 @@ MainFrame::MainFrame()
     map_panel_->on_transmitter_moved = [this](int id, double lat, double lon){
         OnTransmitterMoved(id, lat, lon);
     };
-    map_panel_->on_cursor_moved    = [this](double lat, double lon){ OnCursorMoved(lat, lon); };
-    map_panel_->on_receiver_moved  = [this](double lat, double lon){ OnReceiverMoved(lat, lon); };
+    map_panel_->on_cursor_moved          = [this](double lat, double lon){ OnCursorMoved(lat, lon); };
+    map_panel_->on_receiver_moved        = [this](double lat, double lon){ OnReceiverMoved(lat, lon); };
+    map_panel_->on_transmitter_selected  = [this](int id){ OnTransmitterSelected(id); };
+    map_panel_->on_receiver_placed       = [this](double lat, double lon){ OnReceiverPlaced(lat, lon); };
 
     // Dockable panels
     net_config_    = new NetworkConfigPanel(this);
@@ -86,6 +89,17 @@ MainFrame::MainFrame()
         scenario_.receiver = rx;
         MarkDirty();
         TriggerRecompute();
+    };
+    param_editor_->on_tx_lock_changed = [this](int id, bool locked) {
+        if (id >= 0 && id < (int)scenario_.transmitters.size()) {
+            scenario_.transmitters[id].locked = locked;
+            map_panel_->LockTransmitter(id, locked);
+            MarkDirty();
+        }
+    };
+    param_editor_->on_rx_lock_changed = [this](bool locked) {
+        rx_locked_ = locked;
+        map_panel_->LockReceiver(locked);
     };
 
     layer_panel_->on_toggle = [this](const std::string& layer, bool visible) {
@@ -186,8 +200,12 @@ void MainFrame::BuildToolbar() {
     tb->AddTool(ID_TOOL_PLACE_TX, "Place TX",
                 wxArtProvider::GetBitmap(wxART_NEW, wxART_TOOLBAR),
                 "Click map to place a transmitter", wxITEM_CHECK);
+    tb->AddTool(ID_TOOL_PLACE_RX, "Place RX",
+                wxArtProvider::GetBitmap(wxART_FIND, wxART_TOOLBAR),
+                "Click map to place the receiver", wxITEM_CHECK);
     tb->Realize();
     Bind(wxEVT_TOOL, &MainFrame::OnToolPlaceTx, this, ID_TOOL_PLACE_TX);
+    Bind(wxEVT_TOOL, &MainFrame::OnToolPlaceRx, this, ID_TOOL_PLACE_RX);
 }
 
 void MainFrame::BuildStatusBar() {
@@ -262,7 +280,7 @@ void MainFrame::OnMapClick(double lat, double lon) {
     int id = (int)scenario_.transmitters.size();
     scenario_.transmitters.push_back(tx);
 
-    map_panel_->AddTransmitterMarker(id, lat, lon, tx.name);
+    map_panel_->AddTransmitterMarker(id, lat, lon, tx.name, tx.locked);
     param_editor_->LoadTransmitter(id, tx);
     ++next_tx_id_;
     MarkDirty();
@@ -291,7 +309,39 @@ void MainFrame::OnCursorMoved(double lat, double lon) {
 
 void MainFrame::OnToolPlaceTx(wxCommandEvent& evt) {
     placement_mode_ = evt.IsChecked();
+    if (placement_mode_) {
+        rx_placement_mode_ = false;
+        GetToolBar()->ToggleTool(ID_TOOL_PLACE_RX, false);
+    }
     map_panel_->SetPlacementMode(placement_mode_);
+}
+
+void MainFrame::OnToolPlaceRx(wxCommandEvent& evt) {
+    rx_placement_mode_ = evt.IsChecked();
+    if (rx_placement_mode_) {
+        placement_mode_ = false;
+        GetToolBar()->ToggleTool(ID_TOOL_PLACE_TX, false);
+        map_panel_->SetPlacementMode(false);
+    }
+    map_panel_->SetReceiverPlacementMode(rx_placement_mode_);
+}
+
+void MainFrame::OnTransmitterSelected(int id) {
+    if (id >= 0 && id < (int)scenario_.transmitters.size())
+        param_editor_->LoadTransmitter(id, scenario_.transmitters[id]);
+}
+
+void MainFrame::OnReceiverPlaced(double lat, double lon) {
+    rx_lat_    = lat;
+    rx_lon_    = lon;
+    rx_placed_ = true;
+    // Deactivate receiver placement mode after first click
+    rx_placement_mode_ = false;
+    GetToolBar()->ToggleTool(ID_TOOL_PLACE_RX, false);
+    map_panel_->SetReceiverPlacementMode(false);
+    map_panel_->SetReceiverMarker(lat, lon, rx_locked_);
+    auto results = computeAtPoint(lat, lon, scenario_);
+    receiver_panel_->SetResults(results);
 }
 
 void MainFrame::OnFileNew(wxCommandEvent& /*evt*/) {

@@ -82,6 +82,10 @@ void MapPanel::OnScriptMessage(wxWebViewEvent& evt) {
             on_transmitter_moved(j["id"].get<int>(),
                                  j["lat"].get<double>(),
                                  j["lon"].get<double>());
+        } else if (type == "transmitter_selected" && on_transmitter_selected) {
+            on_transmitter_selected(j["id"].get<int>());
+        } else if (type == "receiver_placed" && on_receiver_placed) {
+            on_receiver_placed(j["lat"].get<double>(), j["lon"].get<double>());
         } else if (type == "receiver_moved" && on_receiver_moved) {
             on_receiver_moved(j["lat"].get<double>(), j["lon"].get<double>());
         } else if (type == "cursor_moved" && on_cursor_moved) {
@@ -100,12 +104,13 @@ void MapPanel::RunScript(const std::string& js) {
     }
 }
 
-void MapPanel::AddTransmitterMarker(int id, double lat, double lon, const std::string& name) {
-    // Escape name for JS string literal
+void MapPanel::AddTransmitterMarker(int id, double lat, double lon,
+                                     const std::string& name, bool locked) {
     std::string safe_name = name;
     for (auto& c : safe_name) if (c == '\'' || c == '\\') c = '_';
-    RunScript(wxString::Format("addTransmitter(%d, %f, %f, '%s');",
-                               id, lat, lon, safe_name).ToStdString());
+    RunScript(wxString::Format("addTransmitter(%d, %f, %f, '%s', %s);",
+                               id, lat, lon, safe_name,
+                               locked ? "true" : "false").ToStdString());
 }
 
 void MapPanel::MoveTransmitterMarker(int id, double lat, double lon) {
@@ -116,16 +121,25 @@ void MapPanel::RemoveTransmitterMarker(int id) {
     RunScript(wxString::Format("removeTransmitter(%d);", id).ToStdString());
 }
 
-void MapPanel::SetReceiverMarker(double lat, double lon) {
-    RunScript(wxString::Format("setReceiver(%f, %f);", lat, lon).ToStdString());
+void MapPanel::LockTransmitter(int id, bool locked) {
+    RunScript(wxString::Format("lockTransmitter(%d, %s);",
+                               id, locked ? "true" : "false").ToStdString());
+}
+
+void MapPanel::SetReceiverMarker(double lat, double lon, bool locked) {
+    RunScript(wxString::Format("setReceiver(%f, %f, %s);",
+                               lat, lon, locked ? "true" : "false").ToStdString());
 }
 
 void MapPanel::RemoveReceiverMarker() {
     RunScript("removeReceiver();");
 }
 
+void MapPanel::LockReceiver(bool locked) {
+    RunScript(wxString::Format("lockReceiver(%s);", locked ? "true" : "false").ToStdString());
+}
+
 void MapPanel::UpdateLayer(const std::string& layer_name, const std::string& geojson) {
-    // Pass GeoJSON directly — may be large, so use ExecuteScript with string building
     std::ostringstream js;
     js << "updateLayer('" << layer_name << "', " << geojson << ");";
     RunScript(js.str());
@@ -137,6 +151,11 @@ void MapPanel::ClearLayer(const std::string& layer_name) {
 
 void MapPanel::SetPlacementMode(bool enabled) {
     RunScript(wxString::Format("setPlacementMode(%s);", enabled ? "true" : "false").ToStdString());
+}
+
+void MapPanel::SetReceiverPlacementMode(bool enabled) {
+    RunScript(wxString::Format("setReceiverPlacementMode(%s);",
+                               enabled ? "true" : "false").ToStdString());
 }
 
 } // namespace bp

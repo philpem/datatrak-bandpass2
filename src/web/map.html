@@ -24,7 +24,6 @@
 (function () {
   'use strict';
 
-  // Parse port from URL query string (?port=XXXX)
   var tilePort = 0;
   try {
     var params = new URLSearchParams(window.location.search);
@@ -35,37 +34,27 @@
     ? 'http://127.0.0.1:' + tilePort + '/{z}/{x}/{y}.png'
     : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
 
-  // Initialise map centred on UK
-  var map = L.map('map', {
-    center: [54.0, -2.0],
-    zoom: 6
-  });
+  var map = L.map('map', { center: [54.0, -2.0], zoom: 6 });
+  L.tileLayer(tileUrl, { attribution: '© OpenStreetMap contributors', maxZoom: 18 }).addTo(map);
 
-  L.tileLayer(tileUrl, {
-    attribution: '© OpenStreetMap contributors',
-    maxZoom: 18
-  }).addTo(map);
+  var transmitters   = {};
+  var receiverMarker = null;
+  var layerGroups    = {};
+  var placementMode  = false;
+  var receiverMode   = false;
 
-  // -----------------------------------------------------------------------
-  // State
-  // -----------------------------------------------------------------------
-  var transmitters    = {};   // id → { marker, name }
-  var receiverMarker  = null;
-  var layerGroups     = {};   // layer_name → L.GeoJSON layer
-  var placementMode   = false;
+  // ── C++ → JS ──────────────────────────────────────────────────────────────
 
-  // -----------------------------------------------------------------------
-  // C++ → JS API
-  // -----------------------------------------------------------------------
-  window.addTransmitter = function (id, lat, lon, name) {
-    if (transmitters[id]) {
-      transmitters[id].marker.setLatLng([lat, lon]);
-      return;
-    }
-    var marker = L.marker([lat, lon], { title: name, draggable: true });
+  window.addTransmitter = function (id, lat, lon, name, locked) {
+    if (transmitters[id]) { transmitters[id].marker.setLatLng([lat, lon]); return; }
+    var marker = L.marker([lat, lon], { title: name, draggable: !locked });
     marker.on('dragend', function (e) {
       var ll = e.target.getLatLng();
       bandpassPostMessage({ type: 'transmitter_moved', id: id, lat: ll.lat, lon: ll.lng });
+    });
+    marker.on('click', function (e) {
+      L.DomEvent.stopPropagation(e);
+      bandpassPostMessage({ type: 'transmitter_selected', id: id });
     });
     marker.addTo(map);
     transmitters[id] = { marker: marker, name: name };
@@ -76,24 +65,25 @@
   };
 
   window.removeTransmitter = function (id) {
-    if (transmitters[id]) {
-      transmitters[id].marker.remove();
-      delete transmitters[id];
-    }
+    if (transmitters[id]) { transmitters[id].marker.remove(); delete transmitters[id]; }
   };
 
-  window.setReceiver = function (lat, lon) {
+  window.lockTransmitter = function (id, locked) {
+    if (!transmitters[id]) return;
+    var m = transmitters[id].marker;
+    if (locked) m.dragging.disable(); else m.dragging.enable();
+  };
+
+  window.setReceiver = function (lat, lon, locked) {
     if (receiverMarker) {
       receiverMarker.setLatLng([lat, lon]);
     } else {
-      receiverMarker = L.marker([lat, lon], {
-        title: 'Receiver',
-        draggable: true
-      }).addTo(map);
+      receiverMarker = L.marker([lat, lon], { title: 'Receiver', draggable: !locked });
       receiverMarker.on('dragend', function (e) {
         var ll = e.target.getLatLng();
         bandpassPostMessage({ type: 'receiver_moved', lat: ll.lat, lon: ll.lng });
       });
+      receiverMarker.addTo(map);
     }
   };
 
@@ -101,51 +91,55 @@
     if (receiverMarker) { receiverMarker.remove(); receiverMarker = null; }
   };
 
+  window.lockReceiver = function (locked) {
+    if (!receiverMarker) return;
+    if (locked) receiverMarker.dragging.disable(); else receiverMarker.dragging.enable();
+  };
+
   window.updateLayer = function (layerName, geojson) {
-    if (layerGroups[layerName]) {
-      map.removeLayer(layerGroups[layerName]);
-    }
+    if (layerGroups[layerName]) map.removeLayer(layerGroups[layerName]);
     var data = typeof geojson === 'string' ? JSON.parse(geojson) : geojson;
     var layer = L.geoJSON(data, {
       style: function (feature) {
-        return {
-          fillColor:   feature.properties && feature.properties.c ? feature.properties.c : '#4444ff',
-          fillOpacity: 0.4,
-          weight:      0,
-          stroke:      false
-        };
+        return { fillColor: (feature.properties && feature.properties.c) ? feature.properties.c : '#4444ff',
+                 fillOpacity: 0.4, weight: 0, stroke: false };
       }
     }).addTo(map);
     layerGroups[layerName] = layer;
   };
 
   window.clearLayer = function (layerName) {
-    if (layerGroups[layerName]) {
-      map.removeLayer(layerGroups[layerName]);
-      delete layerGroups[layerName];
-    }
+    if (layerGroups[layerName]) { map.removeLayer(layerGroups[layerName]); delete layerGroups[layerName]; }
   };
 
   window.setPlacementMode = function (enabled) {
     placementMode = enabled;
-    map._container.style.cursor = enabled ? 'crosshair' : '';
+    if (enabled) receiverMode = false;
+    map._container.style.cursor = (placementMode || receiverMode) ? 'crosshair' : '';
   };
 
-  // -----------------------------------------------------------------------
-  // Map events → C++
-  // -----------------------------------------------------------------------
+  window.setReceiverPlacementMode = function (enabled) {
+    receiverMode = enabled;
+    if (enabled) placementMode = false;
+    map._container.style.cursor = (placementMode || receiverMode) ? 'crosshair' : '';
+  };
+
+  // ── JS → C++ ──────────────────────────────────────────────────────────────
+
   map.on('click', function (e) {
-    if (!placementMode) return;
-    bandpassPostMessage({ type: 'transmitter_placed', lat: e.latlng.lat, lon: e.latlng.lng });
+    if (receiverMode) {
+      bandpassPostMessage({ type: 'receiver_placed', lat: e.latlng.lat, lon: e.latlng.lng });
+      return;
+    }
+    if (placementMode) {
+      bandpassPostMessage({ type: 'transmitter_placed', lat: e.latlng.lat, lon: e.latlng.lng });
+    }
   });
 
   map.on('mousemove', function (e) {
     bandpassPostMessage({ type: 'cursor_moved', lat: e.latlng.lat, lon: e.latlng.lng });
   });
 
-  // -----------------------------------------------------------------------
-  // Signal ready
-  // -----------------------------------------------------------------------
   bandpassPostMessage({ type: 'ready' });
 
 }());

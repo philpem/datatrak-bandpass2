@@ -62,6 +62,10 @@ void ParamEditor::BuildTransmitterPage(wxWindow* page) {
     tx_spo_   = MakeField(page, "SPO (μs)",         gs);
     tx_delay_ = MakeField(page, "Station delay (μs)", gs);
 
+    gs->Add(new wxStaticText(page, wxID_ANY, "Lock position"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
+    tx_locked_ = new wxCheckBox(page, wxID_ANY, "");
+    gs->Add(tx_locked_, 0, wxBOTTOM, 4);
+
     auto* sizer = new wxBoxSizer(wxVERTICAL);
     sizer->Add(gs, 0, wxALL | wxEXPAND, 8);
     page->SetSizer(sizer);
@@ -76,6 +80,10 @@ void ParamEditor::BuildTransmitterPage(wxWindow* page) {
         wxCommandEvent e; OnTxField(e); });
     tx_mslot_->Bind(wxEVT_SPINCTRL, [this](wxSpinEvent&){
         wxCommandEvent e; OnTxField(e); });
+    tx_locked_->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent&) {
+        if (updating_ || current_tx_id_ < 0 || !on_tx_lock_changed) return;
+        on_tx_lock_changed(current_tx_id_, tx_locked_->GetValue());
+    });
 }
 
 void ParamEditor::BuildReceiverPage(wxWindow* page) {
@@ -99,6 +107,10 @@ void ParamEditor::BuildReceiverPage(wxWindow* page) {
                                   wxSP_ARROW_KEYS, 2, 8, 4);
     gs->Add(rx_minstns_, 1, wxEXPAND | wxBOTTOM, 4);
 
+    gs->Add(new wxStaticText(page, wxID_ANY, "Lock position"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
+    rx_locked_ = new wxCheckBox(page, wxID_ANY, "");
+    gs->Add(rx_locked_, 0, wxBOTTOM, 4);
+
     auto* sizer = new wxBoxSizer(wxVERTICAL);
     sizer->Add(gs, 0, wxALL | wxEXPAND, 8);
     page->SetSizer(sizer);
@@ -108,6 +120,10 @@ void ParamEditor::BuildReceiverPage(wxWindow* page) {
     }
     rx_minstns_->Bind(wxEVT_SPINCTRL, [this](wxSpinEvent&){
         wxCommandEvent e; OnRxField(e); });
+    rx_locked_->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent&) {
+        if (updating_ || !on_rx_lock_changed) return;
+        on_rx_lock_changed(rx_locked_->GetValue());
+    });
 }
 
 void ParamEditor::LoadTransmitter(int id, const Transmitter& tx) {
@@ -123,6 +139,7 @@ void ParamEditor::LoadTransmitter(int id, const Transmitter& tx) {
     tx_mslot_->SetValue(tx.master_slot);
     tx_spo_->ChangeValue(wxString::Format("%.3f", tx.spo_us));
     tx_delay_->ChangeValue(wxString::Format("%.3f", tx.station_delay_us));
+    tx_locked_->SetValue(tx.locked);
     notebook_->SetSelection(0);
     updating_ = false;
 }
@@ -160,6 +177,7 @@ void ParamEditor::OnTxField(wxCommandEvent& /*evt*/) {
     tx.master_slot      = tx_mslot_->GetValue();
     tx.spo_us           = wxAtof(tx_spo_->GetValue());
     tx.station_delay_us = wxAtof(tx_delay_->GetValue());
+    tx.locked           = tx_locked_->GetValue();
     on_transmitter_changed(current_tx_id_, tx);
 }
 

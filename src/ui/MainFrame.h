@@ -31,6 +31,7 @@ private:
     void OnViewLayerPanel(wxCommandEvent& evt);
     void OnViewParamEditor(wxCommandEvent& evt);
     void OnToolPlaceTx(wxCommandEvent& evt);
+    void OnToolPlaceRx(wxCommandEvent& evt);
     void OnHelpAbout(wxCommandEvent& evt);
     void OnClose(wxCloseEvent& evt);
 
@@ -40,6 +41,8 @@ private:
     // Map / scenario callbacks
     void OnMapClick(double lat, double lon);
     void OnTransmitterMoved(int id, double lat, double lon);
+    void OnTransmitterSelected(int id);
+    void OnReceiverPlaced(double lat, double lon);
     void OnCursorMoved(double lat, double lon);
     void OnReceiverMoved(double lat, double lon);
     void OnExportSimulator();
@@ -68,8 +71,10 @@ private:
     Scenario           scenario_;
     std::string        current_file_;
     bool               dirty_           = false;
-    bool               placement_mode_  = false;
-    int                next_tx_id_      = 1;
+    bool               placement_mode_     = false;
+    bool               rx_placement_mode_  = false;
+    bool               rx_locked_          = false;
+    int                next_tx_id_         = 1;
     double             rx_lat_          = 0.0;
     double             rx_lon_          = 0.0;
     bool               rx_placed_       = false;

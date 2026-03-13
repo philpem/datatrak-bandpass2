@@ -1,13 +1,13 @@
 #pragma once
 #include <functional>
 #include <string>
-#include <wx/panel.h>
+#include <wx/scrolwin.h>
 #include <wx/checkbox.h>
 #include <wx/sizer.h>
 
 namespace bp {
 
-class LayerPanel : public wxPanel {
+class LayerPanel : public wxScrolledWindow {
 public:
     explicit LayerPanel(wxWindow* parent);
 

@@ -22,6 +22,8 @@ public:
 
     std::function<void(int id, const Transmitter&)> on_transmitter_changed;
     std::function<void(const ReceiverModel&)>        on_receiver_changed;
+    std::function<void(int id, bool locked)>         on_tx_lock_changed;
+    std::function<void(bool locked)>                 on_rx_lock_changed;
 
 private:
     void BuildTransmitterPage(wxWindow* page);
@@ -43,6 +45,7 @@ private:
     wxSpinCtrl* tx_mslot_   = nullptr;
     wxTextCtrl* tx_spo_     = nullptr;
     wxTextCtrl* tx_delay_   = nullptr;
+    wxCheckBox* tx_locked_  = nullptr;
 
     // Receiver page
     wxChoice*   rx_mode_    = nullptr;
@@ -50,6 +53,7 @@ private:
     wxTextCtrl* rx_vnoise_  = nullptr;
     wxTextCtrl* rx_range_   = nullptr;
     wxSpinCtrl* rx_minstns_ = nullptr;
+    wxCheckBox* rx_locked_  = nullptr;
 
     int  current_tx_id_  = -1;
     bool updating_       = false;

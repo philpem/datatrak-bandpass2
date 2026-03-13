@@ -15,7 +15,7 @@ static const struct { const char* key; const char* label; bool default_on; } LAY
 };
 
 LayerPanel::LayerPanel(wxWindow* parent)
-    : wxPanel(parent)
+    : wxScrolledWindow(parent)
 {
     auto* sizer = new wxBoxSizer(wxVERTICAL);
     sizer->Add(new wxStaticText(this, wxID_ANY, "Map Layers"), 0, wxALL, 6);
@@ -34,6 +34,8 @@ LayerPanel::LayerPanel(wxWindow* parent)
     }
 
     SetSizer(sizer);
+    SetScrollRate(0, 10);
+    FitInside();
 }
 
 void LayerPanel::OnToggle(wxCommandEvent& evt) {
