@@ -7,6 +7,8 @@ set(BP_SOURCES
     engine/groundwave.cpp
     engine/skywave.cpp
     engine/noise.cpp
+    engine/snr.cpp
+    engine/whdop.cpp
     engine/compute_manager.cpp
     ui/MainFrame.cpp
     ui/MapPanel.cpp

@@ -2,6 +2,8 @@
 #include "groundwave.h"
 #include "skywave.h"
 #include "noise.h"
+#include "snr.h"
+#include "whdop.h"
 #include <wx/app.h>
 
 namespace bp {
@@ -126,6 +128,15 @@ ComputeResult ComputeManager::RunPipeline(const Scenario& scenario,
 
     // Stage 3: Atmospheric noise (ITU P.372)
     computeAtmNoise(*data, scenario, cancel);
+    if (cancel.load()) return result;
+
+    // Stage 4-6: SNR, GDR, SGR
+    computeSNR(*data, scenario, cancel);
+    if (cancel.load()) return result;
+
+    // Stage 7-9: WHDOP and repeatable accuracy
+    computeWHDOP(*data, scenario, cancel);
+    if (cancel.load()) return result;
     if (cancel.load()) return result;
 
     result.data = std::move(data);

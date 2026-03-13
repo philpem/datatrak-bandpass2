@@ -57,3 +57,15 @@ bp_add_test(test_groundwave
     ${CMAKE_SOURCE_DIR}/src/coords/Osgb.cpp
     ${CMAKE_SOURCE_DIR}/src/coords/NationalGrid.cpp
 )
+
+# SNR / WHDOP tests
+bp_add_test(test_snr_whdop
+    engine/test_snr_whdop.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/snr.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/whdop.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/groundwave.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/noise.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/grid.cpp
+    ${CMAKE_SOURCE_DIR}/src/coords/Osgb.cpp
+    ${CMAKE_SOURCE_DIR}/src/coords/NationalGrid.cpp
+)
