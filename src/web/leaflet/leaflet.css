@@ -1,0 +1,39 @@
+/* Leaflet CSS stub — replace with full leaflet.css from https://unpkg.com/leaflet@1.9.4/dist/leaflet.css */
+.leaflet-container {
+    background: #ddd;
+    outline: 0;
+}
+.leaflet-map-pane,
+.leaflet-tile,
+.leaflet-marker-icon,
+.leaflet-marker-shadow,
+.leaflet-tile-pane,
+.leaflet-overlay-pane,
+.leaflet-shadow-pane,
+.leaflet-marker-pane,
+.leaflet-popup-pane,
+.leaflet-overlay-pane svg,
+.leaflet-zoom-box,
+.leaflet-image-layer,
+.leaflet-layer {
+    position: absolute;
+    left: 0;
+    top: 0;
+}
+.leaflet-container {
+    overflow: hidden;
+}
+.leaflet-tile, .leaflet-marker-icon, .leaflet-marker-shadow {
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    user-select: none;
+    -webkit-user-drag: none;
+}
+.leaflet-tile::-moz-selection, .leaflet-marker-icon::-moz-selection,
+.leaflet-marker-shadow::-moz-selection { background: transparent; }
+.leaflet-tile::selection, .leaflet-marker-icon::selection,
+.leaflet-marker-shadow::selection { background: transparent; }
+.leaflet-safe-area-inset-top { padding-top: constant(safe-area-inset-top); padding-top: env(safe-area-inset-top); }
+.leaflet-safe-area-inset-right { padding-right: constant(safe-area-inset-right); padding-right: env(safe-area-inset-right); }
+.leaflet-safe-area-inset-bottom { padding-bottom: constant(safe-area-inset-bottom); padding-bottom: env(safe-area-inset-bottom); }
+.leaflet-safe-area-inset-left { padding-left: constant(safe-area-inset-left); padding-left: env(safe-area-inset-left); }

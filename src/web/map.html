@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BANDPASS II Map</title>
+<link rel="stylesheet" href="leaflet/leaflet.css">
+<style>
+  html, body {
+    margin: 0; padding: 0;
+    width: 100%; height: 100%;
+    overflow: hidden;
+  }
+  #map {
+    width: 100%; height: 100%;
+  }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<script src="leaflet/leaflet.js"></script>
+<script src="bridge.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  // Parse port from URL query string (?port=XXXX)
+  var tilePort = 0;
+  try {
+    var params = new URLSearchParams(window.location.search);
+    tilePort = parseInt(params.get('port') || '0', 10);
+  } catch (e) {}
+
+  var tileUrl = tilePort > 0
+    ? 'http://127.0.0.1:' + tilePort + '/{z}/{x}/{y}.png'
+    : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+
+  // Initialise map centred on UK
+  var map = L.map('map', {
+    center: [54.0, -2.0],
+    zoom: 6
+  });
+
+  L.tileLayer(tileUrl, {
+    attribution: '© OpenStreetMap contributors',
+    maxZoom: 18
+  }).addTo(map);
+
+  // -----------------------------------------------------------------------
+  // State
+  // -----------------------------------------------------------------------
+  var transmitters    = {};   // id → { marker, name }
+  var receiverMarker  = null;
+  var layerGroups     = {};   // layer_name → L.GeoJSON layer
+  var placementMode   = false;
+
+  // -----------------------------------------------------------------------
+  // C++ → JS API
+  // -----------------------------------------------------------------------
+  window.addTransmitter = function (id, lat, lon, name) {
+    if (transmitters[id]) {
+      transmitters[id].marker.setLatLng([lat, lon]);
+      return;
+    }
+    var marker = L.marker([lat, lon], { title: name, draggable: true });
+    marker.on('dragend', function (e) {
+      var ll = e.target.getLatLng();
+      bandpassPostMessage({ type: 'transmitter_moved', id: id, lat: ll.lat, lon: ll.lng });
+    });
+    marker.addTo(map);
+    transmitters[id] = { marker: marker, name: name };
+  };
+
+  window.moveTransmitter = function (id, lat, lon) {
+    if (transmitters[id]) transmitters[id].marker.setLatLng([lat, lon]);
+  };
+
+  window.removeTransmitter = function (id) {
+    if (transmitters[id]) {
+      transmitters[id].marker.remove();
+      delete transmitters[id];
+    }
+  };
+
+  window.setReceiver = function (lat, lon) {
+    if (receiverMarker) {
+      receiverMarker.setLatLng([lat, lon]);
+    } else {
+      receiverMarker = L.marker([lat, lon], {
+        title: 'Receiver',
+        draggable: true
+      }).addTo(map);
+      receiverMarker.on('dragend', function (e) {
+        var ll = e.target.getLatLng();
+        bandpassPostMessage({ type: 'receiver_moved', lat: ll.lat, lon: ll.lng });
+      });
+    }
+  };
+
+  window.removeReceiver = function () {
+    if (receiverMarker) { receiverMarker.remove(); receiverMarker = null; }
+  };
+
+  window.updateLayer = function (layerName, geojson) {
+    if (layerGroups[layerName]) {
+      map.removeLayer(layerGroups[layerName]);
+    }
+    var data = typeof geojson === 'string' ? JSON.parse(geojson) : geojson;
+    var layer = L.geoJSON(data, {
+      style: function (feature) {
+        return {
+          fillColor:   feature.properties && feature.properties.c ? feature.properties.c : '#4444ff',
+          fillOpacity: 0.4,
+          weight:      0,
+          stroke:      false
+        };
+      }
+    }).addTo(map);
+    layerGroups[layerName] = layer;
+  };
+
+  window.clearLayer = function (layerName) {
+    if (layerGroups[layerName]) {
+      map.removeLayer(layerGroups[layerName]);
+      delete layerGroups[layerName];
+    }
+  };
+
+  window.setPlacementMode = function (enabled) {
+    placementMode = enabled;
+    map._container.style.cursor = enabled ? 'crosshair' : '';
+  };
+
+  // -----------------------------------------------------------------------
+  // Map events → C++
+  // -----------------------------------------------------------------------
+  map.on('click', function (e) {
+    if (!placementMode) return;
+    bandpassPostMessage({ type: 'transmitter_placed', lat: e.latlng.lat, lon: e.latlng.lng });
+  });
+
+  map.on('mousemove', function (e) {
+    bandpassPostMessage({ type: 'cursor_moved', lat: e.latlng.lat, lon: e.latlng.lng });
+  });
+
+  // -----------------------------------------------------------------------
+  // Signal ready
+  // -----------------------------------------------------------------------
+  bandpassPostMessage({ type: 'ready' });
+
+}());
+</script>
+</body>
+</html>
