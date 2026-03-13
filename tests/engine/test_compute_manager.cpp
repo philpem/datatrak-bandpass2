@@ -1,6 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include "engine/grid.h"
 #include "model/Scenario.h"
+#include <atomic>
 
 using namespace bp;
 
@@ -15,7 +16,8 @@ TEST_CASE("buildGrid returns correct point count", "[grid]") {
     def.lon_max      =  0.0;
     def.resolution_km = 10.0;
 
-    auto pts = buildGrid(def);
+    std::atomic<bool> cancel{false};
+    auto pts = buildGrid(def, cancel);
     // Should have a reasonable number of points for a 1°×1° area at 10 km resolution
     REQUIRE(pts.size() > 10);
     REQUIRE(pts.size() < 1000);
@@ -29,7 +31,8 @@ TEST_CASE("buildGrid points have valid lat/lon", "[grid]") {
     def.lon_max      = -1.0;
     def.resolution_km = 50.0;
 
-    auto pts = buildGrid(def);
+    std::atomic<bool> cancel{false};
+    auto pts = buildGrid(def, cancel);
     REQUIRE(!pts.empty());
     for (const auto& p : pts) {
         REQUIRE(p.lat >= 49.9);

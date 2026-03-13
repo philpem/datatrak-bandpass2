@@ -3,6 +3,7 @@
 #include <vector>
 #include <map>
 #include <cstdint>
+#include <atomic>
 #include "../model/Scenario.h"
 
 namespace bp {
@@ -33,7 +34,9 @@ struct GridData {
     uint64_t request_id = 0;
 };
 
-// Build the grid point array from a GridDef
-std::vector<GridPoint> buildGrid(const GridDef& def);
+// Build the grid point array from a GridDef.
+// Passes cancel through so the caller can abort a large grid build.
+std::vector<GridPoint> buildGrid(const GridDef& def,
+                                  const std::atomic<bool>& cancel);
 
 } // namespace bp

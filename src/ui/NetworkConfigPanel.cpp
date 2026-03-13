@@ -41,7 +41,7 @@ NetworkConfigPanel::NetworkConfigPanel(wxWindow* parent)
 
     // Grid resolution
     gs->Add(new wxStaticText(this, wxID_ANY, "Grid res (km)"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
-    res_field_ = new wxTextCtrl(this, wxID_ANY, "1.0");
+    res_field_ = new wxTextCtrl(this, wxID_ANY, "10.0");
     res_field_->Bind(wxEVT_TEXT, &NetworkConfigPanel::OnOtherChanged, this);
     gs->Add(res_field_, 1, wxEXPAND | wxBOTTOM, 2);
 

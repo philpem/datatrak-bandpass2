@@ -1,6 +1,4 @@
 #include "grid.h"
-#include "../coords/NationalGrid.h"
-#include "../coords/Osgb.h"
 #include <cmath>
 #include <sstream>
 #include <algorithm>
@@ -8,7 +6,8 @@
 
 namespace bp {
 
-std::vector<GridPoint> buildGrid(const GridDef& def) {
+std::vector<GridPoint> buildGrid(const GridDef& def,
+                                  const std::atomic<bool>& cancel) {
     // Approximate degrees per km at mid-latitude
     double mid_lat = (def.lat_min + def.lat_max) / 2.0;
     constexpr double DEG_PER_KM_LAT = 1.0 / 110.574;
@@ -19,20 +18,12 @@ std::vector<GridPoint> buildGrid(const GridDef& def) {
 
     std::vector<GridPoint> pts;
     for (double lat = def.lat_min; lat <= def.lat_max + dlat * 0.5; lat += dlat) {
+        if (cancel.load()) return {};
         for (double lon = def.lon_min; lon <= def.lon_max + dlon * 0.5; lon += dlon) {
             GridPoint p;
             p.lat = lat;
             p.lon = lon;
-            // Compute OSGB easting/northing
-            try {
-                LatLon osgb36 = osgb::wgs84_to_osgb36({lat, lon});
-                EastNorth en  = national_grid::latlon_to_en(osgb36);
-                p.easting     = en.easting;
-                p.northing    = en.northing;
-            } catch (...) {
-                p.easting  = 0.0;
-                p.northing = 0.0;
-            }
+            // easting/northing left as 0 — computed on demand in display code
             pts.push_back(p);
         }
     }

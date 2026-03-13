@@ -31,7 +31,7 @@ struct GridDef {
     double lat_max      = 59.5;
     double lon_min      = -7.0;
     double lon_max      =  2.5;
-    double resolution_km = 1.0;
+    double resolution_km = 10.0;
 };
 
 struct PatternOffset {

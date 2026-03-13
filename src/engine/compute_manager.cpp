@@ -90,11 +90,14 @@ ComputeResult ComputeManager::RunPipeline(const Scenario& scenario,
         return result;
     }
 
+    // Nothing to compute without transmitters
+    if (scenario.transmitters.empty()) return result;
+
     if (cancel.load()) return result;
 
-    // Build grid
-    auto grid_pts = buildGrid(scenario.grid);
-    if (cancel.load()) return result;
+    // Build grid (cancel-aware; returns empty vector if cancelled mid-build)
+    auto grid_pts = buildGrid(scenario.grid, cancel);
+    if (cancel.load() || grid_pts.empty()) return result;
 
     auto data = std::make_shared<GridData>();
     data->request_id = 0;
