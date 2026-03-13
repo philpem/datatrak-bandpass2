@@ -17,12 +17,6 @@ jobs:
         with:
           vcpkgJsonGlob: 'vcpkg.json'
 
-      - name: Install vcpkg dependencies
-        run: |
-          vcpkg install \
-            tomlplusplus nlohmann-json geographiclib catch2 \
-            wxwidgets[webview] sqlite3 curl
-
       - name: Configure
         run: |
           cmake -B build -G "Visual Studio 17 2022" -A x64 `
