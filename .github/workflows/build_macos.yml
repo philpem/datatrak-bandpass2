@@ -10,7 +10,7 @@ jobs:
   build:
     runs-on: macos-14
     steps:
-      - uses: actions/checkout@v4.3.1
+      - uses: actions/checkout@v6.0.2
 
       - name: Install Homebrew dependencies
         run: |
@@ -34,7 +34,7 @@ jobs:
           cd dist && zip -r ../bandpass2-macos-arm64.zip bandpass2/
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5.0.0
         with:
           name: bandpass2-macos-arm64
           path: bandpass2-macos-arm64.zip
