@@ -4,8 +4,9 @@
 
 namespace bp {
 
-static wxTextCtrl* MakeField(wxWindow* parent, const wxString& label, wxSizer* sizer) {
-    sizer->Add(new wxStaticText(parent, wxID_ANY, label), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
+static wxTextCtrl* MakeField(wxWindow* parent, const char* label, wxSizer* sizer) {
+    sizer->Add(new wxStaticText(parent, wxID_ANY, wxString::FromUTF8(label)),
+               0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
     auto* tc = new wxTextCtrl(parent, wxID_ANY);
     sizer->Add(tc, 1, wxEXPAND | wxBOTTOM, 4);
     return tc;
