@@ -1,0 +1,49 @@
+set(BP_SOURCES
+    main.cpp
+    model/toml_io.cpp
+    coords/Osgb.cpp
+    coords/NationalGrid.cpp
+    engine/grid.cpp
+    engine/compute_manager.cpp
+    ui/MainFrame.cpp
+    ui/MapPanel.cpp
+    ui/TileCache.cpp
+    ui/NetworkConfigPanel.cpp
+    ui/ParamEditor.cpp
+    ui/LayerPanel.cpp
+    ui/ReceiverPanel.cpp
+    ui/ResultsPanel.cpp
+)
+
+add_executable(bandpass2 ${BP_SOURCES})
+
+target_include_directories(bandpass2 PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+target_link_libraries(bandpass2 PRIVATE
+    ${wxWidgets_LIBRARIES}
+    SQLite::SQLite3
+    CURL::libcurl
+    tomlplusplus::tomlplusplus
+    nlohmann_json::nlohmann_json
+)
+
+# GeographicLib uses a FindModule (not CONFIG) on Linux/macOS
+if(GeographicLib_FOUND)
+    target_include_directories(bandpass2 PRIVATE ${GeographicLib_INCLUDE_DIRS})
+    target_link_libraries(bandpass2 PRIVATE ${GeographicLib_LIBRARIES})
+endif()
+
+if(GDAL_FOUND)
+    target_link_libraries(bandpass2 PRIVATE GDAL::GDAL)
+    target_compile_definitions(bandpass2 PRIVATE BP_HAVE_GDAL)
+endif()
+
+# Copy web assets to build directory so the app can find them at runtime
+add_custom_command(TARGET bandpass2 POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_CURRENT_SOURCE_DIR}/web
+        $<TARGET_FILE_DIR:bandpass2>/web
+    COMMENT "Copying web assets"
+)
