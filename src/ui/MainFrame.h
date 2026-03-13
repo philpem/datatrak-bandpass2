@@ -5,6 +5,7 @@
 #include <wx/aui/aui.h>
 #include "../model/Scenario.h"
 #include "../engine/compute_manager.h"
+#include "../almanac/AlmanacExport.h"
 #include "MapPanel.h"
 #include "NetworkConfigPanel.h"
 #include "ParamEditor.h"
@@ -42,6 +43,7 @@ private:
     void OnCursorMoved(double lat, double lon);
     void OnReceiverMoved(double lat, double lon);
     void OnExportSimulator();
+    void OnExportAlmanac(almanac::FirmwareFormat fmt);
     void TriggerRecompute();
     void MarkDirty();
     bool ConfirmDiscardChanges();

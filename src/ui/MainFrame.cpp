@@ -3,6 +3,7 @@
 #include "../coords/Osgb.h"
 #include "../model/toml_io.h"
 #include "../engine/asf.h"
+#include "../almanac/AlmanacExport.h"
 #include <wx/msgdlg.h>
 #include <wx/filedlg.h>
 #include <wx/aboutdlg.h>
@@ -28,6 +29,8 @@ enum {
     ID_VIEW_LAYERS,
     ID_VIEW_PARAMS,
     ID_TOOL_PLACE_TX,
+    ID_EXPORT_ALMANAC_V7,
+    ID_EXPORT_ALMANAC_V16,
     SB_WGS84   = 0,
     SB_OSGB    = 1,
     SB_ML      = 2,
@@ -145,6 +148,11 @@ void MainFrame::BuildMenus() {
     file->Append(ID_FILE_SAVE,   "&Save\tCtrl+S");
     file->Append(ID_FILE_SAVEAS, "Save &As...");
     file->AppendSeparator();
+    auto* exportMenu = new wxMenu;
+    exportMenu->Append(ID_EXPORT_ALMANAC_V7,  "Almanac Commands (V7)");
+    exportMenu->Append(ID_EXPORT_ALMANAC_V16, "Almanac Commands (V16)");
+    file->AppendSubMenu(exportMenu, "E&xport");
+    file->AppendSeparator();
     file->Append(wxID_EXIT,      "E&xit");
     mb->Append(file, "&File");
 
@@ -165,6 +173,8 @@ void MainFrame::BuildMenus() {
     Bind(wxEVT_MENU, &MainFrame::OnFileSave,        this, ID_FILE_SAVE);
     Bind(wxEVT_MENU, &MainFrame::OnFileSaveAs,      this, ID_FILE_SAVEAS);
     Bind(wxEVT_MENU, [this](wxCommandEvent&){ Close(); }, wxID_EXIT);
+    Bind(wxEVT_MENU, [this](wxCommandEvent&){ OnExportAlmanac(almanac::FirmwareFormat::V7);  }, ID_EXPORT_ALMANAC_V7);
+    Bind(wxEVT_MENU, [this](wxCommandEvent&){ OnExportAlmanac(almanac::FirmwareFormat::V16); }, ID_EXPORT_ALMANAC_V16);
     Bind(wxEVT_MENU, &MainFrame::OnViewNetworkConfig, this, ID_VIEW_NETCFG);
     Bind(wxEVT_MENU, &MainFrame::OnViewLayerPanel,    this, ID_VIEW_LAYERS);
     Bind(wxEVT_MENU, &MainFrame::OnViewParamEditor,   this, ID_VIEW_PARAMS);
@@ -441,6 +451,26 @@ void MainFrame::OnExportSimulator() {
             f.Write(text);
             SetStatusText("Phase export saved.", SB_STATUS);
         }
+    }
+}
+
+void MainFrame::OnExportAlmanac(almanac::FirmwareFormat fmt) {
+    GridData gd;
+    std::string text = almanac::generate_almanac(scenario_, gd, fmt);
+
+    wxString defaultName = (fmt == almanac::FirmwareFormat::V7)
+                            ? "almanac_v7.txt" : "almanac_v16.txt";
+    wxFileDialog dlg(this, "Export Almanac Commands", "", defaultName,
+                     "Text files (*.txt)|*.txt|All files (*.*)|*.*",
+                     wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+    if (dlg.ShowModal() != wxID_OK) return;
+
+    wxFile f(dlg.GetPath(), wxFile::write);
+    if (f.IsOpened()) {
+        f.Write(wxString(text));
+        SetStatusText("Almanac exported.", SB_STATUS);
+    } else {
+        wxMessageBox("Could not write file.", "Export Error", wxICON_ERROR, this);
     }
 }
 
