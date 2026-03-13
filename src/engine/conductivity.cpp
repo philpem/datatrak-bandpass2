@@ -47,9 +47,10 @@ static bool is_sea_cell(double lat, double lon) {
     if (lat <= 37.0)
         return false;
 
-    // Remaining cells in the broad North Atlantic / North Sea / English Channel
-    // bounding box are treated as sea
-    if (lat >= 48.0 && lat <= 62.0 && lon >= -14.0 && lon <= 10.0)
+    // Remaining cells in the North Atlantic / North Sea / English Channel
+    // bounding box are treated as sea.  Extend west to -30° to cover the
+    // full open-Atlantic area that UK LF networks can reach.
+    if (lat >= 48.0 && lat <= 62.0 && lon >= -30.0 && lon <= 10.0)
         return true;
 
     return false;
