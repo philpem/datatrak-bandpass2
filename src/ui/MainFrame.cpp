@@ -2,6 +2,7 @@
 #include "../coords/NationalGrid.h"
 #include "../coords/Osgb.h"
 #include "../model/toml_io.h"
+#include "../engine/asf.h"
 #include <wx/msgdlg.h>
 #include <wx/filedlg.h>
 #include <wx/aboutdlg.h>
@@ -10,6 +11,9 @@
 #include <wx/stdpaths.h>
 #include <wx/filename.h>
 #include <wx/artprov.h>
+#include <wx/clipbrd.h>
+#include <wx/dataobj.h>
+#include <wx/file.h>
 #include <cstdlib>
 #include <stdexcept>
 
@@ -54,13 +58,15 @@ MainFrame::MainFrame()
     map_panel_->on_transmitter_moved = [this](int id, double lat, double lon){
         OnTransmitterMoved(id, lat, lon);
     };
-    map_panel_->on_cursor_moved = [this](double lat, double lon){ OnCursorMoved(lat, lon); };
+    map_panel_->on_cursor_moved    = [this](double lat, double lon){ OnCursorMoved(lat, lon); };
+    map_panel_->on_receiver_moved  = [this](double lat, double lon){ OnReceiverMoved(lat, lon); };
 
     // Dockable panels
     net_config_    = new NetworkConfigPanel(this);
     param_editor_  = new ParamEditor(this);
     layer_panel_   = new LayerPanel(this);
     receiver_panel_ = new ReceiverPanel(this);
+    receiver_panel_->on_export_simulator = [this](){ OnExportSimulator(); };
     results_panel_ = new ResultsPanel(this);
 
     net_config_->SetScenario(&scenario_);
@@ -382,6 +388,60 @@ bool MainFrame::ConfirmDiscardChanges() {
     int ret = wxMessageBox("Discard unsaved changes?", "BANDPASS II",
                            wxYES_NO | wxNO_DEFAULT | wxICON_QUESTION, this);
     return ret == wxYES;
+}
+
+void MainFrame::OnReceiverMoved(double lat, double lon) {
+    rx_lat_    = lat;
+    rx_lon_    = lon;
+    rx_placed_ = true;
+
+    // Compute per-slot phase at receiver location
+    auto results = computeAtPoint(lat, lon, scenario_);
+    receiver_panel_->SetResults(results);
+}
+
+void MainFrame::OnExportSimulator() {
+    if (!rx_placed_) {
+        wxMessageBox("Place a receiver on the map first.",
+                     "Export for Simulator", wxOK | wxICON_INFORMATION, this);
+        return;
+    }
+
+    // Build export text matching datatrak_gen.h slotPhaseOffset[] format
+    wxString text;
+    text += "# BANDPASS II receiver phase export\n";
+    text += wxString::Format("# Receiver: %.5f, %.5f\n", rx_lat_, rx_lon_);
+    text += "# Format: slot  f1+  f1-  f2+  f2-  snr_db  gdr_db\n";
+    text += "# Phases: integer millilanes 0-999 (slotPhaseOffset scale)\n";
+
+    auto results = computeAtPoint(rx_lat_, rx_lon_, scenario_);
+    for (const auto& r : results) {
+        text += wxString::Format("%d  %d  %d  %d  %d  %.1f  %.1f\n",
+            r.slot,
+            (int)(r.f1plus_phase  * 1000) % 1000,
+            (int)(r.f1minus_phase * 1000) % 1000,
+            (int)(r.f2plus_phase  * 1000) % 1000,
+            (int)(r.f2minus_phase * 1000) % 1000,
+            r.snr_db, r.gdr_db);
+    }
+
+    // Copy to clipboard
+    if (wxTheClipboard->Open()) {
+        wxTheClipboard->SetData(new wxTextDataObject(text));
+        wxTheClipboard->Close();
+    }
+
+    // Save to file
+    wxFileDialog dlg(this, "Save Simulator Export", "", "receiver_phase.txt",
+                     "Text files (*.txt)|*.txt|All files (*.*)|*.*",
+                     wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+    if (dlg.ShowModal() == wxID_OK) {
+        wxFile f(dlg.GetPath(), wxFile::write);
+        if (f.IsOpened()) {
+            f.Write(text);
+            SetStatusText("Phase export saved.", SB_STATUS);
+        }
+    }
 }
 
 } // namespace bp

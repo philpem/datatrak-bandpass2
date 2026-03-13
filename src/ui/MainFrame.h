@@ -40,6 +40,8 @@ private:
     void OnMapClick(double lat, double lon);
     void OnTransmitterMoved(int id, double lat, double lon);
     void OnCursorMoved(double lat, double lon);
+    void OnReceiverMoved(double lat, double lon);
+    void OnExportSimulator();
     void TriggerRecompute();
     void MarkDirty();
     bool ConfirmDiscardChanges();
@@ -66,6 +68,9 @@ private:
     bool               dirty_           = false;
     bool               placement_mode_  = false;
     int                next_tx_id_      = 1;
+    double             rx_lat_          = 0.0;
+    double             rx_lon_          = 0.0;
+    bool               rx_placed_       = false;
 
     // Backend
     std::unique_ptr<TileCache>      tile_cache_;
