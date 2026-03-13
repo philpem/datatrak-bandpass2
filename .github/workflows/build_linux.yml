@@ -30,3 +30,17 @@ jobs:
 
       - name: Test
         run: ctest --test-dir build --output-on-failure
+
+      - name: Package
+        run: |
+          mkdir -p dist/bandpass2
+          cp build/src/bandpass2 dist/bandpass2/
+          cp -r build/src/web    dist/bandpass2/
+          cd dist && zip -r ../bandpass2-linux-x86_64.zip bandpass2/
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bandpass2-linux-x86_64
+          path: bandpass2-linux-x86_64.zip
+          retention-days: 30

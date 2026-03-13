@@ -45,7 +45,7 @@ std::string MapPanel::GetMapHtmlPath() const {
     candidate.AppendDir("bandpass2");
     candidate.AppendDir("web");
     candidate.SetFullName("map.html");
-    candidate.Normalize();
+    candidate.Normalize(wxPATH_NORM_DOTS | wxPATH_NORM_ABSOLUTE);
     if (candidate.FileExists()) return candidate.GetFullPath().ToStdString();
 
     // Try: <build_dir>/src/web/map.html (during development)
@@ -54,7 +54,7 @@ std::string MapPanel::GetMapHtmlPath() const {
     candidate.AppendDir("src");
     candidate.AppendDir("web");
     candidate.SetFullName("map.html");
-    candidate.Normalize();
+    candidate.Normalize(wxPATH_NORM_DOTS | wxPATH_NORM_ABSOLUTE);
     if (candidate.FileExists()) return candidate.GetFullPath().ToStdString();
 
     return "";
