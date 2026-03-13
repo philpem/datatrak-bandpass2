@@ -85,6 +85,21 @@ TEST_CASE("Po: V7 clips negative values to 0") {
     CHECK(text.find("WARNING") != std::string::npos);
 }
 
+TEST_CASE("Po: V7 clips values above 999") {
+    auto s = make_test_scenario();
+    PatternOffset po;
+    po.pattern    = "5,3";
+    po.f1plus_ml  = 1000;   // exactly at boundary — clips to 999
+    po.f1minus_ml = 2500;   // well above — clips to 999
+    po.f2plus_ml  = 500;    // in range — unchanged
+    po.f2minus_ml = 999;    // exactly at max — unchanged
+    s.pattern_offsets.push_back(po);
+
+    GridData gd;
+    auto text = generate_po(s, gd, FirmwareFormat::V7);
+    CHECK(text.find("po 5,3 999 999 500 999") != std::string::npos);
+}
+
 TEST_CASE("Po: V16 format uses signed values") {
     auto s = make_test_scenario();
     PatternOffset po;

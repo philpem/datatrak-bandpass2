@@ -14,7 +14,7 @@ TEST_CASE("groundwave: free-space limit at very high conductivity") {
     // Free-space field: E0 = 300*sqrt(P_W)/d = 300*sqrt(40)/1 = 1897 uV/m = 65.56 dBuV/m
     GroundConstants gc_pec { 1e6, 15.0 };
     double E = groundwave_field_dbuvm(146437.5, 1.0, gc_pec, 40.0);
-    CHECK(E == Approx(65.56).margin(1.0));
+    CHECK(E == Approx(65.56).margin(0.1));
 }
 
 TEST_CASE("groundwave: field decreases with distance") {

@@ -73,6 +73,13 @@ TEST_CASE("parse_coordinate: WGS84 decimal degrees", "[national_grid]") {
     REQUIRE_THAT(result.lon, WithinAbs(-0.1848, 1e-4));
 }
 
+TEST_CASE("parse_coordinate: grid reference format", "[national_grid]") {
+    // "TL 271 707" → Huntingdon area; parse_coordinate detects leading letter → grid ref
+    LatLon result = national_grid::parse_coordinate("TL 271 707");
+    REQUIRE_THAT(result.lat, WithinAbs(52.3, 0.3));
+    REQUIRE_THAT(result.lon, WithinAbs(-0.2, 0.5));
+}
+
 TEST_CASE("parse_coordinate: raw easting/northing", "[national_grid]") {
     LatLon result = national_grid::parse_coordinate("513054 262453");
     // Should return WGS84 approximation of Huntingdon area

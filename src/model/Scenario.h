@@ -24,6 +24,12 @@ struct Frequencies {
     bool is_standard() const {
         return (f1_hz == 146'437.5 && f2_hz == 131'250.0);
     }
+
+    // Returns true iff both frequencies are within the hard 30–300 kHz limits.
+    bool is_valid_range() const {
+        return f1_hz >= 30e3 && f1_hz <= 300e3 &&
+               f2_hz >= 30e3 && f2_hz <= 300e3;
+    }
 };
 
 struct GridDef {

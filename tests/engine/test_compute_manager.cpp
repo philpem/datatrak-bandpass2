@@ -80,9 +80,28 @@ TEST_CASE("Frequencies default values", "[scenario]") {
 
 TEST_CASE("Frequencies out-of-range detection", "[scenario]") {
     Frequencies f;
-    f.f1_hz = 25000.0;   // below 30 kHz
-    REQUIRE(f.f1_hz < 30000.0);
 
-    f.f1_hz = 350000.0;  // above 300 kHz
-    REQUIRE(f.f1_hz > 300000.0);
+    // Below lower limit (30 kHz)
+    f.f1_hz = 25000.0;  f.f2_hz = 131250.0;
+    CHECK_FALSE(f.is_valid_range());
+
+    // Above upper limit (300 kHz)
+    f.f1_hz = 350000.0;  f.f2_hz = 131250.0;
+    CHECK_FALSE(f.is_valid_range());
+
+    // F2 out of range
+    f.f1_hz = 146437.5;  f.f2_hz = 29999.0;
+    CHECK_FALSE(f.is_valid_range());
+
+    // Exactly at lower bound — must be accepted
+    f.f1_hz = 30000.0;  f.f2_hz = 30000.0;
+    CHECK(f.is_valid_range());
+
+    // Exactly at upper bound — must be accepted
+    f.f1_hz = 300000.0;  f.f2_hz = 300000.0;
+    CHECK(f.is_valid_range());
+
+    // f1 == f2 at Datatrak standard — allowed (with warning, not error)
+    f.f1_hz = 146437.5;  f.f2_hz = 146437.5;
+    CHECK(f.is_valid_range());
 }
