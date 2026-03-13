@@ -329,30 +329,29 @@ virtual receiver, not a grid operation.
 | 1 | Groundwave field strength | `groundwave.cpp` | `computeGroundwave()` | ITU P.368 + Millington + Monteath |
 | 2 | Skywave field strength | `skywave.cpp` | `computeSkywave()` | ITU P.684 |
 | 3 | Atmospheric noise | `noise.cpp` | `computeAtmNoise()` | ITU P.372 |
-| 4 | Vehicle noise | `noise.cpp` | `vehicleNoise()` | Empirical |
+| 4 | Vehicle noise | `noise.cpp` | `vehicle_noise_dbuvm()` | Empirical |
 | 5 | SNR per station | `snr.cpp` | `computeSNR()` | — |
-| 6 | SGR / GDR | `snr.cpp` | `computeGDR()` | — |
-| 7 | Phase/range uncertainty | `phase_error.cpp` | `phaseUncertainty()` | Eq. 9.7–9.8 |
-| 8 | Station selection + WHDOP | `station_select.cpp` + `whdop.cpp` | `selectStations()`, `computeWHDOP()` | Eq. 9.12–9.16, App. K |
-| 9 | Repeatable accuracy | `repeatable.cpp` | `computeRepeatable()` | σ_p = σ_d × WHDOP |
-| 10 | ASF / absolute accuracy | `asf.cpp` | `computeASF()`, `virtualLocatorFix()` | Eq. 11.1–11.10 |
-| 11 | Confidence factor | `asf.cpp` | `computeConfidence()` | Residues from VL fix |
+| 6 | SGR / GDR | `snr.cpp` | `computeSNR()` | — |
+| 7 | Phase/range uncertainty | `snr.cpp` | `phase_uncertainty_ml()` | Eq. 9.7–9.8 |
+| 8 | Station selection + WHDOP | `whdop.cpp` | `compute_whdop()`, `computeWHDOP()` | Eq. 9.12–9.16, App. K |
+| 9 | Repeatable accuracy | `whdop.cpp` | `computeWHDOP()` | σ_p = σ_d × WHDOP |
+| 10 | ASF / absolute accuracy | `asf.cpp` | `computeASF()`, `virtual_locator_error_m()` | Eq. 11.1–11.10 |
+| 11 | Confidence factor | `asf.cpp` | `computeASF()` (inline) | Residues from VL fix |
 | 12 | Per-slot phase at receiver | `asf.cpp` | `computeAtPoint()` | Stages 1+10 at placed point |
 
-### Key Williams equations → functions
+### Key Williams equations → actual functions
 
 ```
-Eq. 9.7–9.8   phase/range uncertainty      → phase_error.cpp::phaseUncertainty()
-Eq. 9.9       weighted least-squares fix   → asf.cpp::virtualLocatorFix()
-Eq. 9.12      directional cosines matrix A → whdop.cpp::buildDirectionalCosines()
-Eq. 9.13      weight matrix W              → station_select.cpp::buildWeightMatrix()
-Eq. 9.14      SNR-based weighting          → station_select.cpp::snrWeight()
-Eq. 9.16      weighted HDOP               → whdop.cpp::computeWHDOP()
-Eq. 11.1      additional delay             → asf.cpp::additionalDelay()
-Eq. 11.3      chord distance WGS84        → grid.cpp::chordDistance()
-Eq. 11.5–11.10 link bias chain            → asf.cpp::linkBiasError()
-Appendix J    Helmert transform           → coords/Osgb.cpp::helmertTransform()
-Appendix K    slot selection rules        → station_select.cpp::selectStations()
+Eq. 9.7–9.8   phase/range uncertainty      → snr.cpp::phase_uncertainty_ml()
+Eq. 9.9       weighted least-squares fix   → asf.cpp::virtual_locator_error_m()  ← simplified; P4-02 to replace
+Eq. 9.12      directional cosines matrix A → whdop.cpp::compute_whdop() (inline)
+Eq. 9.13      weight matrix W              → whdop.cpp::compute_whdop() (inline)
+Eq. 9.14      SNR-based weighting          → whdop.cpp::compute_whdop() (inline)
+Eq. 9.16      weighted HDOP               → whdop.cpp::compute_whdop()
+Eq. 11.1      additional delay             → asf.cpp::asf_single_ml()           ← approximation; P4-01 to replace
+Eq. 11.5–11.10 link bias chain            → asf.cpp::computeASF() (partial)
+Appendix J    Helmert transform           → coords/Osgb.cpp::wgs84_to_osgb36()
+Appendix K    slot selection rules        → whdop.cpp::compute_whdop()
 ```
 
 ---
@@ -683,77 +682,191 @@ build → test → archive artifact.
 
 ## Implementation phases
 
-### Phase 1 — Skeleton (start here)
+### Phase 1 — Skeleton ✓ COMPLETE
 
-| Task | Description |
-|---|---|
-| P1-01 | CMake skeleton, vcpkg manifest, `cmake/deps_*.cmake`, Catch2 harness, GitHub Actions ×3, Jenkinsfile, Dockerfile.build |
-| P1-02 | wxWidgets `MainFrame` + menus (File/Edit/View/Help), toolbar stubs, status bar |
-| P1-03 | `MapPanel` (wxWebView + Leaflet + OSM tiles), JS bridge skeleton, round-trip smoke test |
-| P1-04 | Tile cache: libcurl fetch → SQLite MBTiles store, 30-day TTL, read-only .mbtiles fallback |
-| P1-05 | TOML scenario I/O: load/save `Scenario`/`Transmitter`/`ReceiverModel` with round-trip unit tests |
-| P1-06 | `coords/` module: WGS84↔OSGB36 (Helmert), National Grid E/N↔lat/lon, grid ref formatting, OSTN15 loader stub. Regression tests vs known OS benchmark points. |
-| P1-07 | Transmitter placement UI: click map → add/drag transmitters, coordinate display in both systems, sync to Scenario |
-| P1-08 | Parameter editor panel (`ParamEditor`): per-transmitter and per-receiver forms, validation, simple/advanced receiver mode toggle |
-| P1-08b | Network Configuration panel (`NetworkConfigPanel`): **F1/F2 frequency fields** (4 dp, 30–300 kHz validation, red highlight on error), mode (8-slot/interlaced), grid resolution, receiver model, datum transform. Dockable via View → Network Configuration. Live ml→m readout in status bar on frequency change. 500 ms debounce → full recompute. |
-| P1-09 | `ComputeGrid` + worker thread: grid definition, worker thread, message queue, cancellation flag, `wxQueueEvent` dispatch, ownership-transfer model. Unit tests. |
+| Task | Status | Description |
+|---|---|---|
+| P1-01 | ✓ | CMake skeleton, vcpkg manifest, `cmake/deps_*.cmake`, Catch2 harness, GitHub Actions ×3, Jenkinsfile, Dockerfile.build |
+| P1-02 | ✓ | wxWidgets `MainFrame` + menus (File/Edit/View/Help), toolbar stubs, status bar |
+| P1-03 | ✓ | `MapPanel` (wxWebView + Leaflet + OSM tiles), JS bridge, round-trip smoke test |
+| P1-04 | ✓ | Tile cache: libcurl fetch → SQLite MBTiles store, 30-day TTL, read-only .mbtiles fallback |
+| P1-05 | ✓ | TOML scenario I/O: load/save `Scenario`/`Transmitter`/`ReceiverModel` with round-trip unit tests |
+| P1-06 | ✓ | `coords/` module: WGS84↔OSGB36 (Helmert), National Grid E/N↔lat/lon, grid ref formatting, OSTN15 loader stub. Regression tests vs known OS benchmark points. |
+| P1-07 | ✓ | Transmitter placement UI: click map → add/drag transmitters, coordinate display in both systems, sync to Scenario |
+| P1-08 | ✓ | Parameter editor panel (`ParamEditor`): per-transmitter and per-receiver forms, validation, simple/advanced receiver mode toggle |
+| P1-08b | ✓ | Network Configuration panel (`NetworkConfigPanel`): F1/F2 frequency fields, mode, grid resolution, receiver model, datum. 500 ms debounce → full recompute. |
+| P1-09 | ✓ | `ComputeManager` + worker thread: grid definition, message queue, cancellation flag, `wxQueueEvent` dispatch. Unit tests. |
 
-### Phase 2 — Core propagation
+### Phase 2 — Core propagation (partial)
 
-| Task | Description |
-|---|---|
-| P2-01 | ITU P.368 groundwave attenuation curves (polynomial, parameterised by **conductivity + configured frequency**). All curve evaluations use `scenario.frequencies.f1_hz` / `f2_hz`. Validate against ITU published values at both standard and non-standard frequencies. |
-| P2-02 | Millington mixed-path extension over land/sea boundaries |
-| P2-03 | Conductivity raster: GDAL GeoTIFF load, bilinear interpolation at lat/lon. Built-in synthetic test values. ITU P.832 importer. |
-| P2-04 | Terrain raster: SRTM tile load, mosaic, height profile along path |
-| P2-05 | **Monteath terrain method** — most complex sub-module. Surface impedance integration along terrain profile. Phase delay + field strength correction. Validate against Williams Ch.10. |
-| P2-06 | ITU P.684 skywave: median night-time, sea gain, geomagnetic latitude correction (Eq. 5.3–5.5). Uses **configured frequencies**. Validate against Williams figures. |
-| P2-07 | ITU P.372 atmospheric noise: Fam table interpolation at **configured frequencies**, annual median |
-| P2-08 | Groundwave layer render: first visible map layer, GeoJSON colour ramp to Leaflet |
+| Task | Status | Description |
+|---|---|---|
+| P2-01 | ✓ | ITU P.368 groundwave: empirical polynomial fit parameterised by conductivity + configured frequency. Uses `scenario.frequencies.f1_hz`. **Note: polynomial approximation, not full Sommerfeld/Wait/GRWAVE.** |
+| P2-02 | ✗ | Millington mixed-path extension over land/sea boundaries — **not implemented**. Groundwave currently uses midpoint conductivity only. |
+| P2-03 | ✓ | Conductivity raster: `BuiltInConductivityMap` (land/sea heuristic, British Isles region) + `GdalConductivityMap` (GeoTIFF, `#ifdef USE_GDAL`). Factory: `make_conductivity_map()`. |
+| P2-04 | ✓ | Terrain raster: `FlatTerrainMap` + `GdalTerrainMap` (GeoTIFF single-file and SRTM HGT directory). `TerrainMap::profile()` samples great-circle path via GeographicLib. Factory: `make_terrain_map()`. |
+| P2-05 | ✗ | **Monteath terrain method** — **not implemented**. `terrain.cpp` provides the height profile; the surface-impedance integration over that profile has not been written. This is a prerequisite for proper P4-01. |
+| P2-06 | ✓ | ITU P.684 skywave: median night-time, sea gain, geomagnetic latitude correction. Uses configured frequencies. |
+| P2-07 | ✓ | ITU P.372 atmospheric noise: Fam table interpolation at configured frequencies, annual median. |
+| P2-08 | ✓ | All computed layers rendered as GeoJSON colour ramps to Leaflet. Layer toggle panel with wxChoice + opacity slider. |
 
-### Phase 3 — SNR, geometry, repeatable, virtual receiver
+### Phase 3 — SNR, geometry, repeatable, virtual receiver ✓ COMPLETE
 
-| Task | Description |
-|---|---|
-| P3-01 | SNR / GDR computation from groundwave + noise + skywave arrays |
-| P3-02 | Phase/range uncertainty: Williams Eq. 9.7–9.8 |
-| P3-03 | Station selection + WHDOP: nearest-N, range limit, slot-clash rules (App. K), weight matrix (Eq. 9.14), WHDOP (Eq. 9.16). Validate against Williams Fig. 9.9. |
-| P3-04 | Repeatable accuracy: σ_p = σ_d × WHDOP, user-configurable filter factor |
-| P3-05 | SNR / WHDOP / repeatable layer renders; layer toggle panel wired up |
-| P3-06 | Virtual receiver marker: drag on map, real-time coordinate display in both systems |
-| P3-07 | Per-slot phase computation (`asf.cpp::computeAtPoint()`): pseudorange, fractional phase, lane number, SNR, GDR at receiver point for all four components (f1+/f1−/f2+/f2−). Updates ReceiverPanel. |
-| P3-08 | Simulator export: text block with phase values 0–999 matching `slotPhaseOffset[]` in `datatrak_gen.h`. Copy to clipboard + save file. |
-| P3-09 | Field-strength vs range plot in ResultsPanel |
+| Task | Status | Description |
+|---|---|---|
+| P3-01 | ✓ | SNR / GDR / SGR computation (`snr.cpp::computeSNR()`). |
+| P3-02 | ✓ | Phase/range uncertainty: Williams Eq. 9.7–9.8 → `snr.cpp::phase_uncertainty_ml()`. |
+| P3-03 | ✓ | Station selection + WHDOP: nearest-N, range limit, slot-clash rules, weight matrix, WHDOP (Eq. 9.16) → `whdop.cpp::compute_whdop()` + `computeWHDOP()`. |
+| P3-04 | ✓ | Repeatable accuracy: σ_p = σ_d × WHDOP, computed inside `computeWHDOP()`. |
+| P3-05 | ✓ | SNR / WHDOP / repeatable layer renders; layer toggle panel wired up. |
+| P3-06 | ✓ | Virtual receiver marker: drag on map, real-time coordinate display. |
+| P3-07 | ✓ | Per-slot phase computation (`asf.cpp::computeAtPoint()`): pseudorange, fractional phase, lane number, SNR, GDR. **See approximations in §Current implementation state.** |
+| P3-08 | ✓ | Simulator export: text block with phase values 0–999 matching `slotPhaseOffset[]`. Copy to clipboard + save file. |
+| P3-09 | ✓ | Field-strength vs range plot in ResultsPanel. |
 
-### Phase 4 — ASF, absolute accuracy, confidence factor
+### Phase 4 — ASF, absolute accuracy, confidence factor (partial — **START HERE**)
 
-| Task | Description |
-|---|---|
-| P4-01 | Monteath SF phase delay (ASF): per station pair, link bias chain (Eq. 11.5–11.10), SPO and station delay from scenario |
-| P4-02 | Virtual Locator least-squares (Eq. 9.9–9.12): iterated weighted LS, Airy ellipsoid, convergence < 1 m, per grid point |
-| P4-03 | Absolute accuracy + confidence factor map layers |
-| P4-04 | Airy ellipsoid + OSGB in Virtual Locator: Andoyer-Lambert range with Airy ellipsoid, matches firmware behaviour |
-| P4-05 | OSTN15 full datum transform: load grid (GDAL), bicubic interpolation, fallback to Helmert |
+A first-pass skeleton for Phase 4 exists in `asf.cpp`, but the core physics is
+approximated and must be replaced. See **§Current implementation state** for the
+precise gaps. The map layers (`asf`, `absolute_accuracy`, `confidence`) are
+computed and rendered; `asf_gradient` and `absolute_accuracy_corrected` are
+allocated but zero everywhere.
 
-### Phase 5 — Outputs, almanac, monitor calibration, polish
+| Task | Status | Description |
+|---|---|---|
+| P4-01 | ⚠ approx | Monteath SF phase delay (ASF): currently `asf_single_ml()` — a first-order surface impedance approximation. Must be replaced with proper Monteath terrain profile integration (needs P2-05 first). SPO and station delay from scenario not yet applied. |
+| P4-02 | ⚠ approx | Virtual Locator least-squares (Eq. 9.9–9.12): currently `virtual_locator_error_m()` — a geometric estimate (RMS ASF × WHDOP). Must be replaced with an iterated weighted LS position fix, convergence < 1 m, per grid point. Needs P4-04 (Airy ellipsoid) first. |
+| P4-03 | ✓ | Absolute accuracy + confidence factor map layers computed and rendered. Will automatically improve when P4-01/P4-02 are replaced. |
+| P4-04 | ✗ | Airy ellipsoid + OSGB in Virtual Locator: Andoyer-Lambert range computation with Airy 1830 ellipsoid, matching Mk4 firmware behaviour. Currently WGS84 GeographicLib is used everywhere. |
+| P4-05 | ✗ | OSTN15 full datum transform: stub in `coords/Osgb.cpp` falls back to Helmert. Needs GDAL grid load + bicubic interpolation. |
 
-| Task | Description |
-|---|---|
-| P5-01 | PNG / SVG / GeoTIFF / CSV export. GeoTIFF via GDAL, verify import into QGIS. |
-| P5-02 | HTML report: self-contained, scenario params + layer images + statistics tables |
-| P5-03 | Scenario comparison mode: load two scenarios, diff selected layers side by side |
-| P5-04 | Data import helpers: `tools/` Python scripts for ITU P.832, SRTM, OSTN15 |
-| P5-05 | Physics documentation: `docs/physics/` annotated Williams equation derivations |
-| P5-06 | Receiver modelling guide + coordinate systems guide |
-| P5-07 | Linux AppImage packaging (linuxdeploy) |
-| P5-08 | **UK 32-zone polygon dataset**: digitise DTM-170 Fig 7.3 zone boundaries as GeoJSON. Bundle as `data/zones/uk_32zone.geojson`. Include zone centroids. |
-| P5-09 | **Zone pattern computation (Zp)**: per zone centroid, SNR-filter pattern pairs, rank by WHDOP, assign top 3. Flag zones with <3 viable patterns. |
-| P5-10 | **Pattern offset reference UI**: Mode 1/2/3 selector, reference marker placement (map click or OSGB entry), multiple markers → least-squares composite, RMS residual display. |
-| P5-11 | **ASF gradient map layer**: spatial gradient magnitude of ASF grid per pattern pair [ml/km]. Monitor siting planning layer. |
-| P5-12 | **Pattern offset computation (Po)**: ASF at reference point(s) in millilanes, clip negative→0 + flag, store in scenario. |
-| P5-13 | **Almanac text export (V7 + V16)**: Sg, Stxs, Zp, Po commands in both formats. Header block: generation params, configured frequencies + derived lane widths + ml→m conversion, RMS residuals, warnings (non-standard frequencies, negative po clips, coverage gaps). Plain ASCII. |
-| P5-14 | **Monitor station calibration import**: manual delta entry UI + CSV/JSON import. Apply corrections to `po` store. Multi-monitor consistency check (default threshold 20 ml). Delta-error map overlay. |
-| P5-15 | **Model vs measurement diagnostic**: corrected vs predicted absolute accuracy comparison, pattern-pair divergence table, divergence classification (uniform / specific pair / temporal / single-monitor). |
+### Phase 5 — Outputs, almanac, monitor calibration, polish (partial)
+
+| Task | Status | Description |
+|---|---|---|
+| P5-01 | ✗ | PNG / SVG / GeoTIFF / CSV export. |
+| P5-02 | ✗ | HTML report. |
+| P5-03 | ✗ | Scenario comparison mode. |
+| P5-04 | ✗ | Data import helpers (`tools/` Python scripts). |
+| P5-05 | ✗ | Physics documentation. |
+| P5-06 | ✗ | Receiver modelling guide + coordinate systems guide. |
+| P5-07 | ✗ | Linux AppImage packaging. |
+| P5-08 | ✗ | UK 32-zone polygon dataset (`data/zones/uk_32zone.geojson`). |
+| P5-09 | ✗ | Zone pattern computation (Zp). |
+| P5-10 | ✗ | Pattern offset reference UI (Mode 1/2/3 selector, reference marker). |
+| P5-11 | ✗ | ASF gradient map layer — layer is allocated in the pipeline but always zero. |
+| P5-12 | ✓ | Pattern offset computation (Po): `almanac/AlmanacExport.cpp`. |
+| P5-13 | ✓ | Almanac text export (V7 + V16): Sg, Stxs, Po commands. Zp stub (needs P5-08/09). |
+| P5-14 | ✗ | Monitor station calibration import. |
+| P5-15 | ✗ | Model vs measurement diagnostic. |
+
+---
+
+## Current implementation state (Phase 4 handover)
+
+This section documents the approximations and gaps in the current code that
+Phase 4 must address. All 58 tests pass. Build is clean on Linux.
+
+### Engine approximations to replace
+
+**`groundwave.cpp::groundwave_field_dbuvm()`** — empirical polynomial fit:
+```
+A_db = 0.0438 × d_km^0.832 × (f/100kHz)^0.5 × (0.005/σ)^0.3
+```
+Adequate for Phase 3 testing. The full Sommerfeld/Wait/GRWAVE residue series
+would give better accuracy at short and very long ranges, but is not required
+for Phase 4 (ASF dominates absolute accuracy, not the groundwave model shape).
+
+**`asf.cpp::asf_single_ml()`** — first-order surface impedance approximation:
+```cpp
+double omega = 2π × freq_hz;
+double x     = σ / (ω ε₀);
+double η²    = 1 / sqrt(εᵣ² + x²);     // |η|² first order
+double τ_asf = (d_km × 1000 / c) × 0.5 × η²;
+return τ_asf × freq_hz × 1000.0;        // millilanes
+```
+Uses a fixed `εᵣ = 15` (typical land). Does not use the terrain profile or the
+conductivity raster. P4-01 must replace this with Monteath terrain profile
+integration, once P2-05 (Monteath) is implemented.
+
+**`asf.cpp::virtual_locator_error_m()`** — geometric estimate only:
+```cpp
+sigma_asf = RMS of ASF values across selected stations (in metres)
+return sigma_asf × WHDOP;
+```
+This is not an iterated position fix. It gives a rough order-of-magnitude
+absolute accuracy figure. P4-02 must replace this with Williams Eq. 9.9–9.12:
+an iterated weighted least-squares fix that converges to < 1 m.
+
+### Hardcoded conductivity in asf.cpp
+
+Both `computeASF()` and `computeAtPoint()` use:
+```cpp
+GroundConstants gc { 0.005, 15.0 };  // hardcoded land constants
+```
+These must be replaced with `make_conductivity_map(scenario)->lookup(lat, lon)`
+once the Monteath terrain method is integrated (since the conductivity raster
+is already available from P2-03 and is used correctly in `groundwave.cpp`).
+
+### f1−/f2− phases in computeAtPoint()
+
+The per-slot phase output in `computeAtPoint()` produces identical values for
+f1+ and f1−, and for f2+ and f2−. The F+ and F− navslots in a Datatrak
+transmission have opposite polarity — the correct phase offset for F− is
+`(1.0 - phase_fplus)` mod 1. This must be fixed before the simulator export
+produces physically correct values.
+
+### Uncomputed layers
+
+Two layers are allocated in `RunPipeline()` but remain zero everywhere:
+
+- **`asf_gradient`** — spatial gradient magnitude of the ASF grid [ml/km].
+  Implement in `computeASF()` after the ASF values are computed: for each grid
+  point, compute the gradient magnitude from the four neighbours. This feeds
+  the monitor siting planning layer (P5-11).
+
+- **`absolute_accuracy_corrected`** — absolute accuracy with monitor station
+  corrections applied. Depends on P5-14 (monitor calibration import).
+
+### OSTN15 datum transform
+
+`coords/Osgb.cpp::wgs84_to_osgb36_ostn15()` is a stub that calls
+`wgs84_to_osgb36()` (Helmert). Full OSTN15 (P4-05) requires downloading the OS
+shift grid file via `tools/ostn15_download.py` and loading it with GDAL for
+bicubic interpolation.
+
+### Airy ellipsoid in Virtual Locator
+
+The Mk4 Locator firmware computes ranges using the Airy 1830 ellipsoid with the
+Andoyer-Lambert formula. `asf.cpp` currently uses `GeographicLib::Geodesic::WGS84()`
+for all distance computations. P4-04 must add an Airy ellipsoid path (Airy
+semi-major a = 6377563.396 m, f = 1/299.3249646) and use it inside
+`virtual_locator_error_m()` and `computeAtPoint()`.
+
+GeographicLib supports arbitrary ellipsoids:
+```cpp
+// Airy 1830
+const GeographicLib::Geodesic airy(6377563.396, 1.0/299.3249646);
+```
+
+### Missing P2-02 Millington and P2-05 Monteath
+
+Implementing P4-01 properly requires P2-05 (Monteath terrain method) first.
+P2-05 in turn works best with P2-02 (Millington) for mixed land/sea paths.
+The recommended implementation order for Phase 4 is therefore:
+
+1. **P2-05 Monteath** (terrain profile integration) — incremental, unit tests at each step
+2. **P4-01** (replace `asf_single_ml` with Monteath output)
+3. **P4-04** (Airy ellipsoid in VL and `computeAtPoint`)
+4. **P4-02** (replace `virtual_locator_error_m` with iterated WLS using Airy)
+5. **P4-03** (absolute accuracy layers update automatically)
+6. **P4-05** (OSTN15 full transform — can be done in parallel with 1–5)
+7. Fix `asf_gradient` layer computation
+8. Fix f1−/f2− phase polarity in `computeAtPoint`
+9. Replace hardcoded conductivity in `asf.cpp` with raster lookup
+
+P2-02 (Millington) can be deferred to a later pass — the midpoint conductivity
+approximation is adequate for non-coastal paths.
 
 ---
 
@@ -831,14 +944,26 @@ the interface is a text/serial protocol.
 
 ---
 
-## Where to start
+## Where to resume — Phase 4
 
-**Start with Phase 1, task P1-01**: create the CMake skeleton, vcpkg manifest,
-platform cmake files, Catch2 test harness, and the three GitHub Actions
-workflows. Build it, make sure all three CI workflows pass with an empty
-(hello-world) binary, before writing any application code.
+Phases 1, 2 (partial), and 3 are complete. 58 tests pass. The application
+builds and runs with a working Leaflet map, transmitter/receiver placement,
+full propagation pipeline (groundwave → SNR → WHDOP → repeatable → ASF →
+absolute accuracy → confidence), ReceiverPanel, simulator export, and almanac
+export (Sg/Stxs/Po in V7/V16 formats).
 
-Then P1-02 (MainFrame), P1-03 (MapPanel + bridge), in order. The milestone for
-Phase 1 is: a window with a working Leaflet map, a transmitter that can be
-placed by clicking the map, and the TOML scenario round-tripping correctly in
-unit tests.
+**Read §Current implementation state before writing any Phase 4 code.** It
+documents precisely which functions are approximations, which layers are
+uncomputed, and why.
+
+**Recommended starting point: P2-05 Monteath terrain method.** This is the
+most complex sub-module and a prerequisite for a proper P4-01 ASF
+implementation. Implement it incrementally in `engine/` — one unit test per
+step. The terrain height profile API (`terrain.h::TerrainMap::profile()`) is
+already in place.
+
+The Phase 4 milestone is: absolute accuracy map that reflects real Monteath
+ASF delays rather than the surface-impedance approximation, computed via a
+proper iterated WLS Virtual Locator fix using Airy ellipsoid ranges, with
+the `asf_gradient` layer correctly computed and the f1−/f2− phase polarity
+fixed in `computeAtPoint()`.
