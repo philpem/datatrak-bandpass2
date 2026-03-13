@@ -1,0 +1,387 @@
+#include "MainFrame.h"
+#include "../coords/NationalGrid.h"
+#include "../coords/Osgb.h"
+#include "../model/toml_io.h"
+#include <wx/msgdlg.h>
+#include <wx/filedlg.h>
+#include <wx/aboutdlg.h>
+#include <wx/toolbar.h>
+#include <wx/menu.h>
+#include <wx/stdpaths.h>
+#include <wx/filename.h>
+#include <wx/artprov.h>
+#include <cstdlib>
+#include <stdexcept>
+
+namespace bp {
+
+enum {
+    ID_FILE_NEW      = wxID_NEW,
+    ID_FILE_OPEN     = wxID_OPEN,
+    ID_FILE_SAVE     = wxID_SAVE,
+    ID_FILE_SAVEAS   = wxID_SAVEAS,
+    ID_VIEW_NETCFG   = wxID_HIGHEST + 100,
+    ID_VIEW_LAYERS,
+    ID_VIEW_PARAMS,
+    ID_TOOL_PLACE_TX,
+    SB_WGS84   = 0,
+    SB_OSGB    = 1,
+    SB_ML      = 2,
+    SB_STATUS  = 3,
+};
+
+MainFrame::MainFrame()
+    : wxFrame(nullptr, wxID_ANY, "BANDPASS II",
+              wxDefaultPosition, wxSize(1200, 800))
+{
+    aui_.SetManagedWindow(this);
+
+    // Initialize tile cache (store in user data dir)
+    try {
+        wxString data_dir = wxStandardPaths::Get().GetUserDataDir();
+        wxFileName db_path(data_dir, "tiles.db");
+        tile_cache_ = std::make_unique<TileCache>(
+            std::filesystem::path(db_path.GetFullPath().ToStdString()));
+    } catch (std::exception& e) {
+        wxLogWarning("Tile cache init failed: %s", e.what());
+    }
+
+    uint16_t port = tile_cache_ ? tile_cache_->GetPort() : 0;
+
+    // Map panel (centre)
+    map_panel_ = new MapPanel(this, port);
+    map_panel_->on_map_click         = [this](double lat, double lon){ OnMapClick(lat, lon); };
+    map_panel_->on_transmitter_moved = [this](int id, double lat, double lon){
+        OnTransmitterMoved(id, lat, lon);
+    };
+    map_panel_->on_cursor_moved = [this](double lat, double lon){ OnCursorMoved(lat, lon); };
+
+    // Dockable panels
+    net_config_    = new NetworkConfigPanel(this);
+    param_editor_  = new ParamEditor(this);
+    layer_panel_   = new LayerPanel(this);
+    receiver_panel_ = new ReceiverPanel(this);
+    results_panel_ = new ResultsPanel(this);
+
+    net_config_->SetScenario(&scenario_);
+    net_config_->on_changed = [this](const Scenario&){ TriggerRecompute(); };
+
+    param_editor_->on_transmitter_changed = [this](int id, const Transmitter& tx) {
+        if (id >= 0 && id < (int)scenario_.transmitters.size()) {
+            scenario_.transmitters[id] = tx;
+            MarkDirty();
+            TriggerRecompute();
+        }
+    };
+    param_editor_->on_receiver_changed = [this](const ReceiverModel& rx) {
+        scenario_.receiver = rx;
+        MarkDirty();
+        TriggerRecompute();
+    };
+
+    layer_panel_->on_toggle = [this](const std::string& layer, bool visible) {
+        if (visible) map_panel_->ClearLayer(layer);
+        else         map_panel_->ClearLayer(layer);
+    };
+
+    // AUI layout
+    aui_.AddPane(map_panel_, wxAuiPaneInfo().CenterPane().Name("map"));
+    aui_.AddPane(net_config_, wxAuiPaneInfo()
+        .Right().Layer(1).Position(0).Name("netcfg")
+        .Caption("Network Configuration").CloseButton(true).PinButton(true)
+        .BestSize(260, 220).MinSize(200, 180));
+    aui_.AddPane(param_editor_, wxAuiPaneInfo()
+        .Right().Layer(1).Position(1).Name("params")
+        .Caption("Parameters").CloseButton(true).PinButton(true)
+        .BestSize(260, 300).MinSize(200, 200));
+    aui_.AddPane(layer_panel_, wxAuiPaneInfo()
+        .Right().Layer(1).Position(2).Name("layers")
+        .Caption("Layers").CloseButton(true).PinButton(true)
+        .BestSize(220, 250).MinSize(180, 200));
+    aui_.AddPane(receiver_panel_, wxAuiPaneInfo()
+        .Bottom().Layer(0).Position(0).Name("receiver")
+        .Caption("Receiver Phase Table").CloseButton(true)
+        .BestSize(600, 160).MinSize(400, 120));
+    aui_.AddPane(results_panel_, wxAuiPaneInfo()
+        .Bottom().Layer(0).Position(1).Name("results")
+        .Caption("Field Strength Plots").CloseButton(true)
+        .BestSize(400, 160).MinSize(300, 120));
+    aui_.Update();
+
+    BuildMenus();
+    BuildToolbar();
+    BuildStatusBar();
+
+    // Compute manager
+    compute_mgr_ = std::make_unique<ComputeManager>(this);
+    Bind(EVT_COMPUTE_RESULT, &MainFrame::OnComputeResult, this);
+
+    // Initial recompute
+    scenario_.frequencies.recompute();
+    UpdateStatusBarMl();
+    UpdateTitle();
+    TriggerRecompute();
+
+    Bind(wxEVT_CLOSE_WINDOW, &MainFrame::OnClose, this);
+}
+
+MainFrame::~MainFrame() {
+    if (compute_mgr_) compute_mgr_->Shutdown();
+    aui_.UnInit();
+}
+
+void MainFrame::BuildMenus() {
+    auto* mb = new wxMenuBar;
+
+    auto* file = new wxMenu;
+    file->Append(ID_FILE_NEW,    "&New\tCtrl+N");
+    file->Append(ID_FILE_OPEN,   "&Open...\tCtrl+O");
+    file->Append(ID_FILE_SAVE,   "&Save\tCtrl+S");
+    file->Append(ID_FILE_SAVEAS, "Save &As...");
+    file->AppendSeparator();
+    file->Append(wxID_EXIT,      "E&xit");
+    mb->Append(file, "&File");
+
+    auto* view = new wxMenu;
+    view->Append(ID_VIEW_NETCFG, "&Network Configuration\tCtrl+Shift+N");
+    view->Append(ID_VIEW_LAYERS, "&Layer Panel\tCtrl+Shift+L");
+    view->Append(ID_VIEW_PARAMS, "&Parameter Editor\tCtrl+Shift+P");
+    mb->Append(view, "&View");
+
+    auto* help = new wxMenu;
+    help->Append(wxID_ABOUT, "&About BANDPASS II...");
+    mb->Append(help, "&Help");
+
+    SetMenuBar(mb);
+
+    Bind(wxEVT_MENU, &MainFrame::OnFileNew,         this, ID_FILE_NEW);
+    Bind(wxEVT_MENU, &MainFrame::OnFileOpen,        this, ID_FILE_OPEN);
+    Bind(wxEVT_MENU, &MainFrame::OnFileSave,        this, ID_FILE_SAVE);
+    Bind(wxEVT_MENU, &MainFrame::OnFileSaveAs,      this, ID_FILE_SAVEAS);
+    Bind(wxEVT_MENU, [this](wxCommandEvent&){ Close(); }, wxID_EXIT);
+    Bind(wxEVT_MENU, &MainFrame::OnViewNetworkConfig, this, ID_VIEW_NETCFG);
+    Bind(wxEVT_MENU, &MainFrame::OnViewLayerPanel,    this, ID_VIEW_LAYERS);
+    Bind(wxEVT_MENU, &MainFrame::OnViewParamEditor,   this, ID_VIEW_PARAMS);
+    Bind(wxEVT_MENU, &MainFrame::OnHelpAbout,         this, wxID_ABOUT);
+}
+
+void MainFrame::BuildToolbar() {
+    auto* tb = CreateToolBar(wxTB_HORIZONTAL | wxTB_TEXT);
+    tb->AddTool(ID_TOOL_PLACE_TX, "Place TX",
+                wxArtProvider::GetBitmap(wxART_NEW, wxART_TOOLBAR),
+                "Click map to place a transmitter", wxITEM_CHECK);
+    tb->Realize();
+    Bind(wxEVT_TOOL, &MainFrame::OnToolPlaceTx, this, ID_TOOL_PLACE_TX);
+}
+
+void MainFrame::BuildStatusBar() {
+    CreateStatusBar(4);
+    int widths[] = {220, 180, 260, -1};
+    SetStatusWidths(4, widths);
+    SetStatusText("Ready", SB_STATUS);
+    UpdateStatusBarMl();
+}
+
+void MainFrame::UpdateStatusBarMl() {
+    double ml_f1 = scenario_.frequencies.lane_width_f1_m / 1000.0;
+    double ml_f2 = scenario_.frequencies.lane_width_f2_m / 1000.0;
+    SetStatusText(wxString::Format("1 ml(F1)=%.3fm  1 ml(F2)=%.3fm", ml_f1, ml_f2), SB_ML);
+}
+
+void MainFrame::UpdateTitle() {
+    wxString title = "BANDPASS II";
+    if (!current_file_.empty()) {
+        wxFileName fn(current_file_);
+        title += " — " + fn.GetFullName();
+    }
+    if (dirty_) title += " *";
+    SetTitle(title);
+}
+
+void MainFrame::MarkDirty() {
+    dirty_ = true;
+    UpdateTitle();
+}
+
+void MainFrame::TriggerRecompute() {
+    if (!compute_mgr_) return;
+    compute_mgr_->PostRequest(std::make_shared<const Scenario>(scenario_));
+    SetStatusText("Computing...", SB_STATUS);
+}
+
+void MainFrame::OnComputeResult(wxCommandEvent& evt) {
+    auto* result = static_cast<ComputeResult*>(evt.GetClientData());
+    if (!result) return;
+    std::unique_ptr<ComputeResult> owned(result);
+    if (!owned->error.empty()) {
+        SetStatusText("Error: " + owned->error, SB_STATUS);
+        return;
+    }
+    if (owned->data) {
+        ApplyComputeResult(*owned);
+    }
+    SetStatusText("Ready", SB_STATUS);
+}
+
+void MainFrame::ApplyComputeResult(const ComputeResult& result) {
+    if (!result.data) return;
+    // Push each layer to the map
+    for (const auto& [name, arr] : result.data->layers) {
+        if (!arr.values.empty()) {
+            map_panel_->UpdateLayer(name, arr.to_geojson());
+        }
+    }
+}
+
+void MainFrame::OnMapClick(double lat, double lon) {
+    if (!placement_mode_) return;
+
+    Transmitter tx;
+    tx.name     = "TX-" + std::to_string(next_tx_id_);
+    tx.lat      = lat;
+    tx.lon      = lon;
+    tx.slot     = next_tx_id_;
+    tx.is_master = (next_tx_id_ == 1);
+
+    int id = (int)scenario_.transmitters.size();
+    scenario_.transmitters.push_back(tx);
+
+    map_panel_->AddTransmitterMarker(id, lat, lon, tx.name);
+    param_editor_->LoadTransmitter(id, tx);
+    ++next_tx_id_;
+    MarkDirty();
+    TriggerRecompute();
+}
+
+void MainFrame::OnTransmitterMoved(int id, double lat, double lon) {
+    if (id < 0 || id >= (int)scenario_.transmitters.size()) return;
+    scenario_.transmitters[id].lat = lat;
+    scenario_.transmitters[id].lon = lon;
+    MarkDirty();
+    TriggerRecompute();
+}
+
+void MainFrame::OnCursorMoved(double lat, double lon) {
+    SetStatusText(wxString::Format("%.5f, %.5f", lat, lon), SB_WGS84);
+    try {
+        LatLon osgb36 = osgb::wgs84_to_osgb36({lat, lon});
+        EastNorth en  = national_grid::latlon_to_en(osgb36);
+        std::string ref = national_grid::en_to_gridref(en, 8);
+        SetStatusText(ref, SB_OSGB);
+    } catch (...) {
+        SetStatusText("", SB_OSGB);
+    }
+}
+
+void MainFrame::OnToolPlaceTx(wxCommandEvent& evt) {
+    placement_mode_ = evt.IsChecked();
+    map_panel_->SetPlacementMode(placement_mode_);
+}
+
+void MainFrame::OnFileNew(wxCommandEvent& /*evt*/) {
+    if (!ConfirmDiscardChanges()) return;
+    scenario_      = Scenario{};
+    current_file_  = "";
+    dirty_         = false;
+    next_tx_id_    = 1;
+    placement_mode_ = false;
+    net_config_->SetScenario(&scenario_);
+    UpdateStatusBarMl();
+    UpdateTitle();
+    TriggerRecompute();
+}
+
+void MainFrame::OnFileOpen(wxCommandEvent& /*evt*/) {
+    if (!ConfirmDiscardChanges()) return;
+    wxFileDialog dlg(this, "Open Scenario", "", "",
+                     "BANDPASS Scenario (*.toml)|*.toml|All files (*.*)|*.*",
+                     wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+    if (dlg.ShowModal() != wxID_OK) return;
+    std::string path = dlg.GetPath().ToStdString();
+    try {
+        scenario_     = toml_io::load(path);
+        current_file_ = path;
+        dirty_        = false;
+    } catch (std::exception& e) {
+        wxMessageBox(e.what(), "Error opening file", wxOK | wxICON_ERROR, this);
+        return;
+    }
+    net_config_->SetScenario(&scenario_);
+    UpdateStatusBarMl();
+    UpdateTitle();
+    TriggerRecompute();
+}
+
+void MainFrame::OnFileSave(wxCommandEvent& evt) {
+    if (current_file_.empty()) { OnFileSaveAs(evt); return; }
+    try {
+        toml_io::save(scenario_, current_file_);
+        dirty_ = false;
+        UpdateTitle();
+    } catch (std::exception& e) {
+        wxMessageBox(e.what(), "Error saving file", wxOK | wxICON_ERROR, this);
+    }
+}
+
+void MainFrame::OnFileSaveAs(wxCommandEvent& /*evt*/) {
+    wxFileDialog dlg(this, "Save Scenario", "", "",
+                     "BANDPASS Scenario (*.toml)|*.toml|All files (*.*)|*.*",
+                     wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+    if (dlg.ShowModal() != wxID_OK) return;
+    current_file_ = dlg.GetPath().ToStdString();
+    try {
+        toml_io::save(scenario_, current_file_);
+        dirty_ = false;
+        UpdateTitle();
+    } catch (std::exception& e) {
+        wxMessageBox(e.what(), "Error saving file", wxOK | wxICON_ERROR, this);
+    }
+}
+
+void MainFrame::OnViewNetworkConfig(wxCommandEvent& /*evt*/) {
+    auto& pane = aui_.GetPane("netcfg");
+    pane.Show(!pane.IsShown());
+    aui_.Update();
+}
+
+void MainFrame::OnViewLayerPanel(wxCommandEvent& /*evt*/) {
+    auto& pane = aui_.GetPane("layers");
+    pane.Show(!pane.IsShown());
+    aui_.Update();
+}
+
+void MainFrame::OnViewParamEditor(wxCommandEvent& /*evt*/) {
+    auto& pane = aui_.GetPane("params");
+    pane.Show(!pane.IsShown());
+    aui_.Update();
+}
+
+void MainFrame::OnHelpAbout(wxCommandEvent& /*evt*/) {
+    wxAboutDialogInfo info;
+    info.SetName("BANDPASS II");
+    info.SetDescription(
+        "Datatrak LF radio navigation planning tool.\n"
+        "Models coverage and positioning accuracy using\n"
+        "Williams (2004) propagation physics.");
+    info.SetLicence("GPLv3");
+    wxAboutBox(info, this);
+}
+
+void MainFrame::OnClose(wxCloseEvent& evt) {
+    if (evt.CanVeto() && !ConfirmDiscardChanges()) {
+        evt.Veto();
+        return;
+    }
+    if (compute_mgr_) compute_mgr_->Shutdown();
+    aui_.UnInit();
+    Destroy();
+}
+
+bool MainFrame::ConfirmDiscardChanges() {
+    if (!dirty_) return true;
+    int ret = wxMessageBox("Discard unsaved changes?", "BANDPASS II",
+                           wxYES_NO | wxNO_DEFAULT | wxICON_QUESTION, this);
+    return ret == wxYES;
+}
+
+} // namespace bp
