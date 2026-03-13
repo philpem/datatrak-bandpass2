@@ -69,3 +69,11 @@ bp_add_test(test_snr_whdop
     ${CMAKE_SOURCE_DIR}/src/coords/Osgb.cpp
     ${CMAKE_SOURCE_DIR}/src/coords/NationalGrid.cpp
 )
+
+# Almanac export tests
+bp_add_test(test_almanac_export
+    almanac/test_almanac_export.cpp
+    ${CMAKE_SOURCE_DIR}/src/almanac/AlmanacExport.cpp
+    ${CMAKE_SOURCE_DIR}/src/coords/Osgb.cpp
+    ${CMAKE_SOURCE_DIR}/src/coords/NationalGrid.cpp
+)

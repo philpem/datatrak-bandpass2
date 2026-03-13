@@ -19,6 +19,7 @@ set(BP_SOURCES
     ui/LayerPanel.cpp
     ui/ReceiverPanel.cpp
     ui/ResultsPanel.cpp
+    almanac/AlmanacExport.cpp
 )
 
 add_executable(bandpass2 ${BP_SOURCES})
