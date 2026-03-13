@@ -157,8 +157,8 @@ void MapPanel::UpdateLegend(const std::string& name, double vmin, double vmax,
         return s;
     };
     RunScript(wxString::Format("updateLegend('%s', %g, %g, '%s');",
-                               escape(name), vmin, vmax,
-                               escape(units)).ToStdString());
+                               escape(name).c_str(), vmin, vmax,
+                               escape(units).c_str()).ToStdString());
 }
 
 void MapPanel::ClearLegend() {

@@ -17,8 +17,8 @@ ReceiverPanel::ReceiverPanel(wxWindow* parent)
     units_row->Add(new wxStaticText(this, wxID_ANY, "Phase units:"),
                    0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 6);
     units_choice_ = new wxChoice(this, wxID_ANY);
-    units_choice_->Append("Millilanes (0\xe2\x80\x93999)");
-    units_choice_->Append("Degrees (0.0\xc2\xb0\xe2\x80\x93360.0\xc2\xb0)");
+    units_choice_->Append(wxString::FromUTF8("Millilanes (0\xe2\x80\x93" "999)"));
+    units_choice_->Append(wxString::FromUTF8("Degrees (0.0\xc2\xb0\xe2\x80\x93" "360.0\xc2\xb0)"));
     units_choice_->SetSelection(0);
     units_choice_->Bind(wxEVT_CHOICE, &ReceiverPanel::OnUnitsChanged, this);
     units_row->Add(units_choice_, 0, wxALIGN_CENTER_VERTICAL);
