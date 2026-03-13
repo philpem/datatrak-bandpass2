@@ -1,0 +1,13 @@
+{
+  "name": "bandpass2",
+  "version": "0.1.0",
+  "builtin-baseline": "a44707152fabbedcf1c17fe80d7bfb7d9370d8d5",
+  "dependencies": [
+    "nlohmann-json",
+    "geographiclib",
+    "catch2",
+    { "name": "wxwidgets", "features": ["webview"], "platform": "windows" },
+    { "name": "sqlite3",                             "platform": "windows" },
+    { "name": "curl",                                "platform": "windows" }
+  ]
+}

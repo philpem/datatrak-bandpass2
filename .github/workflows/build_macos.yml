@@ -1,0 +1,41 @@
+name: Build (macOS)
+
+on:
+  push:
+    branches: [ "**" ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v6.0.2
+
+      - name: Install Homebrew dependencies
+        run: |
+          brew install wxwidgets sqlite curl geographiclib \
+               nlohmann-json catch2 cmake ninja
+
+      - name: Configure
+        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Package
+        run: |
+          mkdir -p dist/bandpass2
+          cp build/src/bandpass2 dist/bandpass2/
+          cp -r build/src/web    dist/bandpass2/
+          cd dist && zip -r ../bandpass2-macos-arm64.zip bandpass2/
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v5.0.0
+        with:
+          name: bandpass2-macos-arm64
+          path: bandpass2-macos-arm64.zip
+          retention-days: 30

@@ -1,0 +1,606 @@
+#include "MainFrame.h"
+#include "../coords/NationalGrid.h"
+#include "../coords/Osgb.h"
+#include "../model/toml_io.h"
+#include "../engine/asf.h"
+#include "../almanac/AlmanacExport.h"
+#include <wx/msgdlg.h>
+#include <wx/filedlg.h>
+#include <wx/aboutdlg.h>
+#include <wx/toolbar.h>
+#include <wx/menu.h>
+#include <wx/stdpaths.h>
+#include <wx/filename.h>
+#include <wx/artprov.h>
+#include <wx/clipbrd.h>
+#include <wx/dataobj.h>
+#include <wx/file.h>
+#include <cstdlib>
+#include <stdexcept>
+
+namespace bp {
+
+enum {
+    ID_FILE_NEW      = wxID_NEW,
+    ID_FILE_OPEN     = wxID_OPEN,
+    ID_FILE_SAVE     = wxID_SAVE,
+    ID_FILE_SAVEAS   = wxID_SAVEAS,
+    ID_VIEW_NETCFG   = wxID_HIGHEST + 100,
+    ID_VIEW_LAYERS,
+    ID_VIEW_PARAMS,
+    ID_TOOL_PLACE_TX,
+    ID_TOOL_PLACE_RX,
+    ID_TOOL_COMPUTE,
+    ID_EXPORT_ALMANAC_V7,
+    ID_EXPORT_ALMANAC_V16,
+    SB_WGS84   = 0,
+    SB_OSGB    = 1,
+    SB_ML      = 2,
+    SB_STATUS  = 3,
+};
+
+MainFrame::MainFrame()
+    : wxFrame(nullptr, wxID_ANY, "BANDPASS II",
+              wxDefaultPosition, wxSize(1200, 800))
+{
+    aui_.SetManagedWindow(this);
+
+    // Initialize tile cache (store in user data dir)
+    try {
+        wxString data_dir = wxStandardPaths::Get().GetUserDataDir();
+        wxFileName db_path(data_dir, "tiles.db");
+        tile_cache_ = std::make_unique<TileCache>(
+            std::filesystem::path(db_path.GetFullPath().ToStdString()));
+    } catch (std::exception& e) {
+        wxLogWarning("Tile cache init failed: %s", e.what());
+    }
+
+    uint16_t port = tile_cache_ ? tile_cache_->GetPort() : 0;
+
+    // Map panel (centre)
+    map_panel_ = new MapPanel(this, port);
+    map_panel_->on_map_click         = [this](double lat, double lon){ OnMapClick(lat, lon); };
+    map_panel_->on_transmitter_moved = [this](int id, double lat, double lon){
+        OnTransmitterMoved(id, lat, lon);
+    };
+    map_panel_->on_cursor_moved          = [this](double lat, double lon){ OnCursorMoved(lat, lon); };
+    map_panel_->on_receiver_moved        = [this](double lat, double lon){ OnReceiverMoved(lat, lon); };
+    map_panel_->on_transmitter_selected  = [this](int id){ OnTransmitterSelected(id); };
+    map_panel_->on_receiver_placed       = [this](double lat, double lon){ OnReceiverPlaced(lat, lon); };
+
+    // Dockable panels
+    net_config_    = new NetworkConfigPanel(this);
+    param_editor_  = new ParamEditor(this);
+    layer_panel_   = new LayerPanel(this);
+    receiver_panel_ = new ReceiverPanel(this);
+    receiver_panel_->on_export_simulator = [this](){ OnExportSimulator(); };
+    results_panel_ = new ResultsPanel(this);
+
+    net_config_->SetScenario(&scenario_);
+    net_config_->on_changed = [this](const Scenario&){ TriggerRecompute(); };
+    results_panel_->SetScenario(&scenario_);
+
+    param_editor_->on_transmitter_changed = [this](int id, const Transmitter& tx) {
+        if (id >= 0 && id < (int)scenario_.transmitters.size()) {
+            scenario_.transmitters[id] = tx;
+            MarkDirty();
+            TriggerRecompute();
+        }
+    };
+    param_editor_->on_receiver_changed = [this](const ReceiverModel& rx) {
+        scenario_.receiver = rx;
+        MarkDirty();
+        TriggerRecompute();
+    };
+    param_editor_->on_tx_lock_changed = [this](int id, bool locked) {
+        if (id >= 0 && id < (int)scenario_.transmitters.size()) {
+            scenario_.transmitters[id].locked = locked;
+            map_panel_->LockTransmitter(id, locked);
+            MarkDirty();
+        }
+    };
+    param_editor_->on_rx_lock_changed = [this](bool locked) {
+        rx_locked_ = locked;
+        map_panel_->LockReceiver(locked);
+    };
+
+    layer_panel_->on_select = [this](const std::string& layer) {
+        // Clear all overlay layers and the legend first
+        for (const char* n : {"groundwave","skywave","atm_noise","snr","sgr","gdr",
+                               "whdop","repeatable","asf","asf_gradient",
+                               "absolute_accuracy","absolute_accuracy_corrected","confidence"}) {
+            map_panel_->ClearLayer(n);
+        }
+        map_panel_->ClearLegend();
+        if (!layer.empty()) PushLayerToMap(layer);
+    };
+    layer_panel_->on_opacity_changed = [this](float opacity) {
+        map_panel_->SetLayerOpacity(opacity);
+    };
+
+    // AUI layout
+    aui_.AddPane(map_panel_, wxAuiPaneInfo().CenterPane().Name("map"));
+    aui_.AddPane(net_config_, wxAuiPaneInfo()
+        .Right().Layer(1).Position(0).Name("netcfg")
+        .Caption("Network Configuration").CloseButton(true).PinButton(true)
+        .BestSize(260, 220).MinSize(200, 180));
+    aui_.AddPane(param_editor_, wxAuiPaneInfo()
+        .Right().Layer(1).Position(1).Name("params")
+        .Caption("Parameters").CloseButton(true).PinButton(true)
+        .BestSize(260, 300).MinSize(200, 200));
+    aui_.AddPane(layer_panel_, wxAuiPaneInfo()
+        .Right().Layer(1).Position(2).Name("layers")
+        .Caption("Layers").CloseButton(true).PinButton(true)
+        .BestSize(220, 250).MinSize(180, 200));
+    aui_.AddPane(receiver_panel_, wxAuiPaneInfo()
+        .Bottom().Layer(0).Position(0).Name("receiver")
+        .Caption("Receiver Phase Table").CloseButton(true)
+        .BestSize(600, 160).MinSize(400, 120));
+    aui_.AddPane(results_panel_, wxAuiPaneInfo()
+        .Bottom().Layer(0).Position(1).Name("results")
+        .Caption("Field Strength Plots").CloseButton(true)
+        .BestSize(400, 160).MinSize(300, 120));
+    aui_.Update();
+
+    BuildMenus();
+    BuildToolbar();
+    BuildStatusBar();
+
+    // Compute manager
+    compute_mgr_ = std::make_unique<ComputeManager>(this);
+    Bind(EVT_COMPUTE_RESULT,   &MainFrame::OnComputeResult,   this);
+    Bind(EVT_COMPUTE_PROGRESS, &MainFrame::OnComputeProgress, this);
+
+    // Initial recompute
+    scenario_.frequencies.recompute();
+    UpdateStatusBarMl();
+    UpdateTitle();
+    TriggerRecompute();
+
+    Bind(wxEVT_CLOSE_WINDOW, &MainFrame::OnClose, this);
+}
+
+MainFrame::~MainFrame() {
+    if (compute_mgr_) compute_mgr_->Shutdown();
+    aui_.UnInit();
+}
+
+void MainFrame::BuildMenus() {
+    auto* mb = new wxMenuBar;
+
+    auto* file = new wxMenu;
+    file->Append(ID_FILE_NEW,    "&New\tCtrl+N");
+    file->Append(ID_FILE_OPEN,   "&Open...\tCtrl+O");
+    file->Append(ID_FILE_SAVE,   "&Save\tCtrl+S");
+    file->Append(ID_FILE_SAVEAS, "Save &As...");
+    file->AppendSeparator();
+    auto* exportMenu = new wxMenu;
+    exportMenu->Append(ID_EXPORT_ALMANAC_V7,  "Almanac Commands (V7)");
+    exportMenu->Append(ID_EXPORT_ALMANAC_V16, "Almanac Commands (V16)");
+    file->AppendSubMenu(exportMenu, "E&xport");
+    file->AppendSeparator();
+    file->Append(wxID_EXIT,      "E&xit");
+    mb->Append(file, "&File");
+
+    auto* view = new wxMenu;
+    view->Append(ID_VIEW_NETCFG, "&Network Configuration\tCtrl+Shift+N");
+    view->Append(ID_VIEW_LAYERS, "&Layer Panel\tCtrl+Shift+L");
+    view->Append(ID_VIEW_PARAMS, "&Parameter Editor\tCtrl+Shift+P");
+    mb->Append(view, "&View");
+
+    auto* help = new wxMenu;
+    help->Append(wxID_ABOUT, "&About BANDPASS II...");
+    mb->Append(help, "&Help");
+
+    SetMenuBar(mb);
+
+    Bind(wxEVT_MENU, &MainFrame::OnFileNew,         this, ID_FILE_NEW);
+    Bind(wxEVT_MENU, &MainFrame::OnFileOpen,        this, ID_FILE_OPEN);
+    Bind(wxEVT_MENU, &MainFrame::OnFileSave,        this, ID_FILE_SAVE);
+    Bind(wxEVT_MENU, &MainFrame::OnFileSaveAs,      this, ID_FILE_SAVEAS);
+    Bind(wxEVT_MENU, [this](wxCommandEvent&){ Close(); }, wxID_EXIT);
+    Bind(wxEVT_MENU, [this](wxCommandEvent&){ OnExportAlmanac(almanac::FirmwareFormat::V7);  }, ID_EXPORT_ALMANAC_V7);
+    Bind(wxEVT_MENU, [this](wxCommandEvent&){ OnExportAlmanac(almanac::FirmwareFormat::V16); }, ID_EXPORT_ALMANAC_V16);
+    Bind(wxEVT_MENU, &MainFrame::OnViewNetworkConfig, this, ID_VIEW_NETCFG);
+    Bind(wxEVT_MENU, &MainFrame::OnViewLayerPanel,    this, ID_VIEW_LAYERS);
+    Bind(wxEVT_MENU, &MainFrame::OnViewParamEditor,   this, ID_VIEW_PARAMS);
+    Bind(wxEVT_MENU, &MainFrame::OnHelpAbout,         this, wxID_ABOUT);
+}
+
+void MainFrame::BuildToolbar() {
+    auto* tb = CreateToolBar(wxTB_HORIZONTAL | wxTB_TEXT);
+    tb->AddTool(ID_TOOL_PLACE_TX, "Place TX",
+                wxArtProvider::GetBitmap(wxART_NEW, wxART_TOOLBAR),
+                "Click map to place a transmitter", wxITEM_CHECK);
+    tb->AddTool(ID_TOOL_PLACE_RX, "Place RX",
+                wxArtProvider::GetBitmap(wxART_FIND, wxART_TOOLBAR),
+                "Click map to place the receiver", wxITEM_CHECK);
+    tb->AddSeparator();
+    tb->AddTool(ID_TOOL_COMPUTE, "Auto-compute",
+                wxArtProvider::GetBitmap(wxART_EXECUTABLE_FILE, wxART_TOOLBAR),
+                "Enable/disable automatic recomputation", wxITEM_CHECK);
+    tb->ToggleTool(ID_TOOL_COMPUTE, true);
+    tb->Realize();
+    Bind(wxEVT_TOOL, &MainFrame::OnToolPlaceTx,  this, ID_TOOL_PLACE_TX);
+    Bind(wxEVT_TOOL, &MainFrame::OnToolPlaceRx,  this, ID_TOOL_PLACE_RX);
+    Bind(wxEVT_TOOL, &MainFrame::OnToolCompute,  this, ID_TOOL_COMPUTE);
+}
+
+void MainFrame::BuildStatusBar() {
+    CreateStatusBar(4);
+    int widths[] = {220, 180, 260, -1};
+    SetStatusWidths(4, widths);
+    SetStatusText("Ready", SB_STATUS);
+    UpdateStatusBarMl();
+}
+
+void MainFrame::UpdateStatusBarMl() {
+    double ml_f1 = scenario_.frequencies.lane_width_f1_m / 1000.0;
+    double ml_f2 = scenario_.frequencies.lane_width_f2_m / 1000.0;
+    SetStatusText(wxString::Format("1 ml(F1)=%.3fm  1 ml(F2)=%.3fm", ml_f1, ml_f2), SB_ML);
+}
+
+void MainFrame::UpdateTitle() {
+    wxString title = "BANDPASS II";
+    if (!current_file_.empty()) {
+        wxFileName fn(current_file_);
+        title += wxString::FromUTF8(" \xe2\x80\x94 ") + fn.GetFullName();
+    }
+    if (dirty_) title += " *";
+    SetTitle(title);
+}
+
+void MainFrame::MarkDirty() {
+    dirty_ = true;
+    UpdateTitle();
+}
+
+void MainFrame::TriggerRecompute() {
+    results_panel_->Refresh();   // field-strength plot always reflects current scenario
+    if (!compute_mgr_ || !compute_enabled_) return;
+    compute_mgr_->PostRequest(std::make_shared<const Scenario>(scenario_));
+    SetStatusText("Computing...", SB_STATUS);
+}
+
+void MainFrame::OnComputeResult(wxCommandEvent& evt) {
+    auto* result = static_cast<ComputeResult*>(evt.GetClientData());
+    if (!result) return;
+    std::unique_ptr<ComputeResult> owned(result);
+    if (!owned->error.empty()) {
+        SetStatusText("Error: " + owned->error, SB_STATUS);
+        return;
+    }
+    if (owned->data) {
+        ApplyComputeResult(*owned);
+    }
+    SetStatusText("Ready", SB_STATUS);
+}
+
+void MainFrame::OnComputeProgress(wxCommandEvent& evt) {
+    SetStatusText(wxString::Format("Computing %s... %d%%",
+                                   evt.GetString(), evt.GetInt()), SB_STATUS);
+}
+
+void MainFrame::ApplyComputeResult(const ComputeResult& result) {
+    if (!result.data) return;
+    last_grid_data_ = result.data;
+
+    std::string selected = layer_panel_->GetSelectedLayer();
+    if (selected.empty()) return;   // "None" selected — nothing to push
+    PushLayerToMap(selected);
+}
+
+static const char* LayerUnits(const std::string& layer) {
+    if (layer == "groundwave" || layer == "skywave" || layer == "atm_noise")
+        return "dB\xc2\xb5V/m";          // dBµV/m (UTF-8)
+    if (layer == "snr" || layer == "gdr" || layer == "sgr")
+        return "dB";
+    if (layer == "repeatable" || layer == "absolute_accuracy" ||
+        layer == "absolute_accuracy_corrected")
+        return "m";
+    if (layer == "asf")            return "ml";
+    if (layer == "asf_gradient")   return "ml/km";
+    return "";   // whdop, confidence — dimensionless
+}
+
+void MainFrame::PushLayerToMap(const std::string& name) {
+    if (!last_grid_data_) return;
+    auto it = last_grid_data_->layers.find(name);
+    if (it == last_grid_data_->layers.end()) return;
+    const auto& arr = it->second;
+    if (arr.values.empty()) return;
+    double vmin = *std::min_element(arr.values.begin(), arr.values.end());
+    double vmax = *std::max_element(arr.values.begin(), arr.values.end());
+    if (vmax == vmin) return;
+    SetStatusText("Updating map...", SB_STATUS);
+    wxYield();   // allow status bar to repaint before the (potentially slow) JSON build
+    map_panel_->UpdateLayer(name, arr.to_geojson());
+    map_panel_->UpdateLegend(name, vmin, vmax, LayerUnits(name));
+    SetStatusText("Ready", SB_STATUS);
+}
+
+void MainFrame::OnMapClick(double lat, double lon) {
+    if (!placement_mode_) return;
+
+    Transmitter tx;
+    tx.name     = "TX-" + std::to_string(next_tx_id_);
+    tx.lat      = lat;
+    tx.lon      = lon;
+    tx.slot     = next_tx_id_;
+    tx.is_master = (next_tx_id_ == 1);
+
+    int id = (int)scenario_.transmitters.size();
+    scenario_.transmitters.push_back(tx);
+
+    map_panel_->AddTransmitterMarker(id, lat, lon, tx.name, tx.locked);
+    param_editor_->LoadTransmitter(id, tx);
+    ++next_tx_id_;
+    MarkDirty();
+    TriggerRecompute();
+}
+
+void MainFrame::OnTransmitterMoved(int id, double lat, double lon) {
+    if (id < 0 || id >= (int)scenario_.transmitters.size()) return;
+    scenario_.transmitters[id].lat = lat;
+    scenario_.transmitters[id].lon = lon;
+    MarkDirty();
+    TriggerRecompute();
+}
+
+void MainFrame::OnCursorMoved(double lat, double lon) {
+    SetStatusText(wxString::Format("%.5f, %.5f", lat, lon), SB_WGS84);
+    try {
+        LatLon osgb36 = osgb::wgs84_to_osgb36({lat, lon});
+        EastNorth en  = national_grid::latlon_to_en(osgb36);
+        std::string ref = national_grid::en_to_gridref(en, 8);
+        SetStatusText(ref, SB_OSGB);
+    } catch (...) {
+        SetStatusText("", SB_OSGB);
+    }
+}
+
+void MainFrame::OnToolPlaceTx(wxCommandEvent& evt) {
+    placement_mode_ = evt.IsChecked();
+    if (placement_mode_) {
+        rx_placement_mode_ = false;
+        GetToolBar()->ToggleTool(ID_TOOL_PLACE_RX, false);
+    }
+    map_panel_->SetPlacementMode(placement_mode_);
+}
+
+void MainFrame::OnToolPlaceRx(wxCommandEvent& evt) {
+    rx_placement_mode_ = evt.IsChecked();
+    if (rx_placement_mode_) {
+        placement_mode_ = false;
+        GetToolBar()->ToggleTool(ID_TOOL_PLACE_TX, false);
+        map_panel_->SetPlacementMode(false);
+    }
+    map_panel_->SetReceiverPlacementMode(rx_placement_mode_);
+}
+
+void MainFrame::OnToolCompute(wxCommandEvent& evt) {
+    compute_enabled_ = evt.IsChecked();
+    if (compute_enabled_) {
+        TriggerRecompute();
+    } else {
+        // Clear all map layers when computation is disabled
+        for (auto& name : {"groundwave","skywave","atm_noise","snr","sgr","gdr",
+                            "whdop","repeatable","asf","asf_gradient",
+                            "absolute_accuracy","absolute_accuracy_corrected","confidence"}) {
+            map_panel_->ClearLayer(name);
+        }
+        SetStatusText("Computation disabled", SB_STATUS);
+    }
+}
+
+void MainFrame::OnTransmitterSelected(int id) {
+    if (id >= 0 && id < (int)scenario_.transmitters.size()) {
+        param_editor_->LoadTransmitter(id, scenario_.transmitters[id]);
+        map_panel_->SelectTransmitterMarker(id);
+    }
+}
+
+static wxString FormatReceiverPosition(double lat, double lon) {
+    wxString pos = wxString::Format("RX: %.5f, %.5f", lat, lon);
+    try {
+        LatLon osgb36 = osgb::wgs84_to_osgb36({lat, lon});
+        EastNorth en  = national_grid::latlon_to_en(osgb36);
+        pos += "  |  " + wxString::FromUTF8(national_grid::en_to_gridref(en, 8));
+    } catch (...) {}
+    return pos;
+}
+
+void MainFrame::OnReceiverPlaced(double lat, double lon) {
+    rx_lat_    = lat;
+    rx_lon_    = lon;
+    rx_placed_ = true;
+    // Deactivate receiver placement mode after first click
+    rx_placement_mode_ = false;
+    GetToolBar()->ToggleTool(ID_TOOL_PLACE_RX, false);
+    map_panel_->SetReceiverPlacementMode(false);
+    map_panel_->SetReceiverMarker(lat, lon, rx_locked_);
+    receiver_panel_->SetPositionText(FormatReceiverPosition(lat, lon));
+    auto results = computeAtPoint(lat, lon, scenario_);
+    receiver_panel_->SetResults(results);
+}
+
+void MainFrame::OnFileNew(wxCommandEvent& /*evt*/) {
+    if (!ConfirmDiscardChanges()) return;
+    scenario_      = Scenario{};
+    current_file_  = "";
+    dirty_         = false;
+    next_tx_id_    = 1;
+    placement_mode_ = false;
+    net_config_->SetScenario(&scenario_);
+    UpdateStatusBarMl();
+    UpdateTitle();
+    TriggerRecompute();
+}
+
+void MainFrame::OnFileOpen(wxCommandEvent& /*evt*/) {
+    if (!ConfirmDiscardChanges()) return;
+    wxFileDialog dlg(this, "Open Scenario", "", "",
+                     "BANDPASS Scenario (*.toml)|*.toml|All files (*.*)|*.*",
+                     wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+    if (dlg.ShowModal() != wxID_OK) return;
+    std::string path = dlg.GetPath().ToStdString();
+    try {
+        scenario_     = toml_io::load(path);
+        current_file_ = path;
+        dirty_        = false;
+    } catch (std::exception& e) {
+        wxMessageBox(e.what(), "Error opening file", wxOK | wxICON_ERROR, this);
+        return;
+    }
+    net_config_->SetScenario(&scenario_);
+    UpdateStatusBarMl();
+    UpdateTitle();
+    TriggerRecompute();
+}
+
+void MainFrame::OnFileSave(wxCommandEvent& evt) {
+    if (current_file_.empty()) { OnFileSaveAs(evt); return; }
+    try {
+        toml_io::save(scenario_, current_file_);
+        dirty_ = false;
+        UpdateTitle();
+    } catch (std::exception& e) {
+        wxMessageBox(e.what(), "Error saving file", wxOK | wxICON_ERROR, this);
+    }
+}
+
+void MainFrame::OnFileSaveAs(wxCommandEvent& /*evt*/) {
+    wxFileDialog dlg(this, "Save Scenario", "", "",
+                     "BANDPASS Scenario (*.toml)|*.toml|All files (*.*)|*.*",
+                     wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+    if (dlg.ShowModal() != wxID_OK) return;
+    current_file_ = dlg.GetPath().ToStdString();
+    try {
+        toml_io::save(scenario_, current_file_);
+        dirty_ = false;
+        UpdateTitle();
+    } catch (std::exception& e) {
+        wxMessageBox(e.what(), "Error saving file", wxOK | wxICON_ERROR, this);
+    }
+}
+
+void MainFrame::OnViewNetworkConfig(wxCommandEvent& /*evt*/) {
+    auto& pane = aui_.GetPane("netcfg");
+    pane.Show(!pane.IsShown());
+    aui_.Update();
+}
+
+void MainFrame::OnViewLayerPanel(wxCommandEvent& /*evt*/) {
+    auto& pane = aui_.GetPane("layers");
+    pane.Show(!pane.IsShown());
+    aui_.Update();
+}
+
+void MainFrame::OnViewParamEditor(wxCommandEvent& /*evt*/) {
+    auto& pane = aui_.GetPane("params");
+    pane.Show(!pane.IsShown());
+    aui_.Update();
+}
+
+void MainFrame::OnHelpAbout(wxCommandEvent& /*evt*/) {
+    wxAboutDialogInfo info;
+    info.SetName("BANDPASS II");
+    info.SetDescription(
+        "Datatrak LF radio navigation planning tool.\n"
+        "Models coverage and positioning accuracy using\n"
+        "Williams (2004) propagation physics.");
+    info.SetLicence("GPLv3");
+    wxAboutBox(info, this);
+}
+
+void MainFrame::OnClose(wxCloseEvent& evt) {
+    if (evt.CanVeto() && !ConfirmDiscardChanges()) {
+        evt.Veto();
+        return;
+    }
+    if (compute_mgr_) compute_mgr_->Shutdown();
+    aui_.UnInit();
+    Destroy();
+}
+
+bool MainFrame::ConfirmDiscardChanges() {
+    if (!dirty_) return true;
+    int ret = wxMessageBox("Discard unsaved changes?", "BANDPASS II",
+                           wxYES_NO | wxNO_DEFAULT | wxICON_QUESTION, this);
+    return ret == wxYES;
+}
+
+void MainFrame::OnReceiverMoved(double lat, double lon) {
+    rx_lat_    = lat;
+    rx_lon_    = lon;
+    rx_placed_ = true;
+    receiver_panel_->SetPositionText(FormatReceiverPosition(lat, lon));
+    auto results = computeAtPoint(lat, lon, scenario_);
+    receiver_panel_->SetResults(results);
+}
+
+void MainFrame::OnExportSimulator() {
+    if (!rx_placed_) {
+        wxMessageBox("Place a receiver on the map first.",
+                     "Export for Simulator", wxOK | wxICON_INFORMATION, this);
+        return;
+    }
+
+    // Build export text matching datatrak_gen.h slotPhaseOffset[] format
+    wxString text;
+    text += "# BANDPASS II receiver phase export\n";
+    text += wxString::Format("# Receiver: %.5f, %.5f\n", rx_lat_, rx_lon_);
+    text += "# Format: slot  f1+  f1-  f2+  f2-  snr_db  gdr_db\n";
+    text += "# Phases: integer millilanes 0-999 (slotPhaseOffset scale)\n";
+
+    auto results = computeAtPoint(rx_lat_, rx_lon_, scenario_);
+    for (const auto& r : results) {
+        text += wxString::Format("%d  %d  %d  %d  %d  %.1f  %.1f\n",
+            r.slot,
+            (int)(r.f1plus_phase  * 1000) % 1000,
+            (int)(r.f1minus_phase * 1000) % 1000,
+            (int)(r.f2plus_phase  * 1000) % 1000,
+            (int)(r.f2minus_phase * 1000) % 1000,
+            r.snr_db, r.gdr_db);
+    }
+
+    // Copy to clipboard
+    if (wxTheClipboard->Open()) {
+        wxTheClipboard->SetData(new wxTextDataObject(text));
+        wxTheClipboard->Close();
+    }
+
+    // Save to file
+    wxFileDialog dlg(this, "Save Simulator Export", "", "receiver_phase.txt",
+                     "Text files (*.txt)|*.txt|All files (*.*)|*.*",
+                     wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+    if (dlg.ShowModal() == wxID_OK) {
+        wxFile f(dlg.GetPath(), wxFile::write);
+        if (f.IsOpened()) {
+            f.Write(text);
+            SetStatusText("Phase export saved.", SB_STATUS);
+        }
+    }
+}
+
+void MainFrame::OnExportAlmanac(almanac::FirmwareFormat fmt) {
+    GridData gd;
+    std::string text = almanac::generate_almanac(scenario_, gd, fmt);
+
+    wxString defaultName = (fmt == almanac::FirmwareFormat::V7)
+                            ? "almanac_v7.txt" : "almanac_v16.txt";
+    wxFileDialog dlg(this, "Export Almanac Commands", "", defaultName,
+                     "Text files (*.txt)|*.txt|All files (*.*)|*.*",
+                     wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+    if (dlg.ShowModal() != wxID_OK) return;
+
+    wxFile f(dlg.GetPath(), wxFile::write);
+    if (f.IsOpened()) {
+        f.Write(wxString(text));
+        SetStatusText("Almanac exported.", SB_STATUS);
+    } else {
+        wxMessageBox("Could not write file.", "Export Error", wxICON_ERROR, this);
+    }
+}
+
+} // namespace bp
