@@ -64,7 +64,7 @@ std::string MapPanel::GetMapHtmlPath() const {
 void MapPanel::OnWebViewLoad(wxWebViewEvent& /*evt*/) {
     loaded_ = true;
     for (const auto& js : pending_scripts_) {
-        webview_->RunScript(js);
+        webview_->RunScript(wxString::FromUTF8(js.c_str(), js.size()));
     }
     pending_scripts_.clear();
 }
@@ -99,7 +99,7 @@ void MapPanel::OnScriptMessage(wxWebViewEvent& evt) {
 
 void MapPanel::RunScript(const std::string& js) {
     if (loaded_) {
-        webview_->RunScript(js);
+        webview_->RunScript(wxString::FromUTF8(js.c_str(), js.size()));
     } else {
         pending_scripts_.push_back(js);
     }
