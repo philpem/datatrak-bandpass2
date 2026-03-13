@@ -236,6 +236,72 @@ TEST_CASE("computeAtPoint: SNR decreases with distance") {
     CHECK(r_near[0].snr_db > r_far[0].snr_db);
 }
 
+TEST_CASE("computeAtPoint: empty transmitter list returns empty vector") {
+    Scenario s;
+    s.frequencies.recompute();
+    auto results = computeAtPoint(51.5, -1.0, s);
+    CHECK(results.empty());
+}
+
+TEST_CASE("computeAtPoint: station_delay_us shifts f1plus phase") {
+    // station_delay_us and spo_us both add to the total propagation delay.
+    // 1 µs delay at f1 = 146437.5 Hz → 0.146 extra cycles.
+    Scenario s;
+    s.frequencies.recompute();
+    Transmitter tx;
+    tx.lat = 52.3; tx.lon = -0.2;
+    tx.power_w = 40.0; tx.slot = 1; tx.spo_us = 0.0;
+
+    tx.station_delay_us = 0.0;
+    s.transmitters = { tx };
+    auto r0 = computeAtPoint(51.5, -1.0, s);
+
+    tx.station_delay_us = 1.0;
+    s.transmitters = { tx };
+    auto r1 = computeAtPoint(51.5, -1.0, s);
+
+    REQUIRE(!r0.empty()); REQUIRE(!r1.empty());
+    double delta = r1[0].f1plus_phase - r0[0].f1plus_phase;
+    if (delta < 0.0)  delta += 1.0;
+    if (delta >= 1.0) delta -= 1.0;
+    double expected_delta = std::fmod(1.0e-6 * s.frequencies.f1_hz, 1.0);
+    CHECK(delta == Approx(expected_delta).margin(1e-6));
+}
+
+TEST_CASE("computeAtPoint: SPO shifts f2plus phase") {
+    // Verify SPO is applied to F2 as well as F1.
+    // 1 µs SPO at f2 = 131250.0 Hz → 0.131 extra cycles.
+    Scenario s;
+    s.frequencies.recompute();
+    Transmitter tx;
+    tx.lat = 52.3; tx.lon = -0.2;
+    tx.power_w = 40.0; tx.slot = 1; tx.station_delay_us = 0.0;
+
+    tx.spo_us = 0.0;
+    s.transmitters = { tx };
+    auto r0 = computeAtPoint(51.5, -1.0, s);
+
+    tx.spo_us = 1.0;
+    s.transmitters = { tx };
+    auto r1 = computeAtPoint(51.5, -1.0, s);
+
+    REQUIRE(!r0.empty()); REQUIRE(!r1.empty());
+    double delta = r1[0].f2plus_phase - r0[0].f2plus_phase;
+    if (delta < 0.0)  delta += 1.0;
+    if (delta >= 1.0) delta -= 1.0;
+    double expected_delta = std::fmod(1.0e-6 * s.frequencies.f2_hz, 1.0);
+    CHECK(delta == Approx(expected_delta).margin(1e-6));
+}
+
+TEST_CASE("monteath: identical TX and RX coordinates return zero ASF") {
+    // Path length < 1 m → total_dist_m < 1.0 → early return 0.0
+    FlatTerrainMap     terrain;
+    BuiltInConductivityMap cond;
+    double asf = monteath_asf_ml(146437.5, 52.3, -0.2, 52.3, -0.2,
+                                  terrain, cond, 10);
+    CHECK(asf == Approx(0.0).margin(1e-10));
+}
+
 // ---------------------------------------------------------------------------
 // ASF lane width tests (from spec/FrequencyConfig.md)
 // ---------------------------------------------------------------------------

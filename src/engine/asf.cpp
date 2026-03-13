@@ -230,8 +230,13 @@ void computeASF(GridData& data, const Scenario& scenario,
 
             stations.push_back(sg);
 
-            // Monteath ASF for this path (P4-01)
-            // nsamples=20 is adequate for grid computation (±2% error vs 50 samples)
+            // Monteath ASF for this path at F1 (P4-01).
+            // The VL absolute accuracy computation uses F1 ASF only; F2 paths
+            // have similar ASF (same conductivity, marginally different |η|),
+            // so the error from this simplification is small compared with other
+            // approximations in the model.  computeAtPoint() computes ASF at
+            // both F1 and F2 separately for the single-point virtual receiver.
+            // nsamples=20 is adequate for grid computation (±2% error vs 50).
             double asf_ml = monteath_asf_ml(
                 scenario.frequencies.f1_hz,
                 tx.lat, tx.lon,
