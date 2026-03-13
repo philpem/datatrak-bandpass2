@@ -1,5 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_approx.hpp>
+#include <cmath>
 #include "engine/monteath.h"
 #include "engine/asf.h"
 #include "engine/terrain.h"
