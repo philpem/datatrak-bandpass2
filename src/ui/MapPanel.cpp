@@ -23,7 +23,7 @@ MapPanel::MapPanel(wxWindow* parent, uint16_t tile_port)
     // Load the map HTML
     std::string html_path = GetMapHtmlPath();
     if (!html_path.empty()) {
-        wxString url = wxString::Format("file://%s?port=%d", html_path, (int)tile_port_);
+        wxString url = wxString::Format("file://%s?port=%d", html_path.c_str(), (int)tile_port_);
         webview_->LoadURL(url);
     }
 }
@@ -109,7 +109,7 @@ void MapPanel::AddTransmitterMarker(int id, double lat, double lon,
     std::string safe_name = name;
     for (auto& c : safe_name) if (c == '\'' || c == '\\') c = '_';
     RunScript(wxString::Format("addTransmitter(%d, %f, %f, '%s', %s);",
-                               id, lat, lon, safe_name,
+                               id, lat, lon, safe_name.c_str(),
                                locked ? "true" : "false").ToStdString());
 }
 
@@ -146,7 +146,7 @@ void MapPanel::UpdateLayer(const std::string& layer_name, const std::string& geo
 }
 
 void MapPanel::ClearLayer(const std::string& layer_name) {
-    RunScript(wxString::Format("clearLayer('%s');", layer_name).ToStdString());
+    RunScript(wxString::Format("clearLayer('%s');", layer_name.c_str()).ToStdString());
 }
 
 void MapPanel::UpdateLegend(const std::string& name, double vmin, double vmax,
