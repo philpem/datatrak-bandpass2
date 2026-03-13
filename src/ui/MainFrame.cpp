@@ -30,6 +30,7 @@ enum {
     ID_VIEW_PARAMS,
     ID_TOOL_PLACE_TX,
     ID_TOOL_PLACE_RX,
+    ID_TOOL_COMPUTE,
     ID_EXPORT_ALMANAC_V7,
     ID_EXPORT_ALMANAC_V16,
     SB_WGS84   = 0,
@@ -103,7 +104,7 @@ MainFrame::MainFrame()
     };
 
     layer_panel_->on_toggle = [this](const std::string& layer, bool visible) {
-        if (visible) map_panel_->ClearLayer(layer);
+        if (visible) PushLayerToMap(layer);
         else         map_panel_->ClearLayer(layer);
     };
 
@@ -203,9 +204,15 @@ void MainFrame::BuildToolbar() {
     tb->AddTool(ID_TOOL_PLACE_RX, "Place RX",
                 wxArtProvider::GetBitmap(wxART_FIND, wxART_TOOLBAR),
                 "Click map to place the receiver", wxITEM_CHECK);
+    tb->AddSeparator();
+    tb->AddTool(ID_TOOL_COMPUTE, "Auto-compute",
+                wxArtProvider::GetBitmap(wxART_EXECUTABLE_FILE, wxART_TOOLBAR),
+                "Enable/disable automatic recomputation", wxITEM_CHECK);
+    tb->ToggleTool(ID_TOOL_COMPUTE, true);
     tb->Realize();
-    Bind(wxEVT_TOOL, &MainFrame::OnToolPlaceTx, this, ID_TOOL_PLACE_TX);
-    Bind(wxEVT_TOOL, &MainFrame::OnToolPlaceRx, this, ID_TOOL_PLACE_RX);
+    Bind(wxEVT_TOOL, &MainFrame::OnToolPlaceTx,  this, ID_TOOL_PLACE_TX);
+    Bind(wxEVT_TOOL, &MainFrame::OnToolPlaceRx,  this, ID_TOOL_PLACE_RX);
+    Bind(wxEVT_TOOL, &MainFrame::OnToolCompute,  this, ID_TOOL_COMPUTE);
 }
 
 void MainFrame::BuildStatusBar() {
@@ -238,7 +245,7 @@ void MainFrame::MarkDirty() {
 }
 
 void MainFrame::TriggerRecompute() {
-    if (!compute_mgr_) return;
+    if (!compute_mgr_ || !compute_enabled_) return;
     compute_mgr_->PostRequest(std::make_shared<const Scenario>(scenario_));
     SetStatusText("Computing...", SB_STATUS);
 }
@@ -259,12 +266,35 @@ void MainFrame::OnComputeResult(wxCommandEvent& evt) {
 
 void MainFrame::ApplyComputeResult(const ComputeResult& result) {
     if (!result.data) return;
-    // Push each layer to the map
+    last_grid_data_ = result.data;
+
+    const auto& visible = layer_panel_->GetVisibleLayers();
     for (const auto& [name, arr] : result.data->layers) {
-        if (!arr.values.empty()) {
-            map_panel_->UpdateLayer(name, arr.to_geojson());
+        // Skip layers that are hidden
+        if (visible.count(name) && !visible.at(name)) {
+            map_panel_->ClearLayer(name);
+            continue;
         }
+        // Skip layers with uniform (meaningless) values — nothing to display
+        if (arr.values.empty()) continue;
+        double vmin = *std::min_element(arr.values.begin(), arr.values.end());
+        double vmax = *std::max_element(arr.values.begin(), arr.values.end());
+        if (vmax == vmin) continue;   // all-zero or all-same → nothing to show
+
+        map_panel_->UpdateLayer(name, arr.to_geojson());
     }
+}
+
+void MainFrame::PushLayerToMap(const std::string& name) {
+    if (!last_grid_data_) return;
+    auto it = last_grid_data_->layers.find(name);
+    if (it == last_grid_data_->layers.end()) return;
+    const auto& arr = it->second;
+    if (arr.values.empty()) return;
+    double vmin = *std::min_element(arr.values.begin(), arr.values.end());
+    double vmax = *std::max_element(arr.values.begin(), arr.values.end());
+    if (vmax == vmin) return;
+    map_panel_->UpdateLayer(name, arr.to_geojson());
 }
 
 void MainFrame::OnMapClick(double lat, double lon) {
@@ -324,6 +354,21 @@ void MainFrame::OnToolPlaceRx(wxCommandEvent& evt) {
         map_panel_->SetPlacementMode(false);
     }
     map_panel_->SetReceiverPlacementMode(rx_placement_mode_);
+}
+
+void MainFrame::OnToolCompute(wxCommandEvent& evt) {
+    compute_enabled_ = evt.IsChecked();
+    if (compute_enabled_) {
+        TriggerRecompute();
+    } else {
+        // Clear all map layers when computation is disabled
+        for (auto& name : {"groundwave","skywave","atm_noise","snr","sgr","gdr",
+                            "whdop","repeatable","asf","asf_gradient",
+                            "absolute_accuracy","absolute_accuracy_corrected","confidence"}) {
+            map_panel_->ClearLayer(name);
+        }
+        SetStatusText("Computation disabled", SB_STATUS);
+    }
 }
 
 void MainFrame::OnTransmitterSelected(int id) {

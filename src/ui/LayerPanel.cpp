@@ -44,4 +44,11 @@ void LayerPanel::OnToggle(wxCommandEvent& evt) {
         on_toggle(cb->GetName().ToStdString(), cb->GetValue());
 }
 
+std::map<std::string, bool> LayerPanel::GetVisibleLayers() const {
+    std::map<std::string, bool> result;
+    for (const auto& entry : layers_)
+        result[entry.name] = entry.checkbox->GetValue();
+    return result;
+}
+
 } // namespace bp

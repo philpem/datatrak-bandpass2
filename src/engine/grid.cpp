@@ -30,10 +30,31 @@ std::vector<GridPoint> buildGrid(const GridDef& def,
     return pts;
 }
 
-// Simple colour ramp: value → hex colour
-// Phase 1: all values are 0 (empty pipeline), so we just output transparent tiles
-static std::string valueToColour(double /*v*/, double /*vmin*/, double /*vmax*/) {
-    return "#4444ff";
+// Colour ramp: blue → cyan → green → yellow → red  (0.0 → 1.0)
+static std::string valueToColour(double v, double vmin, double vmax) {
+    double t = (vmax > vmin) ? (v - vmin) / (vmax - vmin) : 0.5;
+    t = std::max(0.0, std::min(1.0, t));
+
+    // Four-stop ramp: blue(0)→cyan(0.33)→yellow(0.67)→red(1)
+    double r, g, b;
+    if (t < 1.0/3.0) {
+        double s = t * 3.0;
+        r = 0;  g = s;  b = 1.0 - s * 0.5;
+    } else if (t < 2.0/3.0) {
+        double s = (t - 1.0/3.0) * 3.0;
+        r = s;  g = 1.0;  b = 0.5 - s * 0.5;
+    } else {
+        double s = (t - 2.0/3.0) * 3.0;
+        r = 1.0;  g = 1.0 - s;  b = 0;
+    }
+
+    // Clamp to [0,255] as explicit ints so GCC can prove format-truncation is safe
+    int ri = std::max(0, std::min(255, (int)(r * 255)));
+    int gi = std::max(0, std::min(255, (int)(g * 255)));
+    int bi = std::max(0, std::min(255, (int)(b * 255)));
+    char buf[8];
+    std::snprintf(buf, sizeof(buf), "#%02x%02x%02x", ri, gi, bi);
+    return buf;
 }
 
 std::string GridArray::to_geojson() const {

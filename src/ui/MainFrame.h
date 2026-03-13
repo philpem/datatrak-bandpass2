@@ -5,6 +5,7 @@
 #include <wx/aui/aui.h>
 #include "../model/Scenario.h"
 #include "../engine/compute_manager.h"
+#include "../engine/grid.h"
 #include "../almanac/AlmanacExport.h"
 #include "MapPanel.h"
 #include "NetworkConfigPanel.h"
@@ -32,6 +33,7 @@ private:
     void OnViewParamEditor(wxCommandEvent& evt);
     void OnToolPlaceTx(wxCommandEvent& evt);
     void OnToolPlaceRx(wxCommandEvent& evt);
+    void OnToolCompute(wxCommandEvent& evt);
     void OnHelpAbout(wxCommandEvent& evt);
     void OnClose(wxCloseEvent& evt);
 
@@ -57,6 +59,7 @@ private:
     void UpdateStatusBarMl();
     void UpdateTitle();
     void ApplyComputeResult(const ComputeResult& result);
+    void PushLayerToMap(const std::string& name);
 
     // UI components
     wxAuiManager       aui_;
@@ -74,7 +77,9 @@ private:
     bool               placement_mode_     = false;
     bool               rx_placement_mode_  = false;
     bool               rx_locked_          = false;
+    bool               compute_enabled_    = true;
     int                next_tx_id_         = 1;
+    std::shared_ptr<const GridData> last_grid_data_;
     double             rx_lat_          = 0.0;
     double             rx_lon_          = 0.0;
     bool               rx_placed_       = false;
