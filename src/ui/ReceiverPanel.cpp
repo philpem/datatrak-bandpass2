@@ -9,7 +9,8 @@ ReceiverPanel::ReceiverPanel(wxWindow* parent)
 {
     auto* sizer = new wxBoxSizer(wxVERTICAL);
 
-    sizer->Add(new wxStaticText(this, wxID_ANY, "Receiver Phase Table"), 0, wxALL, 6);
+    pos_label_ = new wxStaticText(this, wxID_ANY, "No receiver placed");
+    sizer->Add(pos_label_, 0, wxLEFT | wxTOP | wxRIGHT, 6);
 
     list_ = new wxListCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
                            wxLC_REPORT | wxLC_SINGLE_SEL);
@@ -45,9 +46,15 @@ void ReceiverPanel::SetResults(const std::vector<SlotPhaseResult>& results) {
     }
 }
 
+void ReceiverPanel::SetPositionText(const wxString& text) {
+    pos_label_->SetLabel(text);
+    Layout();
+}
+
 void ReceiverPanel::Clear() {
     results_.clear();
     list_->DeleteAllItems();
+    pos_label_->SetLabel("No receiver placed");
 }
 
 void ReceiverPanel::OnExport(wxCommandEvent& /*evt*/) {

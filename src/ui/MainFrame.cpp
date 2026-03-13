@@ -78,6 +78,7 @@ MainFrame::MainFrame()
 
     net_config_->SetScenario(&scenario_);
     net_config_->on_changed = [this](const Scenario&){ TriggerRecompute(); };
+    results_panel_->SetScenario(&scenario_);
 
     param_editor_->on_transmitter_changed = [this](int id, const Transmitter& tx) {
         if (id >= 0 && id < (int)scenario_.transmitters.size()) {
@@ -245,6 +246,7 @@ void MainFrame::MarkDirty() {
 }
 
 void MainFrame::TriggerRecompute() {
+    results_panel_->Refresh();   // field-strength plot always reflects current scenario
     if (!compute_mgr_ || !compute_enabled_) return;
     compute_mgr_->PostRequest(std::make_shared<const Scenario>(scenario_));
     SetStatusText("Computing...", SB_STATUS);
@@ -376,6 +378,16 @@ void MainFrame::OnTransmitterSelected(int id) {
         param_editor_->LoadTransmitter(id, scenario_.transmitters[id]);
 }
 
+static wxString FormatReceiverPosition(double lat, double lon) {
+    wxString pos = wxString::Format("RX: %.5f, %.5f", lat, lon);
+    try {
+        LatLon osgb36 = osgb::wgs84_to_osgb36({lat, lon});
+        EastNorth en  = national_grid::latlon_to_en(osgb36);
+        pos += "  |  " + wxString::FromUTF8(national_grid::en_to_gridref(en, 8));
+    } catch (...) {}
+    return pos;
+}
+
 void MainFrame::OnReceiverPlaced(double lat, double lon) {
     rx_lat_    = lat;
     rx_lon_    = lon;
@@ -385,6 +397,7 @@ void MainFrame::OnReceiverPlaced(double lat, double lon) {
     GetToolBar()->ToggleTool(ID_TOOL_PLACE_RX, false);
     map_panel_->SetReceiverPlacementMode(false);
     map_panel_->SetReceiverMarker(lat, lon, rx_locked_);
+    receiver_panel_->SetPositionText(FormatReceiverPosition(lat, lon));
     auto results = computeAtPoint(lat, lon, scenario_);
     receiver_panel_->SetResults(results);
 }
@@ -499,8 +512,7 @@ void MainFrame::OnReceiverMoved(double lat, double lon) {
     rx_lat_    = lat;
     rx_lon_    = lon;
     rx_placed_ = true;
-
-    // Compute per-slot phase at receiver location
+    receiver_panel_->SetPositionText(FormatReceiverPosition(lat, lon));
     auto results = computeAtPoint(lat, lon, scenario_);
     receiver_panel_->SetResults(results);
 }

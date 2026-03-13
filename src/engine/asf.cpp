@@ -1,5 +1,6 @@
 #include "asf.h"
 #include "groundwave.h"
+#include "skywave.h"
 #include "noise.h"
 #include "snr.h"
 #include "whdop.h"
@@ -185,6 +186,24 @@ void computeASF(GridData& data, const Scenario& scenario,
             }
         }
     }
+
+    // Stage 11: Confidence factor (residues from VL fix).
+    // confidence(err) = 1 / (1 + (err/50m)^2)
+    //   → 1.0 at 0 m absolute error (perfect coverage)
+    //   → 0.5 at 50 m error
+    //   → 0.0 where no fix is possible (err >= 9000)
+    auto it_conf     = data.layers.find("confidence");
+    auto it_abs_acc  = data.layers.find("absolute_accuracy");
+    if (it_conf != data.layers.end() && it_abs_acc != data.layers.end()) {
+        const auto& abs_vals  = it_abs_acc->second.values;
+        auto&       conf_vals = it_conf->second.values;
+        for (size_t i = 0; i < abs_vals.size(); ++i) {
+            double err  = abs_vals[i];
+            double conf = (err >= 9000.0) ? 0.0
+                         : 1.0 / (1.0 + (err / 50.0) * (err / 50.0));
+            conf_vals[i] = conf;
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -233,7 +252,11 @@ std::vector<SlotPhaseResult> computeAtPoint(
 
         double e_gw = groundwave_field_dbuvm(scenario.frequencies.f1_hz,
                                               dist_km, gc, tx.power_w);
+        double e_sky = skywave_field_dbuvm(scenario.frequencies.f1_hz,
+                                            dist_km, tx.power_w,
+                                            tx.lat, lat_rx);
         double snr  = compute_snr_db(e_gw, atm_n, veh_n);
+        double gdr  = compute_gdr_db(e_gw, e_sky, atm_n, veh_n);
 
         SlotPhaseResult r;
         r.slot          = tx.slot;
@@ -243,7 +266,7 @@ std::vector<SlotPhaseResult> computeAtPoint(
         r.f2plus_phase  = p2p;  r.f2plus_lane  = l2p;
         r.f2minus_phase = p2m;  r.f2minus_lane = l2m;
         r.snr_db        = snr;
-        r.gdr_db        = snr;  // simplified: no skywave in single-point calc
+        r.gdr_db        = gdr;
         results.push_back(r);
     }
 
