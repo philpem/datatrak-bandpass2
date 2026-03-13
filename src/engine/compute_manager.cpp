@@ -1,4 +1,7 @@
 #include "compute_manager.h"
+#include "groundwave.h"
+#include "skywave.h"
+#include "noise.h"
 #include <wx/app.h>
 
 namespace bp {
@@ -86,14 +89,14 @@ ComputeResult ComputeManager::RunPipeline(const Scenario& scenario,
 
     if (cancel.load()) return result;
 
-    // Phase 1 stub: build grid, return empty layer data
+    // Build grid
     auto grid_pts = buildGrid(scenario.grid);
     if (cancel.load()) return result;
 
     auto data = std::make_shared<GridData>();
-    data->request_id = 0;  // will be overwritten by caller
+    data->request_id = 0;
 
-    // Register all standard layer keys (empty arrays for Phase 1)
+    // Register all standard layer keys with pre-filled grid points
     static const char* LAYERS[] = {
         "groundwave", "skywave", "atm_noise", "snr", "sgr", "gdr",
         "whdop", "repeatable", "asf", "asf_gradient", "absolute_accuracy",
@@ -111,6 +114,19 @@ ComputeResult ComputeManager::RunPipeline(const Scenario& scenario,
         arr.resolution_km = scenario.grid.resolution_km;
         data->layers[name] = std::move(arr);
     }
+
+    // --- Phase 2: propagation stages ---
+    // Stage 1: Groundwave field strength (ITU P.368)
+    computeGroundwave(*data, scenario, cancel);
+    if (cancel.load()) return result;
+
+    // Stage 2: Skywave field strength (ITU P.684, night-time median)
+    computeSkywave(*data, scenario, cancel);
+    if (cancel.load()) return result;
+
+    // Stage 3: Atmospheric noise (ITU P.372)
+    computeAtmNoise(*data, scenario, cancel);
+    if (cancel.load()) return result;
 
     result.data = std::move(data);
     return result;

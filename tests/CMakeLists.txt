@@ -46,3 +46,14 @@ bp_add_test(test_compute_manager
     ${CMAKE_SOURCE_DIR}/src/coords/Osgb.cpp
     ${CMAKE_SOURCE_DIR}/src/coords/NationalGrid.cpp
 )
+
+# Groundwave / noise / skywave tests (no UI/wx dependency)
+bp_add_test(test_groundwave
+    engine/test_groundwave.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/groundwave.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/noise.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/skywave.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/grid.cpp
+    ${CMAKE_SOURCE_DIR}/src/coords/Osgb.cpp
+    ${CMAKE_SOURCE_DIR}/src/coords/NationalGrid.cpp
+)

@@ -4,6 +4,9 @@ set(BP_SOURCES
     coords/Osgb.cpp
     coords/NationalGrid.cpp
     engine/grid.cpp
+    engine/groundwave.cpp
+    engine/skywave.cpp
+    engine/noise.cpp
     engine/compute_manager.cpp
     ui/MainFrame.cpp
     ui/MapPanel.cpp
