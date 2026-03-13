@@ -1,4 +1,5 @@
 #include "groundwave.h"
+#include "conductivity.h"
 #include <GeographicLib/Geodesic.hpp>
 #include <cmath>
 #include <algorithm>
@@ -53,8 +54,8 @@ void computeGroundwave(GridData&               data,
     const GeographicLib::Geodesic& geod = GeographicLib::Geodesic::WGS84();
     size_t n = pts.size();
 
-    // Default ground constants (land); P2-03 will add conductivity raster lookup
-    GroundConstants gc_land { 0.005, 15.0 };
+    // Build conductivity map from scenario settings (P2-03)
+    auto cond_map = make_conductivity_map(scenario);
 
     std::vector<double> rss_total(n, 0.0);
 
@@ -68,8 +69,12 @@ void computeGroundwave(GridData&               data,
             double dist_m = 0.0;
             geod.Inverse(tx.lat, tx.lon, pts[i].lat, pts[i].lon, dist_m);
             double dist_km = std::max(dist_m / 1000.0, 0.1);
+            // Conductivity lookup at the midpoint of the path
+            double mid_lat = (tx.lat + pts[i].lat) / 2.0;
+            double mid_lon = (tx.lon + pts[i].lon) / 2.0;
+            GroundConstants gc = cond_map->lookup(mid_lat, mid_lon);
             double e = groundwave_field_dbuvm(
-                scenario.frequencies.f1_hz, dist_km, gc_land, tx.power_w);
+                scenario.frequencies.f1_hz, dist_km, gc, tx.power_w);
             vals[i] = e;
             double lin = std::pow(10.0, e / 20.0);
             rss_total[i] += lin * lin;

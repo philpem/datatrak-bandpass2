@@ -1,6 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_approx.hpp>
 #include "engine/groundwave.h"
+#include "engine/conductivity.h"
 #include "engine/noise.h"
 #include "engine/skywave.h"
 
@@ -52,6 +53,33 @@ TEST_CASE("groundwave: zero/negative distance returns sentinel") {
     GroundConstants gc { 0.005, 15.0 };
     CHECK(groundwave_field_dbuvm(146437.5,  0.0, gc, 40.0) < -100.0);
     CHECK(groundwave_field_dbuvm(146437.5, -1.0, gc, 40.0) < -100.0);
+}
+
+// ---- BuiltInConductivityMap ----
+
+TEST_CASE("conductivity: open sea gives sea constants") {
+    BuiltInConductivityMap cm;
+    // Mid-Atlantic well west of Ireland — should be sea
+    GroundConstants gc = cm.lookup(52.0, -20.0);
+    CHECK(gc.sigma > 1.0);    // sea: 4 S/m
+    CHECK(gc.eps_r > 50.0);   // sea: 70
+}
+
+TEST_CASE("conductivity: UK mainland gives land constants") {
+    BuiltInConductivityMap cm;
+    // Central England
+    GroundConstants gc = cm.lookup(52.3, -0.2);
+    CHECK(gc.sigma < 0.1);    // land: 5 mS/m
+    CHECK(gc.eps_r < 30.0);   // land: 15
+}
+
+TEST_CASE("conductivity: sea gives higher field strength") {
+    BuiltInConductivityMap cm;
+    GroundConstants gc_land = cm.lookup(52.3, -0.2);
+    GroundConstants gc_sea  = cm.lookup(52.0, -20.0);
+    double E_land = groundwave_field_dbuvm(146437.5, 200.0, gc_land, 40.0);
+    double E_sea  = groundwave_field_dbuvm(146437.5, 200.0, gc_sea,  40.0);
+    CHECK(E_sea > E_land);
 }
 
 // ---- atm_noise_dbuvm ----

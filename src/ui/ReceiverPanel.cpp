@@ -12,32 +12,31 @@ ReceiverPanel::ReceiverPanel(wxWindow* parent)
     pos_label_ = new wxStaticText(this, wxID_ANY, "No receiver placed");
     sizer->Add(pos_label_, 0, wxLEFT | wxTOP | wxRIGHT, 6);
 
-    // Units selector
-    auto* units_row = new wxBoxSizer(wxHORIZONTAL);
-    units_row->Add(new wxStaticText(this, wxID_ANY, "Phase units:"),
-                   0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 6);
+    list_ = new wxListCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+                           wxLC_REPORT | wxLC_SINGLE_SEL);
+    list_->AppendColumn("Slot",   wxLIST_FORMAT_RIGHT,  40);
+    list_->AppendColumn("F1+",    wxLIST_FORMAT_RIGHT,  60);
+    list_->AppendColumn(wxString::FromUTF8("F1\xe2\x88\x92"), wxLIST_FORMAT_RIGHT,  60);
+    list_->AppendColumn("F2+",    wxLIST_FORMAT_RIGHT,  60);
+    list_->AppendColumn(wxString::FromUTF8("F2\xe2\x88\x92"), wxLIST_FORMAT_RIGHT,  60);
+    list_->AppendColumn("SNR dB", wxLIST_FORMAT_RIGHT,  65);
+    list_->AppendColumn("GDR dB", wxLIST_FORMAT_RIGHT,  65);
+    sizer->Add(list_, 1, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, 6);
+
+    // Bottom row: units selector + export button side by side
+    auto* bottom_row = new wxBoxSizer(wxHORIZONTAL);
+    bottom_row->Add(new wxStaticText(this, wxID_ANY, "Units:"),
+                    0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
     units_choice_ = new wxChoice(this, wxID_ANY);
     units_choice_->Append(wxString::FromUTF8("Millilanes (0\xe2\x80\x93" "999)"));
     units_choice_->Append(wxString::FromUTF8("Degrees (0.0\xc2\xb0\xe2\x80\x93" "360.0\xc2\xb0)"));
     units_choice_->SetSelection(0);
     units_choice_->Bind(wxEVT_CHOICE, &ReceiverPanel::OnUnitsChanged, this);
-    units_row->Add(units_choice_, 0, wxALIGN_CENTER_VERTICAL);
-    sizer->Add(units_row, 0, wxLEFT | wxTOP | wxRIGHT, 6);
-
-    list_ = new wxListCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-                           wxLC_REPORT | wxLC_SINGLE_SEL);
-    list_->AppendColumn("Slot",    wxLIST_FORMAT_RIGHT,  40);
-    list_->AppendColumn("F1+",     wxLIST_FORMAT_RIGHT,  60);
-    list_->AppendColumn("F1\xe2\x88\x92", wxLIST_FORMAT_RIGHT,  60);
-    list_->AppendColumn("F2+",     wxLIST_FORMAT_RIGHT,  60);
-    list_->AppendColumn("F2\xe2\x88\x92", wxLIST_FORMAT_RIGHT,  60);
-    list_->AppendColumn("SNR dB",  wxLIST_FORMAT_RIGHT,  65);
-    list_->AppendColumn("GDR dB",  wxLIST_FORMAT_RIGHT,  65);
-    sizer->Add(list_, 1, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, 6);
-
+    bottom_row->Add(units_choice_, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10);
     export_btn_ = new wxButton(this, wxID_ANY, "Export for Simulator");
     export_btn_->Bind(wxEVT_BUTTON, &ReceiverPanel::OnExport, this);
-    sizer->Add(export_btn_, 0, wxALL, 6);
+    bottom_row->Add(export_btn_, 0, wxALIGN_CENTER_VERTICAL);
+    sizer->Add(bottom_row, 0, wxALL, 6);
 
     SetSizer(sizer);
 }

@@ -72,7 +72,12 @@ std::string GridArray::to_geojson() const {
         dlon = (lon_max - lon_min) / (width  - 1) / 2.0;
         dlat = (lat_max - lat_min) / (height - 1) / 2.0;
     } else {
-        dlon = dlat = resolution_km / 111.0;
+        double mid_lat = (lat_min + lat_max) / 2.0;
+        double cos_lat = std::cos(mid_lat * M_PI / 180.0);
+        dlat = resolution_km / 110.574 / 2.0;
+        dlon = (cos_lat > 1e-6)
+             ? resolution_km / (111.320 * cos_lat) / 2.0
+             : dlat;
     }
 
     std::ostringstream out;

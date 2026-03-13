@@ -23,6 +23,10 @@ function(bp_add_test target)
         target_include_directories(${target} PRIVATE ${GeographicLib_INCLUDE_DIRS})
         target_link_libraries(${target} PRIVATE ${GeographicLib_LIBRARIES})
     endif()
+    if(GDAL_FOUND)
+        target_link_libraries(${target} PRIVATE GDAL::GDAL)
+        target_compile_definitions(${target} PRIVATE USE_GDAL)
+    endif()
     catch_discover_tests(${target})
 endfunction()
 
@@ -51,6 +55,8 @@ bp_add_test(test_compute_manager
 bp_add_test(test_groundwave
     engine/test_groundwave.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/groundwave.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/conductivity.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/terrain.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/noise.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/skywave.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/grid.cpp
@@ -64,6 +70,8 @@ bp_add_test(test_snr_whdop
     ${CMAKE_SOURCE_DIR}/src/engine/snr.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/whdop.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/groundwave.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/conductivity.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/terrain.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/noise.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/grid.cpp
     ${CMAKE_SOURCE_DIR}/src/coords/Osgb.cpp

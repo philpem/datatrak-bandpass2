@@ -60,8 +60,12 @@ void ParamEditor::BuildTransmitterPage(wxWindow* page) {
                                 wxSP_ARROW_KEYS, 0, 24, 0);
     gs->Add(tx_mslot_, 1, wxEXPAND | wxBOTTOM, 4);
 
-    tx_spo_   = MakeField(page, "SPO (μs)",         gs);
-    tx_delay_ = MakeField(page, "Station delay (μs)", gs);
+    tx_spo_   = MakeField(page, "SPO (\xce\xbcs)",         gs);
+    tx_spo_->SetToolTip("System Phase Offset: fine phase alignment applied at the "
+                        "transmitter to correct the slot timing relative to the master.");
+    tx_delay_ = MakeField(page, "Station delay (\xce\xbcs)", gs);
+    tx_delay_->SetToolTip("Propagation delay of the reference signal from the master "
+                          "transmitter to this station (synchronisation cable/radio link).");
 
     gs->Add(new wxStaticText(page, wxID_ANY, "Lock position"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
     tx_locked_ = new wxCheckBox(page, wxID_ANY, "");
@@ -99,9 +103,15 @@ void ParamEditor::BuildReceiverPage(wxWindow* page) {
     gs->Add(rx_mode_, 1, wxEXPAND | wxBOTTOM, 4);
     rx_mode_->Bind(wxEVT_CHOICE, &ParamEditor::OnRxMode, this);
 
-    rx_noise_   = MakeField(page, "Noise floor (dBμV/m)",   gs);
-    rx_vnoise_  = MakeField(page, "Vehicle noise (dBμV/m)", gs);
+    rx_noise_   = MakeField(page, "Noise floor (dB\xc2\xb5V/m)",   gs);
+    rx_noise_->SetToolTip("Minimum detectable signal; sets the receive sensitivity "
+                          "floor (ITU-R P.372 atmospheric noise at this site).");
+    rx_vnoise_  = MakeField(page, "Vehicle noise (dB\xc2\xb5V/m)", gs);
+    rx_vnoise_->SetToolTip("In-vehicle conducted/radiated noise floor. Added (power "
+                           "sum) to atmospheric noise to give total receiver noise.");
     rx_range_   = MakeField(page, "Max range (km)",         gs);
+    rx_range_->SetToolTip("Hard range limit; grid points beyond this distance from "
+                          "every transmitter are excluded from WHDOP computation.");
 
     gs->Add(new wxStaticText(page, wxID_ANY, "Min stations"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
     rx_minstns_ = new wxSpinCtrl(page, wxID_ANY, "4", wxDefaultPosition, wxDefaultSize,

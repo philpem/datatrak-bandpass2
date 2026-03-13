@@ -3,6 +3,7 @@
 #include <wx/stdpaths.h>
 #include <nlohmann/json.hpp>
 #include <sstream>
+#include <cstdio>
 
 namespace bp {
 
@@ -151,18 +152,35 @@ void MapPanel::ClearLayer(const std::string& layer_name) {
 
 void MapPanel::UpdateLegend(const std::string& name, double vmin, double vmax,
                              const std::string& units) {
-    // Escape single-quotes just in case
+    // Escape single-quotes in the ASCII parts; use raw byte append for UTF-8
     auto escape = [](std::string s) {
         for (auto& c : s) if (c == '\'' || c == '\\') c = '_';
         return s;
     };
-    RunScript(wxString::Format("updateLegend('%s', %g, %g, '%s');",
-                               escape(name).c_str(), vmin, vmax,
-                               escape(units).c_str()).ToStdString());
+    char buf[128];
+    std::snprintf(buf, sizeof(buf), "updateLegend('%s', %g, %g, '",
+                  escape(name).c_str(), vmin, vmax);
+    std::string js = buf;
+    js += escape(units);
+    js += "');";
+    RunScript(js);
 }
 
 void MapPanel::ClearLegend() {
     RunScript("clearLegend();");
+}
+
+void MapPanel::SelectTransmitterMarker(int id) {
+    RunScript(wxString::Format("selectTransmitter(%d);", id).ToStdString());
+}
+
+void MapPanel::SetLayerOpacity(float opacity) {
+    // Clamp to [0,1]
+    if (opacity < 0.0f) opacity = 0.0f;
+    if (opacity > 1.0f) opacity = 1.0f;
+    char buf[64];
+    std::snprintf(buf, sizeof(buf), "setLayerOpacity(%g);", (double)opacity);
+    RunScript(buf);
 }
 
 void MapPanel::SetPlacementMode(bool enabled) {

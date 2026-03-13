@@ -114,6 +114,9 @@ MainFrame::MainFrame()
         map_panel_->ClearLegend();
         if (!layer.empty()) PushLayerToMap(layer);
     };
+    layer_panel_->on_opacity_changed = [this](float opacity) {
+        map_panel_->SetLayerOpacity(opacity);
+    };
 
     // AUI layout
     aui_.AddPane(map_panel_, wxAuiPaneInfo().CenterPane().Name("map"));
@@ -241,7 +244,7 @@ void MainFrame::UpdateTitle() {
     wxString title = "BANDPASS II";
     if (!current_file_.empty()) {
         wxFileName fn(current_file_);
-        title += " — " + fn.GetFullName();
+        title += wxString::FromUTF8(" \xe2\x80\x94 ") + fn.GetFullName();
     }
     if (dirty_) title += " *";
     SetTitle(title);
@@ -309,8 +312,11 @@ void MainFrame::PushLayerToMap(const std::string& name) {
     double vmin = *std::min_element(arr.values.begin(), arr.values.end());
     double vmax = *std::max_element(arr.values.begin(), arr.values.end());
     if (vmax == vmin) return;
+    SetStatusText("Updating map...", SB_STATUS);
+    wxYield();   // allow status bar to repaint before the (potentially slow) JSON build
     map_panel_->UpdateLayer(name, arr.to_geojson());
     map_panel_->UpdateLegend(name, vmin, vmax, LayerUnits(name));
+    SetStatusText("Ready", SB_STATUS);
 }
 
 void MainFrame::OnMapClick(double lat, double lon) {
@@ -388,8 +394,10 @@ void MainFrame::OnToolCompute(wxCommandEvent& evt) {
 }
 
 void MainFrame::OnTransmitterSelected(int id) {
-    if (id >= 0 && id < (int)scenario_.transmitters.size())
+    if (id >= 0 && id < (int)scenario_.transmitters.size()) {
         param_editor_->LoadTransmitter(id, scenario_.transmitters[id]);
+        map_panel_->SelectTransmitterMarker(id);
+    }
 }
 
 static wxString FormatReceiverPosition(double lat, double lon) {

@@ -10,6 +10,8 @@ set(BP_SOURCES
     engine/snr.cpp
     engine/whdop.cpp
     engine/asf.cpp
+    engine/conductivity.cpp
+    engine/terrain.cpp
     engine/compute_manager.cpp
     ui/MainFrame.cpp
     ui/MapPanel.cpp
@@ -44,7 +46,7 @@ endif()
 
 if(GDAL_FOUND)
     target_link_libraries(bandpass2 PRIVATE GDAL::GDAL)
-    target_compile_definitions(bandpass2 PRIVATE BP_HAVE_GDAL)
+    target_compile_definitions(bandpass2 PRIVATE BP_HAVE_GDAL USE_GDAL)
 endif()
 
 # Copy web assets to build directory so the app can find them at runtime

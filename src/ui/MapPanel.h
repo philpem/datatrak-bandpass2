@@ -27,6 +27,8 @@ public:
     void UpdateLegend(const std::string& name, double vmin, double vmax,
                       const std::string& units);
     void ClearLegend();
+    void SelectTransmitterMarker(int id);   // highlight selected transmitter
+    void SetLayerOpacity(float opacity);    // 0.0–1.0
     void SetPlacementMode(bool enabled);
     void SetReceiverPlacementMode(bool enabled);
 
