@@ -1,6 +1,7 @@
 #pragma once
 #include <functional>
 #include <wx/panel.h>
+#include <wx/scrolwin.h>
 #include <wx/notebook.h>
 #include <wx/textctrl.h>
 #include <wx/spinctrl.h>

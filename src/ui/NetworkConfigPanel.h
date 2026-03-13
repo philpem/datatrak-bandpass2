@@ -1,6 +1,6 @@
 #pragma once
 #include <functional>
-#include <wx/panel.h>
+#include <wx/scrolwin.h>
 #include <wx/textctrl.h>
 #include <wx/choice.h>
 #include <wx/stattext.h>
@@ -9,7 +9,7 @@
 
 namespace bp {
 
-class NetworkConfigPanel : public wxPanel {
+class NetworkConfigPanel : public wxScrolledWindow {
 public:
     explicit NetworkConfigPanel(wxWindow* parent);
 

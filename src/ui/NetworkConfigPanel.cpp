@@ -5,7 +5,7 @@
 namespace bp {
 
 NetworkConfigPanel::NetworkConfigPanel(wxWindow* parent)
-    : wxPanel(parent)
+    : wxScrolledWindow(parent)
     , debounce_(this)
 {
     debounce_.Bind(wxEVT_TIMER, &NetworkConfigPanel::OnDebounceTimer, this);
@@ -67,6 +67,8 @@ NetworkConfigPanel::NetworkConfigPanel(wxWindow* parent)
     sizer->Add(new wxStaticText(this, wxID_ANY, "Network Configuration"), 0, wxALL, 6);
     sizer->Add(gs, 0, wxALL | wxEXPAND, 8);
     SetSizer(sizer);
+    SetScrollRate(0, 10);
+    FitInside();
 }
 
 void NetworkConfigPanel::SetScenario(Scenario* scenario) {

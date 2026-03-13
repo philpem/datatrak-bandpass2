@@ -18,13 +18,17 @@ ParamEditor::ParamEditor(wxWindow* parent)
     notebook_ = new wxNotebook(this, wxID_ANY);
 
     // Transmitter page
-    auto* tx_page = new wxPanel(notebook_);
+    auto* tx_page = new wxScrolledWindow(notebook_);
     BuildTransmitterPage(tx_page);
+    tx_page->SetScrollRate(0, 10);
+    tx_page->FitInside();
     notebook_->AddPage(tx_page, "Transmitter");
 
     // Receiver page
-    auto* rx_page = new wxPanel(notebook_);
+    auto* rx_page = new wxScrolledWindow(notebook_);
     BuildReceiverPage(rx_page);
+    rx_page->SetScrollRate(0, 10);
+    rx_page->FitInside();
     notebook_->AddPage(rx_page, "Receiver");
 
     outer->Add(notebook_, 1, wxEXPAND);
