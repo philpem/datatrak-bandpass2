@@ -1,9 +1,20 @@
 #include "TileCache.h"
 #include <sqlite3.h>
 #include <curl/curl.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <unistd.h>
+#ifdef _WIN32
+#  ifndef WIN32_LEAN_AND_MEAN
+#    define WIN32_LEAN_AND_MEAN
+#  endif
+#  include <winsock2.h>
+#  include <ws2tcpip.h>
+   using socklen_t = int;
+#  define close_socket(s) closesocket(s)
+#else
+#  include <sys/socket.h>
+#  include <netinet/in.h>
+#  include <unistd.h>
+#  define close_socket(s) close(s)
+#endif
 #include <cstring>
 #include <ctime>
 #include <sstream>
@@ -42,12 +53,17 @@ namespace {
 TileCache::TileCache(const std::filesystem::path& db_path) {
     OpenOrCreateDb(db_path);
 
+#ifdef _WIN32
+    WSADATA wsa_data;
+    WSAStartup(MAKEWORD(2, 2), &wsa_data);
+#endif
+
     // Bind to loopback on a random port
-    int server_fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (server_fd < 0) throw std::runtime_error("TileCache: socket failed");
+    bp_socket_t server_fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (server_fd == (bp_socket_t)-1) throw std::runtime_error("TileCache: socket failed");
 
     int opt = 1;
-    setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+    setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, (const char*)&opt, sizeof(opt));
 
     sockaddr_in addr{};
     addr.sin_family      = AF_INET;
@@ -68,18 +84,21 @@ TileCache::TileCache(const std::filesystem::path& db_path) {
 TileCache::~TileCache() {
     running_.store(false);
     // Connect to self to unblock accept()
-    int wake = socket(AF_INET, SOCK_STREAM, 0);
-    if (wake >= 0) {
+    bp_socket_t wake = socket(AF_INET, SOCK_STREAM, 0);
+    if (wake != (bp_socket_t)-1) {
         sockaddr_in addr{};
         addr.sin_family      = AF_INET;
         addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
         addr.sin_port        = htons(port_);
         connect(wake, (sockaddr*)&addr, sizeof(addr));
-        close(wake);
+        close_socket(wake);
     }
     if (server_thread_.joinable()) server_thread_.join();
     if (db_)       sqlite3_close(db_);
     if (fallback_) sqlite3_close(fallback_);
+#ifdef _WIN32
+    WSACleanup();
+#endif
 }
 
 void TileCache::OpenOrCreateDb(const std::filesystem::path& path) {
@@ -107,19 +126,22 @@ void TileCache::SetFallbackMbtiles(const std::filesystem::path& path) {
                     SQLITE_OPEN_READONLY, nullptr);
 }
 
-void TileCache::ServerLoop(int server_fd) {
+void TileCache::ServerLoop(bp_socket_t server_fd) {
     while (running_.load()) {
-        int client = accept(server_fd, nullptr, nullptr);
-        if (client < 0 || !running_.load()) { if (client >= 0) close(client); break; }
+        bp_socket_t client = accept(server_fd, nullptr, nullptr);
+        if (client == (bp_socket_t)-1 || !running_.load()) {
+            if (client != (bp_socket_t)-1) close_socket(client);
+            break;
+        }
         HandleRequest(client);
-        close(client);
+        close_socket(client);
     }
-    close(server_fd);
+    close_socket(server_fd);
 }
 
-void TileCache::HandleRequest(int client_fd) {
+void TileCache::HandleRequest(bp_socket_t client_fd) {
     char buf[2048] = {};
-    recv(client_fd, buf, sizeof(buf) - 1, 0);
+    recv(client_fd, buf, (int)(sizeof(buf) - 1), 0);
 
     std::string request(buf);
     // Parse first line: GET /z/x/y.png HTTP/1.x
@@ -136,15 +158,15 @@ void TileCache::HandleRequest(int client_fd) {
     int z, x, y;
     if (!ParseTilePath(path, z, x, y)) {
         std::string resp = "HTTP/1.0 404 Not Found\r\nContent-Length: 0\r\n\r\n";
-        send(client_fd, resp.c_str(), resp.size(), 0);
+        send(client_fd, resp.c_str(), (int)resp.size(), 0);
         return;
     }
 
     auto tile = ServeTile(z, x, y);
     std::string hdr = MakeResponse(tile.empty() ? 404 : 200, "image/png", tile);
-    send(client_fd, hdr.c_str(), hdr.size(), 0);
+    send(client_fd, hdr.c_str(), (int)hdr.size(), 0);
     if (!tile.empty())
-        send(client_fd, tile.data(), tile.size(), 0);
+        send(client_fd, reinterpret_cast<const char*>(tile.data()), (int)tile.size(), 0);
 }
 
 bool TileCache::ParseTilePath(const std::string& path, int& z, int& x, int& y) {

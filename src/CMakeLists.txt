@@ -49,6 +49,10 @@ if(GDAL_FOUND)
     target_compile_definitions(bandpass2 PRIVATE BP_HAVE_GDAL USE_GDAL)
 endif()
 
+if(WIN32)
+    target_link_libraries(bandpass2 PRIVATE ws2_32)
+endif()
+
 # Copy web assets to build directory so the app can find them at runtime
 add_custom_command(TARGET bandpass2 POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
