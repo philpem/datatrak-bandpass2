@@ -1,5 +1,6 @@
 #include "MainFrame.h"
 #include "ExportManager.h"
+#include "UiConstants.h"
 #include "../coords/NationalGrid.h"
 #include "../coords/Osgb.h"
 #include "../model/toml_io.h"
@@ -291,7 +292,7 @@ void MainFrame::UpdateTitle() {
     wxString title = "BANDPASS II";
     if (!current_file_.empty()) {
         wxFileName fn(current_file_);
-        title += wxString::FromUTF8(" \xe2\x80\x94 ") + fn.GetFullName();
+        title += " - " + fn.GetFullName();
     }
     if (dirty_) title += " *";
     SetTitle(title);
@@ -339,7 +340,7 @@ void MainFrame::ApplyComputeResult(const ComputeResult& result) {
 
 static const char* LayerUnits(const std::string& layer) {
     if (layer == "groundwave" || layer == "skywave" || layer == "atm_noise")
-        return "dB\xc2\xb5V/m";          // dBµV/m (UTF-8)
+        return bp::ui::DBUVM;
     if (layer == "snr" || layer == "gdr" || layer == "sgr")
         return "dB";
     if (layer == "repeatable" || layer == "absolute_accuracy" ||

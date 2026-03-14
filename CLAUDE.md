@@ -888,6 +888,12 @@ the interface is a text/serial protocol.
   implicit use of `constexpr` variables inside lambdas. Using `[]` with a
   `constexpr` variable will compile on Linux/macOS but fail on Windows with
   `error C3493`.
+- **Do not use raw hex escape sequences (`\x..`) for Unicode characters in UI
+  strings.** Use the named constants in `src/ui/UiConstants.h` (`bp::ui::DEGREE`,
+  `bp::ui::MICRO`, `bp::ui::SIGMA`, `bp::ui::DBUVM`, `bp::ui::MICROSEC`).
+  For characters that are purely decorative (em dash, en dash, curly quotes),
+  use plain ASCII instead. Raw hex sequences cause build/display issues on
+  macOS and Windows.
 
 ---
 

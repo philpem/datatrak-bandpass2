@@ -1,4 +1,5 @@
 #include "ResultsPanel.h"
+#include "UiConstants.h"
 #include "../engine/groundwave.h"
 #include "../engine/noise.h"
 #include "../model/Scenario.h"
@@ -209,7 +210,9 @@ void ResultsPanel::DrawPlot(wxDC& dc) {
     wxFont titleFont(8, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD);
     dc.SetFont(titleFont);
     dc.SetTextForeground(wxColour(20, 20, 20));
-    dc.DrawText("Groundwave field strength vs range  (F1, land \xcf\x83=0.005 S/m)", ML, 5);
+    dc.DrawText(wxString::FromUTF8(
+        (std::string("Groundwave field strength vs range  (F1, land ") +
+         bp::ui::SIGMA + "=0.005 S/m)").c_str()), ML, 5);
 
     // ---- Border on top of everything ----
     dc.SetPen(*wxBLACK_PEN);
