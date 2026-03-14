@@ -128,12 +128,10 @@ MainFrame::MainFrame()
     };
 
     layer_panel_->on_select = [this](const std::string& layer) {
-        // Clear all overlay layers and the legend first
-        for (const char* n : {"groundwave","skywave","atm_noise","snr","sgr","gdr",
-                               "whdop","repeatable","asf","asf_gradient",
-                               "absolute_accuracy","absolute_accuracy_corrected",
-                               "absolute_accuracy_delta","confidence"}) {
-            map_panel_->ClearLayer(n);
+        // Clear whichever layer is currently displayed (including _log variants)
+        if (!current_map_layer_.empty()) {
+            map_panel_->ClearLayer(current_map_layer_);
+            current_map_layer_.clear();
         }
         map_panel_->ClearLegend();
         if (!layer.empty()) PushLayerToMap(layer);
@@ -338,6 +336,11 @@ void MainFrame::ApplyComputeResult(const ComputeResult& result) {
 
     std::string selected = layer_panel_->GetSelectedLayer();
     if (selected.empty()) return;   // "None" selected — nothing to push
+    // Clear the current overlay before replacing it with updated data
+    if (!current_map_layer_.empty()) {
+        map_panel_->ClearLayer(current_map_layer_);
+        current_map_layer_.clear();
+    }
     PushLayerToMap(selected);
 }
 
@@ -409,6 +412,7 @@ void MainFrame::PushLayerToMap(const std::string& name) {
         map_panel_->UpdateLayer(name, arr.to_geojson(scale));
     }
     map_panel_->UpdateLegend(name, vmin, vmax, LayerUnits(name, log_scale));
+    current_map_layer_ = name;
     SetStatusText("Ready", SB_STATUS);
 }
 

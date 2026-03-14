@@ -90,6 +90,7 @@ private:
     int                next_tx_id_         = 1;
     int                selected_tx_id_     = -1;
     std::shared_ptr<const GridData> last_grid_data_;
+    std::string        current_map_layer_;  // exact key currently shown on map
     double             rx_lat_          = 0.0;
     double             rx_lon_          = 0.0;
     bool               rx_placed_       = false;
