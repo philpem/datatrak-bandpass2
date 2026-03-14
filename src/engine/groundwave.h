@@ -48,6 +48,27 @@ double millington_field_dbuvm(double freq_hz,
                                double power_w,
                                int nsamples = 20);
 
+// Homogeneous-path groundwave field strength [dBμV/m].
+//
+// Uses a single conductivity lookup at the path midpoint and applies the
+// ITU P.368 empirical polynomial.  Much faster than Millington (~20x) but
+// ignores land/sea transitions.
+double homogeneous_field_dbuvm(double freq_hz,
+                                double lat_tx, double lon_tx,
+                                double lat_rx, double lon_rx,
+                                const ConductivityMap& cond,
+                                double power_w);
+
+// Dispatching function: calls homogeneous_field_dbuvm or millington_field_dbuvm
+// depending on the propagation model setting.
+double groundwave_for_model(double freq_hz,
+                            double lat_tx, double lon_tx,
+                            double lat_rx, double lon_rx,
+                            const ConductivityMap& cond,
+                            double power_w,
+                            Scenario::PropagationModel model,
+                            int nsamples = 20);
+
 // Compute groundwave GridArray for one transmitter over the full grid.
 // Writes into data->layers["groundwave_<tx_slot>"].
 // Also accumulates total groundwave RSS into data->layers["groundwave"].

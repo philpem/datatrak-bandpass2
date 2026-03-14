@@ -67,6 +67,27 @@ NetworkConfigPanel::NetworkConfigPanel(wxWindow* parent)
         outer->Add(bsiz, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 6);
     }
 
+
+    // ── Propagation ──────────────────────────────────────────────────────────
+    {
+        auto* box   = new wxStaticBox(this, wxID_ANY, "Propagation");
+        auto* bsiz  = new wxStaticBoxSizer(box, wxVERTICAL);
+        auto* gs    = new wxFlexGridSizer(2, 4, 6);
+        gs->AddGrowableCol(1);
+
+        gs->Add(new wxStaticText(this, wxID_ANY, "Model"),
+                0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
+        wxArrayString models;
+        models.Add("Homogeneous (fast)"); models.Add("Millington mixed-path");
+        prop_model_ = new wxChoice(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, models);
+        prop_model_->SetSelection(1);  // Millington default
+        prop_model_->Bind(wxEVT_CHOICE, &NetworkConfigPanel::OnOtherChanged, this);
+        gs->Add(prop_model_, 1, wxEXPAND | wxBOTTOM, 2);
+
+        bsiz->Add(gs, 0, wxEXPAND | wxALL, 4);
+        outer->Add(bsiz, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 6);
+    }
+
     // ── Grid ────────────────────────────────────────────────────────────────
     {
         auto* box   = new wxStaticBox(this, wxID_ANY, "Grid");
@@ -221,6 +242,8 @@ void NetworkConfigPanel::SetScenario(Scenario* scenario) {
     f1_field_->ChangeValue(wxString::Format("%.4f", scenario_->frequencies.f1_hz / 1000.0));
     f2_field_->ChangeValue(wxString::Format("%.4f", scenario_->frequencies.f2_hz / 1000.0));
 
+    prop_model_->SetSelection(scenario_->propagation_model == Scenario::PropagationModel::Millington ? 1 : 0);
+
     lat_min_field_->ChangeValue(wxString::Format("%.4f", scenario_->grid.lat_min));
     lat_max_field_->ChangeValue(wxString::Format("%.4f", scenario_->grid.lat_max));
     lon_min_field_->ChangeValue(wxString::Format("%.4f", scenario_->grid.lon_min));
@@ -263,6 +286,9 @@ void NetworkConfigPanel::SaveToScenario() {
     if (f1 >= F_MIN_KHZ && f1 <= F_MAX_KHZ) scenario_->frequencies.f1_hz = f1 * 1000.0;
     if (f2 >= F_MIN_KHZ && f2 <= F_MAX_KHZ) scenario_->frequencies.f2_hz = f2 * 1000.0;
     scenario_->frequencies.recompute();
+
+    scenario_->propagation_model = (prop_model_->GetSelection() == 1) ? Scenario::PropagationModel::Millington
+                                                                       : Scenario::PropagationModel::Homogeneous;
 
     double lat_min = wxAtof(lat_min_field_->GetValue());
     double lat_max = wxAtof(lat_max_field_->GetValue());
