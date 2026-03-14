@@ -204,7 +204,7 @@ void ParamEditor::LoadTransmitter(int id, const Transmitter& tx) {
     tx_name_->ChangeValue(tx.name);
     tx_lat_->ChangeValue(wxString::Format("%.6f", tx.lat));
     tx_lon_->ChangeValue(wxString::Format("%.6f", tx.lon));
-    tx_power_->ChangeValue(wxString::Format("%.1f", tx.power_w));
+    tx_power_->ChangeValue(wxString::Format("%g", tx.power_w));
     tx_height_->ChangeValue(wxString::Format("%.1f", tx.height_m));
     tx_slot_->SetValue(tx.slot);
     tx_master_->SetValue(tx.is_master);
