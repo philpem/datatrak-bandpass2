@@ -2,6 +2,7 @@
 #include "grid.h"
 #include "../model/Scenario.h"
 #include <atomic>
+#include <functional>
 #include <vector>
 
 namespace bp {
@@ -50,8 +51,12 @@ double millington_field_dbuvm(double freq_hz,
 // Compute groundwave GridArray for one transmitter over the full grid.
 // Writes into data->layers["groundwave_<tx_slot>"].
 // Also accumulates total groundwave RSS into data->layers["groundwave"].
+//
+// progress_fn, if provided, is called with a value 0-100 as work progresses.
+// It is throttled to at most one call per percent to avoid event flooding.
 void computeGroundwave(GridData&              data,
                        const Scenario&        scenario,
-                       const std::atomic<bool>& cancel);
+                       const std::atomic<bool>& cancel,
+                       const std::function<void(int)>& progress_fn = {});
 
 } // namespace bp

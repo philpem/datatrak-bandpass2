@@ -151,7 +151,8 @@ double millington_field_dbuvm(double freq_hz,
 // ---------------------------------------------------------------------------
 void computeGroundwave(GridData&               data,
                        const Scenario&         scenario,
-                       const std::atomic<bool>& cancel)
+                       const std::atomic<bool>& cancel,
+                       const std::function<void(int)>& progress_fn)
 {
     auto it = data.layers.find("groundwave");
     if (it == data.layers.end()) return;
@@ -166,13 +167,22 @@ void computeGroundwave(GridData&               data,
 
     std::vector<double> rss_total(n, 0.0);
 
-    for (size_t ti = 0; ti < scenario.transmitters.size(); ++ti) {
+    size_t ntx        = scenario.transmitters.size();
+    size_t total_work = n * std::max(ntx, (size_t)1);
+    size_t done       = 0;
+    int    last_pct   = -1;
+
+    for (size_t ti = 0; ti < ntx; ++ti) {
         if (cancel.load()) return;
         const auto& tx = scenario.transmitters[ti];
-        if (tx.power_w <= 0.0) continue;
+        if (tx.power_w <= 0.0) {
+            done += n;
+            continue;
+        }
 
         std::vector<double> vals(n);
         for (size_t i = 0; i < n; ++i) {
+            if (cancel.load()) return;
             // Millington mixed-path field strength (P2-02).
             // Uses 20 path segments to capture land/sea boundaries.
             double e = millington_field_dbuvm(
@@ -182,6 +192,15 @@ void computeGroundwave(GridData&               data,
             vals[i] = e;
             double lin = std::pow(10.0, e / 20.0);
             rss_total[i] += lin * lin;
+
+            ++done;
+            if (progress_fn) {
+                int pct = (int)(done * 100 / total_work);
+                if (pct != last_pct) {
+                    progress_fn(pct);
+                    last_pct = pct;
+                }
+            }
         }
 
         std::string key = "groundwave_" + std::to_string(tx.slot);

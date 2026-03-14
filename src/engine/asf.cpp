@@ -172,7 +172,8 @@ double virtual_locator_error_m(
 // Grid computation
 // ---------------------------------------------------------------------------
 void computeASF(GridData& data, const Scenario& scenario,
-                const std::atomic<bool>& cancel)
+                const std::atomic<bool>& cancel,
+                const std::function<void(int)>& progress_fn)
 {
     auto it_asf  = data.layers.find("asf");
     auto it_abs  = data.layers.find("absolute_accuracy");
@@ -204,6 +205,8 @@ void computeASF(GridData& data, const Scenario& scenario,
 
     // ASF values grid: store for gradient computation after main loop
     std::vector<double> asf_grid(n, 0.0);
+
+    int last_pct = -1;
 
     for (size_t i = 0; i < n; ++i) {
         if (cancel.load()) return;
@@ -321,6 +324,14 @@ void computeASF(GridData& data, const Scenario& scenario,
                 it_delt->second.values[i] = (uncorr >= 9000.0 || corr_err >= 9000.0)
                                            ? 0.0
                                            : uncorr - corr_err;
+            }
+        }
+
+        if (progress_fn) {
+            int pct = (int)((i + 1) * 100 / n);
+            if (pct != last_pct) {
+                progress_fn(pct);
+                last_pct = pct;
             }
         }
     }
