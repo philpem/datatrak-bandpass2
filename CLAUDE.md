@@ -941,6 +941,11 @@ the interface is a text/serial protocol.
   tests at each stage. Do not attempt to implement either in a single pass.
 - Direct patterns are corrected by transmitter phase adjustment, not by `po`.
   Do not conflate the two correction mechanisms.
+- **Always explicitly capture `constexpr` locals in lambda capture lists.**
+  MSVC requires this (`[DEG_TO_RAD](...)`), while GCC/Clang silently allow
+  implicit use of `constexpr` variables inside lambdas. Using `[]` with a
+  `constexpr` variable will compile on Linux/macOS but fail on Windows with
+  `error C3493`.
 
 ---
 
