@@ -3,6 +3,7 @@
 #include <string>
 #include <wx/sizer.h>
 #include <wx/stattext.h>
+#include <wx/statbox.h>
 #include <GeographicLib/Geodesic.hpp>
 #include <cmath>
 
@@ -41,108 +42,136 @@ ParamEditor::ParamEditor(wxWindow* parent)
 }
 
 void ParamEditor::BuildTransmitterPage(wxWindow* page) {
-    auto* gs = new wxFlexGridSizer(2, 4, 4);
-    gs->AddGrowableCol(1);
+    auto* outer_sizer = new wxBoxSizer(wxVERTICAL);
 
-    tx_name_   = MakeField(page, "Name",            gs);
-    tx_lat_    = MakeField(page, "Lat (WGS84)",     gs);
-    tx_lon_    = MakeField(page, "Lon (WGS84)",     gs);
-    tx_power_  = MakeField(page, "Power (W)",       gs);
-    tx_height_ = MakeField(page, "Height AGL (m)",  gs);
-    tx_height_->SetToolTip("Antenna height above ground level (AGL), in metres. "
-                           "This is the physical height of the radiating element above "
-                           "the local terrain surface, not above sea level. "
-                           "Used as the effective vertical-monopole height in the "
-                           "propagation model.");
+    // ── Site properties ────────────────────────────────────────────────────
+    auto* site_box    = new wxStaticBox(page, wxID_ANY, "Site");
+    auto* site_sizer  = new wxStaticBoxSizer(site_box, wxVERTICAL);
+    auto* site_gs     = new wxFlexGridSizer(2, 4, 4);
+    site_gs->AddGrowableCol(1);
 
-    gs->Add(new wxStaticText(page, wxID_ANY, "Slot"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
-    tx_slot_ = new wxSpinCtrl(page, wxID_ANY, "1", wxDefaultPosition, wxDefaultSize,
-                               wxSP_ARROW_KEYS, 1, 24, 1);
-    tx_slot_->SetToolTip("Slot number (1-24). Each slot is one transmission per cycle. "
-                         "To model a physical site that transmits on multiple slots, "
-                         "add a separate transmitter entry at the same location for each slot.");
-    gs->Add(tx_slot_, 1, wxEXPAND | wxBOTTOM, 4);
+    tx_name_   = MakeField(page, "Name",            site_gs);
+    tx_lat_    = MakeField(page, "Lat (WGS84)",     site_gs);
+    tx_lon_    = MakeField(page, "Lon (WGS84)",     site_gs);
+    tx_power_  = MakeField(page, "Power (W)",       site_gs);
+    tx_height_ = MakeField(page, "Height AGL (m)",  site_gs);
+    tx_height_->SetToolTip("Antenna height above ground level (AGL), in metres.");
 
-    gs->Add(new wxStaticText(page, wxID_ANY, "Is master"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
+    site_gs->Add(new wxStaticText(page, wxID_ANY, "Lock position"),
+                 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
+    tx_locked_ = new wxCheckBox(page, wxID_ANY, "");
+    site_gs->Add(tx_locked_, 0, wxBOTTOM, 4);
+
+    site_sizer->Add(site_gs, 0, wxEXPAND | wxALL, 4);
+    outer_sizer->Add(site_sizer, 0, wxEXPAND | wxALL, 6);
+
+    // ── Slots ──────────────────────────────────────────────────────────────
+    auto* slots_box   = new wxStaticBox(page, wxID_ANY, "Slots");
+    auto* slots_sizer = new wxStaticBoxSizer(slots_box, wxVERTICAL);
+
+    auto* list_row = new wxBoxSizer(wxHORIZONTAL);
+    tx_slot_list_ = new wxListBox(page, wxID_ANY, wxDefaultPosition,
+                                   wxSize(-1, 72), 0, nullptr, wxLB_SINGLE);
+    list_row->Add(tx_slot_list_, 1, wxEXPAND | wxRIGHT, 4);
+
+    auto* btn_col = new wxBoxSizer(wxVERTICAL);
+    btn_add_slot_    = new wxButton(page, wxID_ANY, "Add",    wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
+    btn_remove_slot_ = new wxButton(page, wxID_ANY, "Remove", wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
+    btn_add_slot_->SetToolTip("Add a new slot to this site (colocated transmitter).");
+    btn_remove_slot_->SetToolTip("Remove the selected slot from this site.");
+    btn_col->Add(btn_add_slot_,    0, wxBOTTOM, 4);
+    btn_col->Add(btn_remove_slot_, 0);
+    list_row->Add(btn_col, 0, wxALIGN_TOP);
+    slots_sizer->Add(list_row, 0, wxEXPAND | wxALL, 4);
+    outer_sizer->Add(slots_sizer, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 6);
+
+    // ── Per-slot properties ────────────────────────────────────────────────
+    auto* slot_box    = new wxStaticBox(page, wxID_ANY, "Selected Slot");
+    auto* slot_sizer  = new wxStaticBoxSizer(slot_box, wxVERTICAL);
+    auto* slot_gs     = new wxFlexGridSizer(2, 4, 4);
+    slot_gs->AddGrowableCol(1);
+
+    slot_gs->Add(new wxStaticText(page, wxID_ANY, "Slot #"),
+                 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
+    tx_slot_num_ = new wxSpinCtrl(page, wxID_ANY, "1", wxDefaultPosition, wxDefaultSize,
+                                   wxSP_ARROW_KEYS, 1, 24, 1);
+    tx_slot_num_->SetToolTip("Slot number (1-24). Each slot is one transmission per cycle.");
+    slot_gs->Add(tx_slot_num_, 1, wxEXPAND | wxBOTTOM, 4);
+
+    slot_gs->Add(new wxStaticText(page, wxID_ANY, "Is master"),
+                 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
     tx_master_ = new wxCheckBox(page, wxID_ANY, "");
-    tx_master_->SetToolTip("Check if this transmitter is the chain master (slot-0 reference). "
-                           "Only one transmitter per chain should be marked as master.");
-    gs->Add(tx_master_, 0, wxBOTTOM, 4);
+    tx_master_->SetToolTip("Check if this slot is the chain master (slot-0 reference).");
+    slot_gs->Add(tx_master_, 0, wxBOTTOM, 4);
 
-    gs->Add(new wxStaticText(page, wxID_ANY, "Master slot"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
+    slot_gs->Add(new wxStaticText(page, wxID_ANY, "Master slot"),
+                 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
     tx_mslot_choice_ = new wxChoice(page, wxID_ANY);
-    tx_mslot_choice_->SetToolTip("The master transmitter whose slot timing this station slaves to. "
-                                 "Set to None only if this station is itself the master.");
+    tx_mslot_choice_->SetToolTip("The master slot this slot slaves to. Set to None only if this is the master.");
     tx_mslot_choice_->Append("None (is master)");
     master_slot_values_.push_back(0);
-    gs->Add(tx_mslot_choice_, 1, wxEXPAND | wxBOTTOM, 4);
+    slot_gs->Add(tx_mslot_choice_, 1, wxEXPAND | wxBOTTOM, 4);
 
     // SPO row: text field + estimate button
-    gs->Add(new wxStaticText(page, wxID_ANY, wxString::FromUTF8(
+    slot_gs->Add(new wxStaticText(page, wxID_ANY, wxString::FromUTF8(
                 std::string("SPO (") + bp::ui::MICROSEC + ")")),
             0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
     {
         auto* row = new wxBoxSizer(wxHORIZONTAL);
         tx_spo_ = new wxTextCtrl(page, wxID_ANY);
         tx_spo_->SetToolTip(wxString::FromUTF8(
-            (std::string("System Phase Offset (") + bp::ui::MICROSEC +
-            "): fine phase alignment applied at the "
-            "transmitter to correct the slot timing relative to the master.\n\n"
-            "During commissioning this is measured and trimmed. For initial planning "
-            "click \"Estimate\" to compute the SPO that makes the received "
-            "phase from this slave an integer number of lanes at the master site "
-            "(free-space, ignoring ASF).").c_str()));
+            (std::string("System Phase Offset (") + bp::ui::MICROSEC + "): fine phase alignment.").c_str()));
         btn_spo_calc_ = new wxButton(page, wxID_ANY, "Estimate",
                                      wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
-        btn_spo_calc_->SetToolTip(
-            "Estimate SPO from geometry: computes the value that would make the "
-            "phase received from this slave at the master transmitter's position "
-            "a round number of lanes (free-space propagation, current station delay "
-            "included).\n\nThis is an initial planning estimate; the actual SPO is "
-            "calibrated on-site during commissioning.");
+        btn_spo_calc_->SetToolTip("Estimate SPO from geometry (free-space, initial planning value).");
         row->Add(tx_spo_,       1, wxEXPAND | wxRIGHT, 4);
         row->Add(btn_spo_calc_, 0, wxALIGN_CENTER_VERTICAL);
-        gs->Add(row, 1, wxEXPAND | wxBOTTOM, 4);
+        slot_gs->Add(row, 1, wxEXPAND | wxBOTTOM, 4);
     }
 
-    tx_delay_ = MakeField(page, (std::string("Station delay (") + bp::ui::MICROSEC + ")").c_str(), gs);
-    tx_delay_->SetToolTip("Propagation delay of the reference signal from the master "
-                          "transmitter to this station (synchronisation cable/radio link).");
+    tx_delay_ = MakeField(page, (std::string("Station delay (") + bp::ui::MICROSEC + ")").c_str(), slot_gs);
+    tx_delay_->SetToolTip("Propagation delay of the reference signal from the master transmitter to this station.");
 
-    gs->Add(new wxStaticText(page, wxID_ANY, "Lock position"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
-    tx_locked_ = new wxCheckBox(page, wxID_ANY, "");
-    gs->Add(tx_locked_, 0, wxBOTTOM, 4);
+    slot_sizer->Add(slot_gs, 0, wxEXPAND | wxALL, 4);
+    outer_sizer->Add(slot_sizer, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 6);
 
-    tx_delete_ = new wxButton(page, wxID_ANY, "Delete Transmitter");
+    // ── Delete site button ─────────────────────────────────────────────────
+    tx_delete_ = new wxButton(page, wxID_ANY, "Delete Site");
     tx_delete_->Enable(false);
+    outer_sizer->Add(tx_delete_, 0, wxLEFT | wxRIGHT | wxBOTTOM, 6);
 
-    auto* sizer = new wxBoxSizer(wxVERTICAL);
-    sizer->Add(gs, 0, wxALL | wxEXPAND, 8);
-    sizer->Add(tx_delete_, 0, wxLEFT | wxRIGHT | wxBOTTOM, 8);
-    page->SetSizer(sizer);
+    page->SetSizer(outer_sizer);
 
-    tx_delete_->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
-        if (current_tx_id_ >= 0 && on_transmitter_deleted)
-            on_transmitter_deleted(current_tx_id_);
+    // ── Bind events ────────────────────────────────────────────────────────
+    for (auto* tc : {tx_name_, tx_lat_, tx_lon_, tx_power_, tx_height_}) {
+        tc->Bind(wxEVT_TEXT, &ParamEditor::OnSiteField, this);
+    }
+    tx_locked_->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent&) {
+        if (updating_ || current_site_id_ < 0 || !on_site_lock_changed) return;
+        on_site_lock_changed(current_site_id_, tx_locked_->GetValue());
     });
 
-    // Bind change events (tx_spo_ is created outside MakeField so listed explicitly)
-    for (auto* tc : {tx_name_, tx_lat_, tx_lon_, tx_power_, tx_height_, tx_spo_, tx_delay_}) {
-        tc->Bind(wxEVT_TEXT, &ParamEditor::OnTxField, this);
+    tx_slot_list_->Bind(wxEVT_LISTBOX, &ParamEditor::OnSlotSelected, this);
+    btn_add_slot_->Bind(wxEVT_BUTTON,   &ParamEditor::OnAddSlot,    this);
+    btn_remove_slot_->Bind(wxEVT_BUTTON, &ParamEditor::OnRemoveSlot, this);
+
+    for (auto* tc : {tx_spo_, tx_delay_}) {
+        tc->Bind(wxEVT_TEXT, &ParamEditor::OnSlotField, this);
     }
-    tx_slot_->Bind(wxEVT_SPINCTRL, [this](wxSpinEvent&){
-        wxCommandEvent e; OnTxField(e); });
+    tx_slot_num_->Bind(wxEVT_SPINCTRL, [this](wxSpinEvent&){
+        wxCommandEvent e; OnSlotField(e); });
     tx_master_->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent&){
         UpdateMasterSlotState();
         UpdateSpoCalcState();
-        wxCommandEvent e; OnTxField(e); });
+        wxCommandEvent e; OnSlotField(e); });
     tx_mslot_choice_->Bind(wxEVT_CHOICE, [this](wxCommandEvent&){
         UpdateSpoCalcState();
-        wxCommandEvent e; OnTxField(e); });
+        wxCommandEvent e; OnSlotField(e); });
     btn_spo_calc_->Bind(wxEVT_BUTTON, &ParamEditor::OnCalcSPO, this);
-    tx_locked_->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent&) {
-        if (updating_ || current_tx_id_ < 0 || !on_tx_lock_changed) return;
-        on_tx_lock_changed(current_tx_id_, tx_locked_->GetValue());
+
+    tx_delete_->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
+        if (current_site_id_ >= 0 && on_site_deleted)
+            on_site_deleted(current_site_id_);
     });
 }
 
@@ -157,22 +186,13 @@ void ParamEditor::BuildReceiverPage(wxWindow* page) {
     rx_mode_->SetSelection(0);
     rx_mode_->SetToolTip(
         "Simple: uses a single noise floor (atmospheric only).\n"
-        "Suitable for quick coverage planning where vehicle noise is not the "
-        "dominant factor.\n\n"
-        "Advanced: combines atmospheric and vehicle noise floors in a power sum, "
-        "giving a more accurate noise model for in-vehicle positioning predictions.");
+        "Advanced: combines atmospheric and vehicle noise floors in a power sum.");
     gs->Add(rx_mode_, 1, wxEXPAND | wxBOTTOM, 4);
     rx_mode_->Bind(wxEVT_CHOICE, &ParamEditor::OnRxMode, this);
 
     rx_noise_   = MakeField(page, (std::string("Noise floor (") + bp::ui::DBUVM + ")").c_str(), gs);
-    rx_noise_->SetToolTip("Minimum detectable signal; sets the receive sensitivity "
-                          "floor (ITU-R P.372 atmospheric noise at this site).");
     rx_vnoise_  = MakeField(page, (std::string("Vehicle noise (") + bp::ui::DBUVM + ")").c_str(), gs);
-    rx_vnoise_->SetToolTip("In-vehicle conducted/radiated noise floor. Added (power "
-                           "sum) to atmospheric noise to give total receiver noise.");
-    rx_range_   = MakeField(page, "Max range (km)",         gs);
-    rx_range_->SetToolTip("Hard range limit; grid points beyond this distance from "
-                          "every transmitter are excluded from WHDOP computation.");
+    rx_range_   = MakeField(page, "Max range (km)", gs);
 
     gs->Add(new wxStaticText(page, wxID_ANY, "Min stations"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
     rx_minstns_ = new wxSpinCtrl(page, wxID_ANY, "4", wxDefaultPosition, wxDefaultSize,
@@ -198,36 +218,46 @@ void ParamEditor::BuildReceiverPage(wxWindow* page) {
     });
 }
 
-void ParamEditor::LoadTransmitter(int id, const Transmitter& tx) {
+// ---------------------------------------------------------------------------
+// Load / Clear
+// ---------------------------------------------------------------------------
+
+void ParamEditor::LoadSite(int id, const TransmitterSite& site) {
     updating_ = true;
-    current_tx_id_ = id;
-    tx_name_->ChangeValue(tx.name);
-    tx_lat_->ChangeValue(wxString::Format("%.6f", tx.lat));
-    tx_lon_->ChangeValue(wxString::Format("%.6f", tx.lon));
-    tx_power_->ChangeValue(wxString::Format("%g", tx.power_w));
-    tx_height_->ChangeValue(wxString::Format("%.1f", tx.height_m));
-    tx_slot_->SetValue(tx.slot);
-    tx_master_->SetValue(tx.is_master);
-    tx_spo_->ChangeValue(wxString::Format("%.3f", tx.spo_us));
-    tx_delay_->ChangeValue(wxString::Format("%.3f", tx.station_delay_us));
-    tx_locked_->SetValue(tx.locked);
+    current_site_id_  = id;
+    current_site_     = site;
+    current_slot_idx_ = site.slots.empty() ? -1 : 0;
+
+    tx_name_->ChangeValue(site.name);
+    tx_lat_->ChangeValue(wxString::Format("%.6f", site.lat));
+    tx_lon_->ChangeValue(wxString::Format("%.6f", site.lon));
+    tx_power_->ChangeValue(wxString::Format("%.1f", site.power_w));
+    tx_height_->ChangeValue(wxString::Format("%.1f", site.height_m));
+    tx_locked_->SetValue(site.locked);
     tx_delete_->Enable(true);
+
     notebook_->SetSelection(0);
     updating_ = false;
 
-    RebuildMasterSlotChoices(id);
-    // Select the entry matching tx.master_slot (default to index 0 = None)
-    int sel = 0;
-    for (int i = 0; i < (int)master_slot_values_.size(); ++i) {
-        if (master_slot_values_[i] == tx.master_slot) { sel = i; break; }
+    RebuildMasterSlotChoices();
+    UpdateSlotListBox();
+
+    if (current_slot_idx_ >= 0) {
+        tx_slot_list_->SetSelection(0);
+        LoadSlotFields(0);
+    } else {
+        // No slots — clear slot fields
+        tx_slot_num_->SetValue(1);
+        tx_master_->SetValue(false);
+        tx_mslot_choice_->SetSelection(0);
+        tx_spo_->ChangeValue("0.000");
+        tx_delay_->ChangeValue("0.000");
     }
-    tx_mslot_choice_->SetSelection(sel);
-    UpdateMasterSlotState();
-    UpdateSpoCalcState();
+    btn_remove_slot_->Enable(!site.slots.empty());
 }
 
 void ParamEditor::LoadReceiver(const ReceiverModel& rx) {
-    current_rx_ = rx;   // snapshot — preserves vp_ms, ellipsoid etc. across edits
+    current_rx_ = rx;
     updating_ = true;
     rx_mode_->SetSelection(rx.mode == ReceiverModel::Mode::Advanced ? 1 : 0);
     rx_noise_->ChangeValue(wxString::Format("%.1f", rx.noise_floor_dbuvpm));
@@ -241,34 +271,281 @@ void ParamEditor::LoadReceiver(const ReceiverModel& rx) {
 
 void ParamEditor::ClearSelection() {
     updating_ = true;
-    current_tx_id_ = -1;
+    current_site_id_  = -1;
+    current_slot_idx_ = -1;
+    current_site_ = TransmitterSite{};
     tx_name_->ChangeValue("");
     tx_lat_->ChangeValue("");
     tx_lon_->ChangeValue("");
+    tx_slot_list_->Clear();
     tx_delete_->Enable(false);
     updating_ = false;
 }
 
-void ParamEditor::OnTxField(wxCommandEvent& /*evt*/) {
-    if (updating_ || current_tx_id_ < 0 || !on_transmitter_changed) return;
-    Transmitter tx;
-    tx.name             = tx_name_->GetValue().ToStdString();
-    tx.lat              = wxAtof(tx_lat_->GetValue());
-    tx.lon              = wxAtof(tx_lon_->GetValue());
-    tx.power_w          = wxAtof(tx_power_->GetValue());
-    tx.height_m         = wxAtof(tx_height_->GetValue());
-    tx.slot             = tx_slot_->GetValue();
-    tx.is_master        = tx_master_->GetValue();
-    {
-        int sel = tx_mslot_choice_->GetSelection();
-        tx.master_slot = (sel >= 0 && sel < (int)master_slot_values_.size())
-                         ? master_slot_values_[sel] : 0;
-    }
-    tx.spo_us           = wxAtof(tx_spo_->GetValue());
-    tx.station_delay_us = wxAtof(tx_delay_->GetValue());
-    tx.locked           = tx_locked_->GetValue();
-    on_transmitter_changed(current_tx_id_, tx);
+// ---------------------------------------------------------------------------
+// SetSiteList — rebuild master-slot dropdown whenever the scenario list changes
+// ---------------------------------------------------------------------------
+
+void ParamEditor::SetSiteList(const std::vector<TransmitterSite>& sites) {
+    site_list_ = sites;
+    if (current_site_id_ < 0) return;
+    int prev_sel = 0;
+    int cur = tx_mslot_choice_->GetSelection();
+    if (cur >= 0 && cur < (int)master_slot_values_.size())
+        prev_sel = master_slot_values_[cur];
+    RebuildMasterSlotChoices();
+    int new_sel = 0;
+    for (int i = 0; i < (int)master_slot_values_.size(); ++i)
+        if (master_slot_values_[i] == prev_sel) { new_sel = i; break; }
+    tx_mslot_choice_->SetSelection(new_sel);
 }
+
+// ---------------------------------------------------------------------------
+// Internal helpers
+// ---------------------------------------------------------------------------
+
+void ParamEditor::UpdateSlotListBox() {
+    updating_ = true;
+    tx_slot_list_->Clear();
+    for (const auto& sc : current_site_.slots) {
+        wxString label = wxString::Format("Slot %d", sc.slot);
+        if (sc.is_master) label += "  (Master)";
+        else if (sc.master_slot > 0)
+            label += wxString::Format("  \u2192 Slot %d", sc.master_slot);
+        tx_slot_list_->Append(label);
+    }
+    updating_ = false;
+}
+
+void ParamEditor::LoadSlotFields(int slot_idx) {
+    if (slot_idx < 0 || slot_idx >= (int)current_site_.slots.size()) return;
+    updating_ = true;
+    current_slot_idx_ = slot_idx;
+    const auto& sc = current_site_.slots[slot_idx];
+    tx_slot_num_->SetValue(sc.slot);
+    tx_master_->SetValue(sc.is_master);
+    tx_spo_->ChangeValue(wxString::Format("%.3f", sc.spo_us));
+    tx_delay_->ChangeValue(wxString::Format("%.3f", sc.station_delay_us));
+
+    // Select master-slot entry
+    int sel = 0;
+    for (int i = 0; i < (int)master_slot_values_.size(); ++i)
+        if (master_slot_values_[i] == sc.master_slot) { sel = i; break; }
+    tx_mslot_choice_->SetSelection(sel);
+
+    updating_ = false;
+    UpdateMasterSlotState();
+    UpdateSpoCalcState();
+}
+
+void ParamEditor::SaveCurrentSlotFields() {
+    if (current_slot_idx_ < 0 ||
+        current_slot_idx_ >= (int)current_site_.slots.size()) return;
+    auto& sc = current_site_.slots[current_slot_idx_];
+    sc.slot      = tx_slot_num_->GetValue();
+    sc.is_master = tx_master_->GetValue();
+    int sel = tx_mslot_choice_->GetSelection();
+    sc.master_slot = (sel >= 0 && sel < (int)master_slot_values_.size())
+                     ? master_slot_values_[sel] : 0;
+    sc.spo_us           = wxAtof(tx_spo_->GetValue());
+    sc.station_delay_us = wxAtof(tx_delay_->GetValue());
+}
+
+void ParamEditor::RebuildMasterSlotChoices() {
+    tx_mslot_choice_->Clear();
+    master_slot_values_.clear();
+    tx_mslot_choice_->Append("None (is master)");
+    master_slot_values_.push_back(0);
+
+    // All slots from all sites except the current site (and the current slot itself)
+    for (int si = 0; si < (int)site_list_.size(); ++si) {
+        if (si == current_site_id_) continue;
+        const auto& s = site_list_[si];
+        for (const auto& sc : s.slots) {
+            wxString label = wxString::Format("Slot %d - %s",
+                                              sc.slot, wxString::FromUTF8(s.name).c_str());
+            tx_mslot_choice_->Append(label);
+            master_slot_values_.push_back(sc.slot);
+        }
+    }
+    // Also include OTHER slots within the same site (so colocated slots can
+    // reference each other as master/slave)
+    if (current_site_id_ >= 0 && current_site_id_ < (int)site_list_.size()) {
+        const auto& cur = site_list_[current_site_id_];
+        for (int j = 0; j < (int)cur.slots.size(); ++j) {
+            if (j == current_slot_idx_) continue;
+            const auto& sc = cur.slots[j];
+            wxString label = wxString::Format("Slot %d - %s (same site)",
+                                              sc.slot, wxString::FromUTF8(cur.name).c_str());
+            tx_mslot_choice_->Append(label);
+            master_slot_values_.push_back(sc.slot);
+        }
+    }
+}
+
+void ParamEditor::UpdateMasterSlotState() {
+    tx_mslot_choice_->Enable(!tx_master_->GetValue());
+}
+
+void ParamEditor::UpdateSpoCalcState() {
+    bool is_master = tx_master_->GetValue();
+    int sel = tx_mslot_choice_->GetSelection();
+    bool has_master = !is_master && sel > 0 && sel < (int)master_slot_values_.size();
+    btn_spo_calc_->Enable(has_master);
+}
+
+TransmitterSite ParamEditor::BuildSiteFromForm() const {
+    TransmitterSite site = current_site_;
+    site.name    = tx_name_->GetValue().ToStdString();
+    site.lat     = wxAtof(tx_lat_->GetValue());
+    site.lon     = wxAtof(tx_lon_->GetValue());
+    site.power_w = wxAtof(tx_power_->GetValue());
+    site.height_m = wxAtof(tx_height_->GetValue());
+    site.locked  = tx_locked_->GetValue();
+    // Per-slot fields already written into current_site_.slots by SaveCurrentSlotFields()
+    return site;
+}
+
+// ---------------------------------------------------------------------------
+// Event handlers
+// ---------------------------------------------------------------------------
+
+void ParamEditor::OnSiteField(wxCommandEvent& /*evt*/) {
+    if (updating_ || current_site_id_ < 0 || !on_site_changed) return;
+    current_site_.name    = tx_name_->GetValue().ToStdString();
+    current_site_.lat     = wxAtof(tx_lat_->GetValue());
+    current_site_.lon     = wxAtof(tx_lon_->GetValue());
+    current_site_.power_w = wxAtof(tx_power_->GetValue());
+    current_site_.height_m = wxAtof(tx_height_->GetValue());
+    on_site_changed(current_site_id_, current_site_);
+}
+
+void ParamEditor::OnSlotSelected(wxCommandEvent& /*evt*/) {
+    if (updating_) return;
+    int sel = tx_slot_list_->GetSelection();
+    if (sel == wxNOT_FOUND || sel < 0 ||
+        sel >= (int)current_site_.slots.size()) return;
+    // Save edits to the previously selected slot first
+    SaveCurrentSlotFields();
+    LoadSlotFields(sel);
+}
+
+void ParamEditor::OnSlotField(wxCommandEvent& /*evt*/) {
+    if (updating_ || current_site_id_ < 0 || current_slot_idx_ < 0) return;
+    SaveCurrentSlotFields();
+    // Rebuild list box label for the current slot (slot number or master may have changed)
+    UpdateSlotListBox();
+    updating_ = true;
+    tx_slot_list_->SetSelection(current_slot_idx_);
+    updating_ = false;
+    if (on_site_changed)
+        on_site_changed(current_site_id_, current_site_);
+}
+
+void ParamEditor::OnAddSlot(wxCommandEvent& /*evt*/) {
+    if (current_site_id_ < 0) return;
+    // Save current slot edits first
+    SaveCurrentSlotFields();
+    // Pick a slot number not yet used in the site
+    int next_slot = 1;
+    for (const auto& sc : current_site_.slots)
+        if (sc.slot >= next_slot) next_slot = sc.slot + 1;
+    SlotConfig sc;
+    sc.slot = next_slot;
+    current_site_.slots.push_back(sc);
+    current_slot_idx_ = (int)current_site_.slots.size() - 1;
+    RebuildMasterSlotChoices();
+    UpdateSlotListBox();
+    updating_ = true;
+    tx_slot_list_->SetSelection(current_slot_idx_);
+    updating_ = false;
+    LoadSlotFields(current_slot_idx_);
+    btn_remove_slot_->Enable(true);
+    if (on_site_changed)
+        on_site_changed(current_site_id_, current_site_);
+}
+
+void ParamEditor::OnRemoveSlot(wxCommandEvent& /*evt*/) {
+    if (current_site_id_ < 0 || current_slot_idx_ < 0 ||
+        current_site_.slots.empty()) return;
+    if (current_site_.slots.size() == 1) {
+        // Don't allow removing the last slot (site must have at least one)
+        wxMessageBox("A site must have at least one slot.\n"
+                     "Delete the site instead if it is no longer needed.",
+                     "Remove Slot", wxOK | wxICON_INFORMATION);
+        return;
+    }
+    current_site_.slots.erase(current_site_.slots.begin() + current_slot_idx_);
+    current_slot_idx_ = std::min(current_slot_idx_, (int)current_site_.slots.size() - 1);
+    RebuildMasterSlotChoices();
+    UpdateSlotListBox();
+    if (current_slot_idx_ >= 0) {
+        updating_ = true;
+        tx_slot_list_->SetSelection(current_slot_idx_);
+        updating_ = false;
+        LoadSlotFields(current_slot_idx_);
+    }
+    btn_remove_slot_->Enable(!current_site_.slots.empty());
+    if (on_site_changed)
+        on_site_changed(current_site_id_, current_site_);
+}
+
+void ParamEditor::OnCalcSPO(wxCommandEvent& /*evt*/) {
+    // Find the master transmitter in site_list_ by the chosen slot number.
+    int sel = tx_mslot_choice_->GetSelection();
+    if (sel <= 0 || sel >= (int)master_slot_values_.size()) return;
+    int master_slot = master_slot_values_[sel];
+
+    // Find master site/position
+    double master_lat = 0.0, master_lon = 0.0;
+    bool found = false;
+    for (const auto& s : site_list_) {
+        for (const auto& sc : s.slots) {
+            if (sc.slot == master_slot) {
+                master_lat = s.lat; master_lon = s.lon;
+                found = true; break;
+            }
+        }
+        if (found) break;
+    }
+    if (!found) return;
+
+    // Also check current site's own slots
+    if (!found) {
+        for (const auto& sc : current_site_.slots) {
+            if (sc.slot == master_slot) {
+                master_lat = current_site_.lat; master_lon = current_site_.lon;
+                found = true; break;
+            }
+        }
+    }
+    if (!found) return;
+
+    double slave_lat = wxAtof(tx_lat_->GetValue());
+    double slave_lon = wxAtof(tx_lon_->GetValue());
+
+    const GeographicLib::Geodesic& geod = GeographicLib::Geodesic::WGS84();
+    double dist_m = 0.0;
+    geod.Inverse(slave_lat, slave_lon, master_lat, master_lon, dist_m);
+    dist_m = std::abs(dist_m);
+
+    constexpr double c = 299'792'458.0;
+    double station_delay_s = wxAtof(tx_delay_->GetValue()) * 1e-6;
+    double total_delay_s   = dist_m / c + station_delay_s;
+
+    double phase_lanes = std::fmod(total_delay_s * f1_hz_, 1.0);
+    if (phase_lanes > 0.5) phase_lanes -= 1.0;
+    double spo_us = -phase_lanes / f1_hz_ * 1e6;
+
+    updating_ = true;
+    tx_spo_->ChangeValue(wxString::Format("%.3f", spo_us));
+    updating_ = false;
+    wxCommandEvent e; OnSlotField(e);
+}
+
+// ---------------------------------------------------------------------------
+// Receiver events
+// ---------------------------------------------------------------------------
 
 void ParamEditor::OnRxField(wxCommandEvent& /*evt*/) {
     if (updating_ || !on_receiver_changed) return;
@@ -278,8 +555,6 @@ void ParamEditor::OnRxField(wxCommandEvent& /*evt*/) {
 void ParamEditor::OnRxMode(wxCommandEvent& /*evt*/) {
     UpdateRxFieldStates();
     if (updating_ || !on_receiver_changed) return;
-    // Start from the stored snapshot so that fields not shown in the form
-    // (vp_ms, ellipsoid) are preserved rather than reset to defaults.
     ReceiverModel rx = current_rx_;
     rx.mode = (rx_mode_->GetSelection() == 1) ? ReceiverModel::Mode::Advanced
                                                : ReceiverModel::Mode::Simple;
@@ -291,104 +566,8 @@ void ParamEditor::OnRxMode(wxCommandEvent& /*evt*/) {
     on_receiver_changed(rx);
 }
 
-void ParamEditor::SetTransmitterList(const std::vector<Transmitter>& txs) {
-    tx_list_ = txs;
-    if (current_tx_id_ < 0) return;
-    // Remember the currently selected master slot value, rebuild, then restore
-    int current_master = 0;
-    int sel = tx_mslot_choice_->GetSelection();
-    if (sel >= 0 && sel < (int)master_slot_values_.size())
-        current_master = master_slot_values_[sel];
-    RebuildMasterSlotChoices(current_tx_id_);
-    int new_sel = 0;
-    for (int i = 0; i < (int)master_slot_values_.size(); ++i) {
-        if (master_slot_values_[i] == current_master) { new_sel = i; break; }
-    }
-    tx_mslot_choice_->SetSelection(new_sel);
-}
-
-void ParamEditor::RebuildMasterSlotChoices(int current_id) {
-    tx_mslot_choice_->Clear();
-    master_slot_values_.clear();
-
-    tx_mslot_choice_->Append("None (is master)");
-    master_slot_values_.push_back(0);
-
-    for (int i = 0; i < (int)tx_list_.size(); ++i) {
-        if (i == current_id) continue;  // don't offer self as master
-        const auto& t = tx_list_[i];
-        wxString label = wxString::Format("Slot %d - %s",
-                                          t.slot, wxString::FromUTF8(t.name).c_str());
-        tx_mslot_choice_->Append(label);
-        master_slot_values_.push_back(t.slot);
-    }
-}
-
-void ParamEditor::UpdateMasterSlotState() {
-    // When this transmitter IS the master it has no upstream slot to slave to.
-    tx_mslot_choice_->Enable(!tx_master_->GetValue());
-}
-
-void ParamEditor::UpdateSpoCalcState() {
-    // Enable "Estimate" only when a master has been selected and this is not
-    // the master itself.
-    bool is_master = tx_master_->GetValue();
-    int sel = tx_mslot_choice_->GetSelection();
-    bool has_master = !is_master && sel > 0 && sel < (int)master_slot_values_.size();
-    btn_spo_calc_->Enable(has_master);
-}
-
-void ParamEditor::OnCalcSPO(wxCommandEvent& /*evt*/) {
-    // Find the master transmitter in tx_list_ by the chosen slot number.
-    int sel = tx_mslot_choice_->GetSelection();
-    if (sel <= 0 || sel >= (int)master_slot_values_.size()) return;
-    int master_slot = master_slot_values_[sel];
-
-    const Transmitter* master_tx = nullptr;
-    for (const auto& t : tx_list_) {
-        if (t.slot == master_slot) { master_tx = &t; break; }
-    }
-    if (!master_tx) return;
-
-    // Current slave position (may not yet be committed to tx_list_)
-    double slave_lat = wxAtof(tx_lat_->GetValue());
-    double slave_lon = wxAtof(tx_lon_->GetValue());
-
-    // WGS84 geodesic distance (slave → master).
-    // Using WGS84 here (not Airy) since this is a planning estimate.
-    const GeographicLib::Geodesic& geod = GeographicLib::Geodesic::WGS84();
-    double dist_m = 0.0;
-    geod.Inverse(slave_lat, slave_lon, master_tx->lat, master_tx->lon, dist_m);
-    dist_m = std::abs(dist_m);
-
-    constexpr double c = 299'792'458.0;
-    double station_delay_s = wxAtof(tx_delay_->GetValue()) * 1e-6;
-
-    // Total delay from slave transmitting → received at master site (free-space)
-    double total_delay_s = dist_m / c + station_delay_s;
-
-    // Phase at master (lanes): fmod gives fractional part in [0, 1)
-    double phase_lanes = std::fmod(total_delay_s * f1_hz_, 1.0);
-
-    // Choose smallest-magnitude correction: map to [-0.5, 0.5)
-    if (phase_lanes > 0.5) phase_lanes -= 1.0;
-
-    // SPO to cancel the fractional phase
-    double spo_us = -phase_lanes / f1_hz_ * 1e6;
-
-    updating_ = true;
-    tx_spo_->ChangeValue(wxString::Format("%.3f", spo_us));
-    updating_ = false;
-    // Fire the changed callback so the scenario is updated
-    wxCommandEvent e; OnTxField(e);
-}
-
 void ParamEditor::UpdateRxFieldStates() {
     bool advanced = (rx_mode_->GetSelection() == 1);
-    // Vehicle noise is only applicable in Advanced mode, where it is combined
-    // with the atmospheric noise floor in a power sum.  In Simple mode the
-    // noise_floor field represents the total receiver noise, so vehicle noise
-    // has no separate role and the field is disabled to avoid confusion.
     rx_vnoise_->Enable(advanced);
 }
 

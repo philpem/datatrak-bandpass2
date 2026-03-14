@@ -12,6 +12,22 @@
 using namespace bp;
 using Catch::Approx;
 
+// Helper: create a single-slot TransmitterSite from basic parameters.
+static TransmitterSite make_site(double lat, double lon, int slot,
+                                  double power_w = 40.0, double height_m = 50.0,
+                                  bool is_master = false, int master_slot = 0,
+                                  double spo_us = 0.0, double station_delay_us = 0.0,
+                                  const std::string& name = "") {
+    TransmitterSite site;
+    site.name = name; site.lat = lat; site.lon = lon;
+    site.power_w = power_w; site.height_m = height_m;
+    SlotConfig sc;
+    sc.slot = slot; sc.is_master = is_master; sc.master_slot = master_slot;
+    sc.spo_us = spo_us; sc.station_delay_us = station_delay_us;
+    site.slots.push_back(sc);
+    return site;
+}
+
 // ---------------------------------------------------------------------------
 // Monteath ASF integration tests (P2-05)
 // ---------------------------------------------------------------------------
@@ -113,14 +129,8 @@ TEST_CASE("monteath: higher frequency gives slightly larger ASF") {
 TEST_CASE("computeAtPoint: returns one result per transmitter") {
     Scenario s;
     s.frequencies.recompute();
-    Transmitter tx;
-    tx.lat = 52.3; tx.lon = -0.2;
-    tx.power_w = 40.0; tx.slot = 1; tx.spo_us = 0.0; tx.station_delay_us = 0.0;
-    s.transmitters.push_back(tx);
-    Transmitter tx2;
-    tx2.lat = 50.7; tx2.lon = -0.8;
-    tx2.power_w = 40.0; tx2.slot = 2; tx2.spo_us = 0.0; tx2.station_delay_us = 0.0;
-    s.transmitters.push_back(tx2);
+    s.transmitter_sites.push_back(make_site(52.3, -0.2, 1));
+    s.transmitter_sites.push_back(make_site(50.7, -0.8, 2));
 
     auto results = computeAtPoint(51.5, -1.0, s);
     CHECK(results.size() == 2);
@@ -130,10 +140,7 @@ TEST_CASE("computeAtPoint: f1minus phase is complement of f1plus") {
     // f1− phase = 1 - f1+ phase (mod 1)
     Scenario s;
     s.frequencies.recompute();
-    Transmitter tx;
-    tx.lat = 52.3; tx.lon = -0.2;
-    tx.power_w = 40.0; tx.slot = 1; tx.spo_us = 0.0; tx.station_delay_us = 0.0;
-    s.transmitters.push_back(tx);
+    s.transmitter_sites.push_back(make_site(52.3, -0.2, 1));
 
     auto results = computeAtPoint(51.5, -1.0, s);
     REQUIRE(!results.empty());
@@ -150,10 +157,7 @@ TEST_CASE("computeAtPoint: f1minus phase is complement of f1plus") {
 TEST_CASE("computeAtPoint: f2minus phase is complement of f2plus") {
     Scenario s;
     s.frequencies.recompute();
-    Transmitter tx;
-    tx.lat = 52.3; tx.lon = -0.2;
-    tx.power_w = 40.0; tx.slot = 1; tx.spo_us = 0.0; tx.station_delay_us = 0.0;
-    s.transmitters.push_back(tx);
+    s.transmitter_sites.push_back(make_site(52.3, -0.2, 1));
 
     auto results = computeAtPoint(51.5, -1.0, s);
     REQUIRE(!results.empty());
@@ -167,10 +171,7 @@ TEST_CASE("computeAtPoint: f2minus phase is complement of f2plus") {
 TEST_CASE("computeAtPoint: fractional phases are in range 0 to 1") {
     Scenario s;
     s.frequencies.recompute();
-    Transmitter tx;
-    tx.lat = 52.3; tx.lon = -0.2;
-    tx.power_w = 40.0; tx.slot = 1; tx.spo_us = 0.0; tx.station_delay_us = 0.0;
-    s.transmitters.push_back(tx);
+    s.transmitter_sites.push_back(make_site(52.3, -0.2, 1));
 
     auto results = computeAtPoint(51.5, -1.0, s);
     REQUIRE(!results.empty());
@@ -185,17 +186,12 @@ TEST_CASE("computeAtPoint: fractional phases are in range 0 to 1") {
 TEST_CASE("computeAtPoint: SPO shifts f1plus phase") {
     Scenario s;
     s.frequencies.recompute();
-    Transmitter tx;
-    tx.lat = 52.3; tx.lon = -0.2;
-    tx.power_w = 40.0; tx.slot = 1; tx.station_delay_us = 0.0;
 
     // Two scenarios: spo_us = 0 and spo_us = some non-zero value
-    tx.spo_us = 0.0;
-    s.transmitters = { tx };
+    s.transmitter_sites = { make_site(52.3, -0.2, 1, 40.0, 50.0, false, 0, 0.0) };
     auto r0 = computeAtPoint(51.5, -1.0, s);
 
-    tx.spo_us = 1.0;  // 1 µs SPO
-    s.transmitters = { tx };
+    s.transmitter_sites = { make_site(52.3, -0.2, 1, 40.0, 50.0, false, 0, 1.0) };  // 1 µs SPO
     auto r1 = computeAtPoint(51.5, -1.0, s);
 
     REQUIRE(!r0.empty()); REQUIRE(!r1.empty());
@@ -211,10 +207,7 @@ TEST_CASE("computeAtPoint: SPO shifts f1plus phase") {
 TEST_CASE("computeAtPoint: pseudorange increases with distance") {
     Scenario s;
     s.frequencies.recompute();
-    Transmitter tx;
-    tx.lat = 52.3; tx.lon = -0.2;
-    tx.power_w = 40.0; tx.slot = 1; tx.spo_us = 0.0; tx.station_delay_us = 0.0;
-    s.transmitters = { tx };
+    s.transmitter_sites = { make_site(52.3, -0.2, 1) };
 
     auto r_near = computeAtPoint(52.0, -0.2, s);  // ~33 km
     auto r_far  = computeAtPoint(50.0, -0.2, s);  // ~255 km
@@ -226,10 +219,7 @@ TEST_CASE("computeAtPoint: pseudorange increases with distance") {
 TEST_CASE("computeAtPoint: SNR decreases with distance") {
     Scenario s;
     s.frequencies.recompute();
-    Transmitter tx;
-    tx.lat = 52.3; tx.lon = -0.2;
-    tx.power_w = 40.0; tx.slot = 1; tx.spo_us = 0.0; tx.station_delay_us = 0.0;
-    s.transmitters = { tx };
+    s.transmitter_sites = { make_site(52.3, -0.2, 1) };
 
     auto r_near = computeAtPoint(52.0, -0.2, s);
     auto r_far  = computeAtPoint(50.0, -0.2, s);
@@ -250,16 +240,11 @@ TEST_CASE("computeAtPoint: station_delay_us shifts f1plus phase") {
     // 1 µs delay at f1 = 146437.5 Hz → 0.146 extra cycles.
     Scenario s;
     s.frequencies.recompute();
-    Transmitter tx;
-    tx.lat = 52.3; tx.lon = -0.2;
-    tx.power_w = 40.0; tx.slot = 1; tx.spo_us = 0.0;
 
-    tx.station_delay_us = 0.0;
-    s.transmitters = { tx };
+    s.transmitter_sites = { make_site(52.3, -0.2, 1, 40.0, 50.0, false, 0, 0.0, 0.0) };
     auto r0 = computeAtPoint(51.5, -1.0, s);
 
-    tx.station_delay_us = 1.0;
-    s.transmitters = { tx };
+    s.transmitter_sites = { make_site(52.3, -0.2, 1, 40.0, 50.0, false, 0, 0.0, 1.0) };
     auto r1 = computeAtPoint(51.5, -1.0, s);
 
     REQUIRE(!r0.empty()); REQUIRE(!r1.empty());
@@ -275,16 +260,11 @@ TEST_CASE("computeAtPoint: SPO shifts f2plus phase") {
     // 1 µs SPO at f2 = 131250.0 Hz → 0.131 extra cycles.
     Scenario s;
     s.frequencies.recompute();
-    Transmitter tx;
-    tx.lat = 52.3; tx.lon = -0.2;
-    tx.power_w = 40.0; tx.slot = 1; tx.station_delay_us = 0.0;
 
-    tx.spo_us = 0.0;
-    s.transmitters = { tx };
+    s.transmitter_sites = { make_site(52.3, -0.2, 1, 40.0, 50.0, false, 0, 0.0) };
     auto r0 = computeAtPoint(51.5, -1.0, s);
 
-    tx.spo_us = 1.0;
-    s.transmitters = { tx };
+    s.transmitter_sites = { make_site(52.3, -0.2, 1, 40.0, 50.0, false, 0, 1.0) };
     auto r1 = computeAtPoint(51.5, -1.0, s);
 
     REQUIRE(!r0.empty()); REQUIRE(!r1.empty());
@@ -367,18 +347,11 @@ static Scenario make_4tx_scenario() {
     s.receiver.max_range_km         = 600.0;
     s.receiver.min_stations         = 4;
 
-    auto make_tx = [](double lat, double lon, int slot) {
-        Transmitter t;
-        t.lat = lat; t.lon = lon;
-        t.power_w = 100000.0;  // 100 kW — ensures SNR > 0 at ~200 km range in tests
-        t.height_m = 50.0;
-        t.slot = slot; t.is_master = (slot == 1);
-        return t;
-    };
-    s.transmitters.push_back(make_tx(50.5, -2.5, 1));  // SW
-    s.transmitters.push_back(make_tx(50.5,  0.5, 2));  // SE
-    s.transmitters.push_back(make_tx(55.5, -2.5, 3));  // NW
-    s.transmitters.push_back(make_tx(55.5,  0.5, 4));  // NE
+    // 100 kW — ensures SNR > 0 at ~200 km range in tests
+    s.transmitter_sites.push_back(make_site(50.5, -2.5, 1, 100000.0, 50.0, true));   // SW master
+    s.transmitter_sites.push_back(make_site(50.5,  0.5, 2, 100000.0, 50.0, false));  // SE
+    s.transmitter_sites.push_back(make_site(55.5, -2.5, 3, 100000.0, 50.0, false));  // NW
+    s.transmitter_sites.push_back(make_site(55.5,  0.5, 4, 100000.0, 50.0, false));  // NE
     return s;
 }
 
@@ -470,10 +443,7 @@ TEST_CASE("computeAtPoint: pseudorange uses Airy ellipsoid, differs from WGS84")
 
     Scenario s;
     s.frequencies.recompute();
-    Transmitter tx;
-    tx.lat = 52.3247; tx.lon = -0.1848;
-    tx.power_w = 40.0; tx.slot = 1;
-    s.transmitters = { tx };
+    s.transmitter_sites = { make_site(52.3247, -0.1848, 1) };
 
     auto results = computeAtPoint(50.5, 0.0, s);
     REQUIRE(!results.empty());
@@ -578,8 +548,10 @@ TEST_CASE("computeASF: absolute_accuracy_delta is non-negative when perfect corr
     // that corrections with plausible magnitude (100 ml) improve or maintain accuracy.
     Scenario s = make_4tx_scenario();
     // Assign master_slot so pattern strings can be formed
-    for (auto& tx : s.transmitters) {
-        if (!tx.is_master) tx.master_slot = 1;
+    for (auto& site : s.transmitter_sites) {
+        for (auto& sc : site.slots) {
+            if (!sc.is_master) sc.master_slot = 1;
+        }
     }
     // Add a modest po offset for pattern "2,1"
     PatternOffset po;

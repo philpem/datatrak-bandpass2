@@ -128,9 +128,10 @@ void computeWHDOP(GridData& data, const Scenario& scenario,
     auto cond_map = make_conductivity_map(scenario);
 
     std::vector<TxCache> tx_cache;
-    tx_cache.reserve(scenario.transmitters.size());
+    const auto flat_txs = scenario.flatTransmitters();
+    tx_cache.reserve(flat_txs.size());
 
-    for (const auto& tx : scenario.transmitters) {
+    for (const auto& tx : flat_txs) {
         TxCache c;
         c.lat_tx = tx.lat; c.lon_tx = tx.lon;
         c.power_w = tx.power_w; c.slot = tx.slot;

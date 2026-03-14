@@ -12,15 +12,17 @@ static Scenario make_test_scenario() {
     s.frequencies.f2_hz = 131250.0;
     s.frequencies.recompute();
 
-    Transmitter tx1;
-    tx1.name = "Huntingdon"; tx1.lat = 52.3247; tx1.lon = -0.1848;
-    tx1.slot = 1; tx1.is_master = true; tx1.power_w = 40.0;
+    TransmitterSite site1;
+    site1.name = "Huntingdon"; site1.lat = 52.3247; site1.lon = -0.1848;
+    site1.power_w = 40.0;
+    { SlotConfig sc; sc.slot = 1; sc.is_master = true; site1.slots.push_back(sc); }
 
-    Transmitter tx2;
-    tx2.name = "Selsey"; tx2.lat = 50.73; tx2.lon = -0.79;
-    tx2.slot = 2; tx2.power_w = 40.0;
+    TransmitterSite site2;
+    site2.name = "Selsey"; site2.lat = 50.73; site2.lon = -0.79;
+    site2.power_w = 40.0;
+    { SlotConfig sc; sc.slot = 2; site2.slots.push_back(sc); }
 
-    s.transmitters = { tx1, tx2 };
+    s.transmitter_sites = { site1, site2 };
     return s;
 }
 

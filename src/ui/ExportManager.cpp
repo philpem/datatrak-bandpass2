@@ -276,17 +276,17 @@ std::string ExportManager::export_html(const GridData& data,
        << scenario.grid.lon_min << "°E – " << scenario.grid.lon_max << "°E, "
        << scenario.grid.resolution_km << " km resolution"
        << "</td></tr>\n"
-       << "<tr><td>Transmitters</td><td>" << scenario.transmitters.size() << "</td></tr>\n"
+       << "<tr><td>Transmitter sites</td><td>" << scenario.transmitter_sites.size() << "</td></tr>\n"
        << "<tr><td>Monitor stations</td><td>" << scenario.monitor_stations.size() << "</td></tr>\n"
        << "<tr><td>Pattern offsets</td><td>" << scenario.pattern_offsets.size() << "</td></tr>\n"
        << "</table>\n";
 
     // ---- Transmitter table
-    if (!scenario.transmitters.empty()) {
+    if (!scenario.transmitter_sites.empty()) {
         ss << "<h2>Transmitters</h2>\n"
            << "<table><tr><th>Name</th><th>Slot</th><th>Lat</th><th>Lon</th>"
            << "<th>Power (W)</th><th>Master?</th></tr>\n";
-        for (const auto& tx : scenario.transmitters) {
+        for (const auto& tx : scenario.flatTransmitters()) {
             ss << "<tr><td>" << tx.name << "</td><td>" << tx.slot << "</td>"
                << "<td>" << std::setprecision(5) << tx.lat << "</td>"
                << "<td>" << tx.lon << "</td>"
