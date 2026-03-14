@@ -348,7 +348,7 @@ void computeASF(GridData& data, const Scenario& scenario,
     // ---------------------------------------------------------------------------
     if (it_grad != data.layers.end() && it_asf != data.layers.end() && n >= 4) {
         auto& grad_vals = it_grad->second.values;
-        const double res_km = scenario.grid.resolution_km;
+        const double res_km = it_asf->second.resolution_km;
         if (res_km > 0.0) {
             // Infer ncols from the point set directly.
             // buildGrid() builds in row-major order: outer loop = lat, inner = lon.

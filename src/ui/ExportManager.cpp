@@ -274,7 +274,7 @@ std::string ExportManager::export_html(const GridData& data,
        << std::setprecision(2)
        << scenario.grid.lat_min << "°N – " << scenario.grid.lat_max << "°N, "
        << scenario.grid.lon_min << "°E – " << scenario.grid.lon_max << "°E, "
-       << scenario.grid.resolution_km << " km resolution"
+       << scenario.grid.max_points << " max points"
        << "</td></tr>\n"
        << "<tr><td>Transmitters</td><td>" << scenario.transmitters.size() << "</td></tr>\n"
        << "<tr><td>Monitor stations</td><td>" << scenario.monitor_stations.size() << "</td></tr>\n"

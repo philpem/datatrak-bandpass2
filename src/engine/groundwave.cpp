@@ -214,7 +214,7 @@ void computeGroundwave(GridData&               data,
         arr.lat_max       = scenario.grid.lat_max;
         arr.lon_min       = scenario.grid.lon_min;
         arr.lon_max       = scenario.grid.lon_max;
-        arr.resolution_km = scenario.grid.resolution_km;
+        arr.resolution_km = data.layers.at("groundwave").resolution_km;
     }
 
     if (!cancel.load()) {

@@ -2,6 +2,7 @@
 #include <toml++/toml.hpp>
 #include <fstream>
 #include <sstream>
+#include <cmath>
 
 namespace bp {
 namespace toml_io {
@@ -33,11 +34,33 @@ Scenario load(const std::filesystem::path& path) {
 
     // [grid]
     if (auto g = tbl["grid"].as_table()) {
-        if (auto v = (*g)["lat_min"].value<double>())      s.grid.lat_min       = *v;
-        if (auto v = (*g)["lat_max"].value<double>())      s.grid.lat_max       = *v;
-        if (auto v = (*g)["lon_min"].value<double>())      s.grid.lon_min       = *v;
-        if (auto v = (*g)["lon_max"].value<double>())      s.grid.lon_max       = *v;
-        if (auto v = (*g)["resolution_km"].value<double>())s.grid.resolution_km = *v;
+        if (auto v = (*g)["lat_min"].value<double>())   s.grid.lat_min   = *v;
+        if (auto v = (*g)["lat_max"].value<double>())   s.grid.lat_max   = *v;
+        if (auto v = (*g)["lon_min"].value<double>())   s.grid.lon_min   = *v;
+        if (auto v = (*g)["lon_max"].value<double>())   s.grid.lon_max   = *v;
+        if (auto v = (*g)["max_points"].value<int64_t>()) {
+            s.grid.max_points    = (int)*v;
+            s.grid.resolution_km = 0.0;  // max_points takes precedence
+        } else if (auto v = (*g)["resolution_km"].value<double>()) {
+            // Legacy field: convert to an equivalent max_points so the new
+            // UI shows a sensible value.  resolution_km kept at 0 so
+            // buildGrid() derives the cell size from max_points.
+            double res_km = *v;
+            if (res_km > 0.0) {
+                double mid_lat    = (s.grid.lat_min + s.grid.lat_max) / 2.0;
+                double cos_mid    = std::cos(mid_lat * 3.14159265358979323846 / 180.0);
+                double lat_range_km = (s.grid.lat_max - s.grid.lat_min) * 110.574;
+                double lon_range_km = (cos_mid > 1e-6)
+                    ? (s.grid.lon_max - s.grid.lon_min) * 111.320 * cos_mid
+                    : lat_range_km;
+                double area_km2 = lat_range_km * lon_range_km;
+                int pts = (area_km2 > 0.0)
+                    ? std::max(1, (int)(area_km2 / (res_km * res_km)))
+                    : 10000;
+                s.grid.max_points    = pts;
+                s.grid.resolution_km = 0.0;
+            }
+        }
     }
 
     // [frequencies] — stored as kHz, converted to Hz
@@ -166,11 +189,11 @@ void save(const Scenario& s, const std::filesystem::path& path) {
             {"display_crs", (s.display_crs == Scenario::DisplayCRS::WGS84) ? "wgs84" : "osgb_ng"},
         }},
         {"grid", toml::table{
-            {"lat_min",       s.grid.lat_min},
-            {"lat_max",       s.grid.lat_max},
-            {"lon_min",       s.grid.lon_min},
-            {"lon_max",       s.grid.lon_max},
-            {"resolution_km", s.grid.resolution_km},
+            {"lat_min",    s.grid.lat_min},
+            {"lat_max",    s.grid.lat_max},
+            {"lon_min",    s.grid.lon_min},
+            {"lon_max",    s.grid.lon_max},
+            {"max_points", (int64_t)s.grid.max_points},
         }},
         {"frequencies", toml::table{
             {"f1_khz", s.frequencies.f1_hz / 1000.0},

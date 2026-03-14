@@ -102,8 +102,8 @@ ComputeResult ComputeManager::RunPipeline(const Scenario& scenario,
         return result;
     }
 
-    if (scenario.grid.resolution_km <= 0.0) {
-        result.error = "Grid resolution must be > 0 km";
+    if (scenario.grid.resolution_km <= 0.0 && scenario.grid.max_points <= 0) {
+        result.error = "Grid: set either max_points > 0 or resolution_km > 0";
         return result;
     }
 
@@ -135,7 +135,7 @@ ComputeResult ComputeManager::RunPipeline(const Scenario& scenario,
         arr.lat_max       = scenario.grid.lat_max;
         arr.lon_min       = scenario.grid.lon_min;
         arr.lon_max       = scenario.grid.lon_max;
-        arr.resolution_km = scenario.grid.resolution_km;
+        arr.resolution_km = grid.resolution_km;
         data->layers[name] = std::move(arr);
     }
 

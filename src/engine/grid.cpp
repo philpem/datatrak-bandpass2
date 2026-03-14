@@ -62,15 +62,31 @@ static double log_normalise(double v, double log_vmin, double log_vmax) {
 GridBuildResult buildGrid(const GridDef& def,
                           const std::atomic<bool>& cancel) {
     GridBuildResult result;
-    if (def.resolution_km <= 0.0) return result;
 
     // Approximate degrees per km at mid-latitude
     double mid_lat = (def.lat_min + def.lat_max) / 2.0;
     constexpr double DEG_PER_KM_LAT = 1.0 / 110.574;
-    double deg_per_km_lon = 1.0 / (111.320 * std::cos(mid_lat * M_PI / 180.0));
+    double cos_mid = std::cos(mid_lat * M_PI / 180.0);
+    double deg_per_km_lon = (cos_mid > 1e-6) ? 1.0 / (111.320 * cos_mid) : DEG_PER_KM_LAT;
 
-    double dlat = def.resolution_km * DEG_PER_KM_LAT;
-    double dlon = def.resolution_km * deg_per_km_lon;
+    // Determine the cell spacing to use.
+    double res_km;
+    if (def.resolution_km > 0.0) {
+        res_km = def.resolution_km;
+    } else if (def.max_points > 0) {
+        // Compute resolution that gives approximately max_points grid points.
+        double lat_range_km = (def.lat_max - def.lat_min) * 110.574;
+        double lon_range_km = (def.lon_max - def.lon_min) / deg_per_km_lon;
+        double area_km2 = std::max(lat_range_km * lon_range_km, 1.0);
+        res_km = std::sqrt(area_km2 / def.max_points);
+        if (res_km < 0.05) res_km = 0.05;  // minimum 50 m resolution
+    } else {
+        return result;  // nothing to build
+    }
+    result.resolution_km = res_km;
+
+    double dlat = res_km * DEG_PER_KM_LAT;
+    double dlon = res_km * deg_per_km_lon;
 
     // Pre-compute dimensions
     int cols = 0;

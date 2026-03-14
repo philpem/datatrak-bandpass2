@@ -34,15 +34,18 @@ public:
     void SetLayerOpacity(float opacity);    // 0.0–1.0
     void SetPlacementMode(bool enabled);
     void SetReceiverPlacementMode(bool enabled);
+    // Show or update the draggable grid-bounds rectangle on the map.
+    void SetGridBounds(double lat_min, double lat_max, double lon_min, double lon_max);
 
     // JS → C++ callbacks (set by MainFrame)
-    std::function<void(double lat, double lon)>           on_map_click;
-    std::function<void(int id, double lat, double lon)>   on_transmitter_moved;
-    std::function<void(int id)>                           on_transmitter_selected;
-    std::function<void(double lat, double lon)>           on_receiver_placed;
-    std::function<void(double lat, double lon)>           on_receiver_moved;
-    std::function<void(double lat, double lon)>           on_cursor_moved;
-    std::function<void()>                                  on_map_ready;
+    std::function<void(double lat, double lon)>                           on_map_click;
+    std::function<void(int id, double lat, double lon)>                   on_transmitter_moved;
+    std::function<void(int id)>                                           on_transmitter_selected;
+    std::function<void(double lat, double lon)>                           on_receiver_placed;
+    std::function<void(double lat, double lon)>                           on_receiver_moved;
+    std::function<void(double lat, double lon)>                           on_cursor_moved;
+    std::function<void()>                                                  on_map_ready;
+    std::function<void(double, double, double, double)>                   on_grid_bounds_changed;
 
 private:
     void OnWebViewLoad(wxWebViewEvent& evt);

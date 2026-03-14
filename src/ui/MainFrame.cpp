@@ -81,6 +81,10 @@ MainFrame::MainFrame()
     map_panel_->on_receiver_moved        = [this](double lat, double lon){ OnReceiverMoved(lat, lon); };
     map_panel_->on_transmitter_selected  = [this](int id){ OnTransmitterSelected(id); };
     map_panel_->on_receiver_placed       = [this](double lat, double lon){ OnReceiverPlaced(lat, lon); };
+    map_panel_->on_grid_bounds_changed   = [this](double lat_min, double lat_max,
+                                                   double lon_min, double lon_max){
+        OnGridBoundsChanged(lat_min, lat_max, lon_min, lon_max);
+    };
 
     // Dockable panels
     net_config_    = new NetworkConfigPanel(this);
@@ -93,6 +97,7 @@ MainFrame::MainFrame()
     net_config_->SetScenario(&scenario_);
     net_config_->on_changed = [this](const Scenario&){
         param_editor_->SetFrequency(scenario_.frequencies.f1_hz);
+        SyncGridBounds();
         MarkDirty();
         TriggerRecompute();
     };
@@ -182,6 +187,7 @@ MainFrame::MainFrame()
     scenario_.frequencies.recompute();
     UpdateStatusBarMl();
     UpdateTitle();
+    SyncGridBounds();
     TriggerRecompute();
 
     Bind(wxEVT_CLOSE_WINDOW, &MainFrame::OnClose, this);
@@ -572,6 +578,22 @@ void MainFrame::ClearMapTransmitters(int count) {
         map_panel_->RemoveTransmitterMarker(i);
 }
 
+void MainFrame::SyncGridBounds() {
+    map_panel_->SetGridBounds(scenario_.grid.lat_min, scenario_.grid.lat_max,
+                               scenario_.grid.lon_min, scenario_.grid.lon_max);
+}
+
+void MainFrame::OnGridBoundsChanged(double lat_min, double lat_max,
+                                     double lon_min, double lon_max) {
+    scenario_.grid.lat_min = lat_min;
+    scenario_.grid.lat_max = lat_max;
+    scenario_.grid.lon_min = lon_min;
+    scenario_.grid.lon_max = lon_max;
+    net_config_->SetBoundsFromMap(lat_min, lat_max, lon_min, lon_max);
+    MarkDirty();
+    TriggerRecompute();
+}
+
 void MainFrame::SyncMapTransmitters() {
     for (int i = 0; i < (int)scenario_.transmitters.size(); ++i) {
         const auto& tx = scenario_.transmitters[i];
@@ -598,6 +620,7 @@ void MainFrame::OnFileNew(wxCommandEvent& /*evt*/) {
     param_editor_->SetFrequency(scenario_.frequencies.f1_hz);
     param_editor_->SetTransmitterList(scenario_.transmitters);
     param_editor_->LoadReceiver(scenario_.receiver);
+    SyncGridBounds();
     UpdateStatusBarMl();
     UpdateTitle();
     TriggerRecompute();
@@ -634,6 +657,7 @@ void MainFrame::OnFileOpen(wxCommandEvent& /*evt*/) {
     param_editor_->LoadReceiver(scenario_.receiver);
     param_editor_->ClearSelection();
     map_panel_->SelectTransmitterMarker(-1);
+    SyncGridBounds();
     UpdateStatusBarMl();
     UpdateTitle();
     TriggerRecompute();

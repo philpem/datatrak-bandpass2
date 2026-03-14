@@ -58,6 +58,8 @@ private:
     void OnComputePatternOffsets(wxCommandEvent& evt);
     void ClearMapTransmitters(int count);
     void SyncMapTransmitters();
+    void SyncGridBounds();
+    void OnGridBoundsChanged(double lat_min, double lat_max, double lon_min, double lon_max);
     void TriggerRecompute();
     void MarkDirty();
     bool ConfirmDiscardChanges();
