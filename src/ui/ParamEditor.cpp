@@ -109,6 +109,12 @@ void ParamEditor::BuildReceiverPage(wxWindow* page) {
     modes.Add("Simple"); modes.Add("Advanced");
     rx_mode_ = new wxChoice(page, wxID_ANY, wxDefaultPosition, wxDefaultSize, modes);
     rx_mode_->SetSelection(0);
+    rx_mode_->SetToolTip(
+        "Simple: uses a single noise floor (atmospheric only).\n"
+        "Suitable for quick coverage planning where vehicle noise is not the "
+        "dominant factor.\n\n"
+        "Advanced: combines atmospheric and vehicle noise floors in a power sum, "
+        "giving a more accurate noise model for in-vehicle positioning predictions.");
     gs->Add(rx_mode_, 1, wxEXPAND | wxBOTTOM, 4);
     rx_mode_->Bind(wxEVT_CHOICE, &ParamEditor::OnRxMode, this);
 
@@ -175,6 +181,7 @@ void ParamEditor::LoadReceiver(const ReceiverModel& rx) {
     rx_minstns_->SetValue(rx.min_stations);
     notebook_->SetSelection(1);
     updating_ = false;
+    UpdateRxFieldStates();
 }
 
 void ParamEditor::ClearSelection() {
@@ -210,6 +217,7 @@ void ParamEditor::OnRxField(wxCommandEvent& /*evt*/) {
 }
 
 void ParamEditor::OnRxMode(wxCommandEvent& /*evt*/) {
+    UpdateRxFieldStates();
     if (updating_ || !on_receiver_changed) return;
     // Start from the stored snapshot so that fields not shown in the form
     // (vp_ms, ellipsoid) are preserved rather than reset to defaults.
@@ -222,6 +230,15 @@ void ParamEditor::OnRxMode(wxCommandEvent& /*evt*/) {
     rx.min_stations         = rx_minstns_->GetValue();
     current_rx_ = rx;
     on_receiver_changed(rx);
+}
+
+void ParamEditor::UpdateRxFieldStates() {
+    bool advanced = (rx_mode_->GetSelection() == 1);
+    // Vehicle noise is only applicable in Advanced mode, where it is combined
+    // with the atmospheric noise floor in a power sum.  In Simple mode the
+    // noise_floor field represents the total receiver noise, so vehicle noise
+    // has no separate role and the field is disabled to avoid confusion.
+    rx_vnoise_->Enable(advanced);
 }
 
 } // namespace bp

@@ -165,6 +165,9 @@ MainFrame::MainFrame()
     Bind(EVT_COMPUTE_RESULT,   &MainFrame::OnComputeResult,   this);
     Bind(EVT_COMPUTE_PROGRESS, &MainFrame::OnComputeProgress, this);
 
+    // Populate receiver panel with default values
+    param_editor_->LoadReceiver(scenario_.receiver);
+
     // Initial recompute
     scenario_.frequencies.recompute();
     UpdateStatusBarMl();

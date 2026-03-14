@@ -33,6 +33,7 @@ private:
     void OnTxField(wxCommandEvent& evt);
     void OnRxField(wxCommandEvent& evt);
     void OnRxMode(wxCommandEvent& evt);
+    void UpdateRxFieldStates();
 
     wxNotebook* notebook_ = nullptr;
 
