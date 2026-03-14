@@ -3,17 +3,25 @@
 
 namespace bp {
 
+// Layer keys ending in "_log" use log-scale colour ramp against the same
+// underlying GridArray as the bare key.  PushLayerToMap strips the suffix
+// before looking up data and forces ScaleMode::Log regardless of UseLogScale().
 static const struct { const char* key; const char* label; } LAYER_DEFS[] = {
-    { "",                 "(none)"                         },
-    { "groundwave",       "Groundwave field strength"      },
-    { "snr",              "SNR per transmitter"            },
-    { "gdr",              "GDR"                            },
-    { "whdop",            "WHDOP"                          },
-    { "repeatable",       "Repeatable accuracy"            },
-    { "asf",              "ASF"                            },
-    { "absolute_accuracy","Absolute accuracy"              },
-    { "asf_gradient",     "ASF gradient (monitor siting)" },
-    { "confidence",       "Confidence factor"              },
+    { "",                        "(none)"                                  },
+    { "groundwave",              "Groundwave field strength"               },
+    { "snr",                     "SNR per transmitter"                     },
+    { "gdr",                     "GDR"                                     },
+    { "whdop",                   "WHDOP (linear)"                          },
+    { "whdop_log",               "WHDOP (log scale)"                       },
+    { "repeatable",              "Repeatable accuracy (linear)"            },
+    { "repeatable_log",          "Repeatable accuracy (log scale)"         },
+    { "asf",                     "ASF"                                     },
+    { "absolute_accuracy",       "Absolute accuracy (linear)"              },
+    { "absolute_accuracy_log",   "Absolute accuracy (log scale)"           },
+    { "asf_gradient",            "ASF gradient / monitor siting (linear)"  },
+    { "asf_gradient_log",        "ASF gradient / monitor siting (log)"     },
+    { "confidence",              "Confidence factor (linear)"              },
+    { "confidence_log",          "Confidence factor (log scale)"           },
 };
 
 LayerPanel::LayerPanel(wxWindow* parent)
