@@ -906,9 +906,9 @@ the interface is a text/serial protocol.
 - f2 frequency: **configurable, default 131.2500 kHz**; lane width = c / f2_hz
 - Frequency range: **30–300 kHz** (full LF band). Hard limits — rejected outside
   this range. Warning (not error) if f1 == f2.
-- Lane widths at defaults: f1 ≈ 2047.14 m, f2 ≈ 2284.59 m
+- Lane widths at defaults: f1 ≈ 2047.24 m (= 299792458/146437.5), f2 ≈ 2284.13 m (= 299792458/131250)
 - Pattern offset unit: **millilane (ml)** = 1/1000 lane
-  - At defaults: f1: 1 ml ≈ 2.047 m; f2: 1 ml ≈ 2.285 m
+  - At defaults: f1: 1 ml ≈ 2.047 m; f2: 1 ml ≈ 2.284 m
   - At custom frequencies: recomputed from lane_width = c / f
 - **All pipeline code uses `scenario.frequencies.f1_hz` / `f2_hz`. No hardcoded
   frequency values anywhere.**

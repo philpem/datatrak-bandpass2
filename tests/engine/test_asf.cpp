@@ -309,13 +309,14 @@ TEST_CASE("monteath: identical TX and RX coordinates return zero ASF") {
 TEST_CASE("frequencies: default f1 lane width") {
     Frequencies f;
     f.recompute();
-    CHECK(f.lane_width_f1_m == Approx(2047.14).margin(0.01));
+    // lane_width = c / freq;  c = 299 792 458 m/s exactly (SI definition)
+    CHECK(f.lane_width_f1_m == Approx(299792458.0 / 146437.5).margin(0.01));
 }
 
 TEST_CASE("frequencies: default f2 lane width") {
     Frequencies f;
     f.recompute();
-    CHECK(f.lane_width_f2_m == Approx(2284.59).margin(0.01));
+    CHECK(f.lane_width_f2_m == Approx(299792458.0 / 131250.0).margin(0.01));
 }
 
 TEST_CASE("frequencies: 137 kHz lane width") {
