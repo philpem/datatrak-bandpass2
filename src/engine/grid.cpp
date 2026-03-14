@@ -185,12 +185,20 @@ static void colourRampRGBA(double t, uint8_t* out) {
 
 GridImageData GridArray::to_image_data() const {
     GridImageData result;
-    result.width   = width;
-    result.height  = height;
-    result.lat_min = lat_min;
-    result.lat_max = lat_max;
-    result.lon_min = lon_min;
-    result.lon_max = lon_max;
+    result.width  = width;
+    result.height = height;
+
+    // Grid points are cell centres.  The image overlay bounds must cover the
+    // full cell area, so extend by half a cell in every direction.
+    double mid_lat    = (lat_min + lat_max) / 2.0;
+    double half_dlat  = resolution_km / 110.574 / 2.0;
+    double half_dlon  = (std::cos(mid_lat * M_PI / 180.0) > 1e-6)
+                        ? resolution_km / (111.320 * std::cos(mid_lat * M_PI / 180.0)) / 2.0
+                        : half_dlat;
+    result.lat_min = lat_min - half_dlat;
+    result.lat_max = lat_max + half_dlat;
+    result.lon_min = lon_min - half_dlon;
+    result.lon_max = lon_max + half_dlon;
 
     if (points.empty() || values.empty() || width <= 0 || height <= 0)
         return result;

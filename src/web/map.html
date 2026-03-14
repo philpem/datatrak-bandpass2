@@ -245,10 +245,11 @@
     for (var name in layerGroups) {
       if (layerGroups.hasOwnProperty(name)) {
         var layer = layerGroups[name];
-        if (typeof layer.setStyle === 'function') {
-          layer.setStyle({ fillOpacity: opacity });
-        } else if (typeof layer.setOpacity === 'function') {
+        // Check setOpacity first (image overlays); fall back to setStyle (GeoJSON layers).
+        if (typeof layer.setOpacity === 'function') {
           layer.setOpacity(opacity);
+        } else if (typeof layer.setStyle === 'function') {
+          layer.setStyle({ fillOpacity: opacity });
         }
       }
     }
