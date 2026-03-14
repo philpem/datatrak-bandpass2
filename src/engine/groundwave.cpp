@@ -1,8 +1,10 @@
 #include "groundwave.h"
 #include "conductivity.h"
 #include <GeographicLib/Geodesic.hpp>
+#include <GeographicLib/GeodesicLine.hpp>
 #include <cmath>
 #include <algorithm>
+#include <vector>
 
 namespace bp {
 
@@ -40,6 +42,102 @@ double groundwave_field_dbuvm(double freq_hz,
 }
 
 // ---------------------------------------------------------------------------
+// Millington (1949) mixed-path groundwave field strength
+//
+// The Millington method corrects the groundwave field strength for mixed
+// conductivity paths (e.g. land + sea) using a forward–backward average.
+//
+// For N segments (conductivities σ₀…σ_{N-1}, cumulative distances D₁…D_N):
+//
+//   Forward:  E_fwd = E_hom(D_N, σ_{N-1})
+//                   + Σ_{k=0}^{N-2} [E_hom(D_{k+1}, σ_k) − E_hom(D_{k+1}, σ_{k+1})]
+//
+//   Backward: E_back = E_hom(D_N, σ_0)
+//                    + Σ_{k=0}^{N-2} [E_hom(D_N−D_{N-2-k}, σ_{N-1-k})
+//                                   − E_hom(D_N−D_{N-2-k}, σ_{N-2-k})]
+//
+//   Result: 20 log10(½(lin(E_fwd) + lin(E_back)))
+//
+// For a homogeneous path all correction terms cancel, giving E_hom(D_N, σ)
+// from both passes — identical to groundwave_field_dbuvm().
+// ---------------------------------------------------------------------------
+double millington_field_dbuvm(double freq_hz,
+                               double lat_tx, double lon_tx,
+                               double lat_rx, double lon_rx,
+                               const ConductivityMap& cond,
+                               double power_w,
+                               int nsamples)
+{
+    if (nsamples < 1) nsamples = 1;
+    if (power_w <= 0.0) return -200.0;
+
+    const GeographicLib::Geodesic& geod = GeographicLib::Geodesic::WGS84();
+
+    double total_dist_m = 0.0;
+    geod.Inverse(lat_tx, lon_tx, lat_rx, lon_rx, total_dist_m);
+    double total_dist_km = total_dist_m / 1000.0;
+    if (total_dist_km < 0.1) return -200.0;
+
+    // Sample nsamples segments along the great circle.
+    // Segment k spans from sample point k to k+1.
+    // Conductivity is looked up at each segment midpoint.
+    struct Seg {
+        double d_end_km;    // cumulative distance from TX at segment end
+        GroundConstants gc; // conductivity at segment midpoint
+    };
+
+    std::vector<Seg> segs;
+    segs.reserve(nsamples);
+
+    GeographicLib::GeodesicLine line = geod.InverseLine(lat_tx, lon_tx, lat_rx, lon_rx);
+
+    double prev_lat = lat_tx, prev_lon = lon_tx;
+    for (int i = 1; i <= nsamples; ++i) {
+        double s   = (double(i) / nsamples) * total_dist_m;
+        double lat = 0.0, lon = 0.0;
+        line.Position(s, lat, lon);
+
+        double mid_lat = 0.5 * (prev_lat + lat);
+        double mid_lon = 0.5 * (prev_lon + lon);
+
+        segs.push_back({ s / 1000.0, cond.lookup(mid_lat, mid_lon) });
+
+        prev_lat = lat;
+        prev_lon = lon;
+    }
+
+    int N = (int)segs.size(); // == nsamples
+
+    // --- Forward pass ---
+    // Start: homogeneous field for total distance at last segment's conductivity.
+    double E_fwd = groundwave_field_dbuvm(freq_hz, total_dist_km, segs[N-1].gc, power_w);
+    // Add correction at each interior boundary (between segment k and k+1).
+    for (int k = 0; k < N - 1; ++k) {
+        double D = segs[k].d_end_km;
+        E_fwd += groundwave_field_dbuvm(freq_hz, D, segs[k  ].gc, power_w)
+               - groundwave_field_dbuvm(freq_hz, D, segs[k+1].gc, power_w);
+    }
+
+    // --- Backward pass ---
+    // Start: homogeneous field for total distance at first segment's conductivity.
+    double E_back = groundwave_field_dbuvm(freq_hz, total_dist_km, segs[0].gc, power_w);
+    // Add correction at each interior boundary traversed in reverse.
+    // For k=0..N-2: boundary distance from RX = total − segs[N-2-k].d_end_km.
+    // Reversed segment k has conductivity segs[N-1-k].gc;
+    // reversed segment k+1 has conductivity segs[N-2-k].gc.
+    for (int k = 0; k < N - 1; ++k) {
+        double D_back = total_dist_km - segs[N-2-k].d_end_km;
+        E_back += groundwave_field_dbuvm(freq_hz, D_back, segs[N-1-k].gc, power_w)
+                - groundwave_field_dbuvm(freq_hz, D_back, segs[N-2-k].gc, power_w);
+    }
+
+    // Linear average of forward and backward estimates.
+    double lin_fwd  = std::pow(10.0, E_fwd  / 20.0);
+    double lin_back = std::pow(10.0, E_back / 20.0);
+    return 20.0 * std::log10(0.5 * (lin_fwd + lin_back));
+}
+
+// ---------------------------------------------------------------------------
 // Grid computation
 // ---------------------------------------------------------------------------
 void computeGroundwave(GridData&               data,
@@ -66,15 +164,12 @@ void computeGroundwave(GridData&               data,
 
         std::vector<double> vals(n);
         for (size_t i = 0; i < n; ++i) {
-            double dist_m = 0.0;
-            geod.Inverse(tx.lat, tx.lon, pts[i].lat, pts[i].lon, dist_m);
-            double dist_km = std::max(dist_m / 1000.0, 0.1);
-            // Conductivity lookup at the midpoint of the path
-            double mid_lat = (tx.lat + pts[i].lat) / 2.0;
-            double mid_lon = (tx.lon + pts[i].lon) / 2.0;
-            GroundConstants gc = cond_map->lookup(mid_lat, mid_lon);
-            double e = groundwave_field_dbuvm(
-                scenario.frequencies.f1_hz, dist_km, gc, tx.power_w);
+            // Millington mixed-path field strength (P2-02).
+            // Uses 20 path segments to capture land/sea boundaries.
+            double e = millington_field_dbuvm(
+                scenario.frequencies.f1_hz,
+                tx.lat, tx.lon, pts[i].lat, pts[i].lon,
+                *cond_map, tx.power_w, 20);
             vals[i] = e;
             double lin = std::pow(10.0, e / 20.0);
             rss_total[i] += lin * lin;
