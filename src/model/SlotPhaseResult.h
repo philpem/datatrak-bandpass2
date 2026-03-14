@@ -19,6 +19,8 @@ struct SlotPhaseResult {
 
     double snr_db = 0.0;
     double gdr_db = 0.0;
+
+    double distance_m = 0.0;   // Slant range receiver→transmitter (Airy ellipsoid) [m]
 };
 
 } // namespace bp

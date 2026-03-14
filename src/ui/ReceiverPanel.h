@@ -1,4 +1,5 @@
 #pragma once
+#include <algorithm>
 #include <functional>
 #include <vector>
 #include <wx/panel.h>
@@ -23,11 +24,13 @@ public:
 private:
     void OnExport(wxCommandEvent& evt);
     void OnUnitsChanged(wxCommandEvent& evt);
-    void RefreshTable();  // reformat from results_ using current units selection
+    void OnSortChanged(wxCommandEvent& evt);
+    void RefreshTable();  // reformat from results_ using current units + sort selection
 
     wxStaticText* pos_label_    = nullptr;
     wxListCtrl*   list_         = nullptr;
     wxChoice*     units_choice_ = nullptr;
+    wxChoice*     sort_choice_  = nullptr;
     wxButton*     export_btn_   = nullptr;
     std::vector<SlotPhaseResult> results_;
 };
