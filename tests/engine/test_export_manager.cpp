@@ -138,21 +138,14 @@ TEST_CASE("ExportManager::export_geotiff: empty layer returns error") {
     CHECK_FALSE(err.empty());
 }
 
-#if defined(BP_USE_GDAL) || defined(USE_GDAL)
 TEST_CASE("ExportManager::export_geotiff: valid layer writes file") {
     auto g   = make_test_layer();
     auto tpath = temp_path("bp_test_layer.tif");
     auto err = ExportManager::export_geotiff(g, tpath);
-    if (err.empty()) {
-        // Check file was created
-        std::ifstream f(tpath, std::ios::binary);
-        CHECK(f.is_open());
-    } else {
-        // GDAL might not have GTiff driver — just ensure error is descriptive
-        CHECK_FALSE(err.empty());
-    }
+    CHECK(err.empty());
+    std::ifstream f(tpath, std::ios::binary);
+    CHECK(f.is_open());
 }
-#endif
 
 // -----------------------------------------------------------------------
 // PNG export tests (only with wxWidgets — stub test without wx)

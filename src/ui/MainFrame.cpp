@@ -209,9 +209,6 @@ void MainFrame::BuildMenus() {
     exportMenu->Append(ID_EXPORT_LAYERS_CSV,    "Active Layer as CSV...");
     exportMenu->Append(ID_EXPORT_LAYERS_PNG,    "Active Layer as PNG...");
     exportMenu->Append(ID_EXPORT_LAYERS_GEOTIFF, "Active Layer as GeoTIFF...");
-#ifndef BP_HAVE_GDAL
-    exportMenu->Enable(ID_EXPORT_LAYERS_GEOTIFF, false);
-#endif
     exportMenu->Append(ID_EXPORT_LAYERS_HTML,   "HTML Report...");
     exportMenu->AppendSeparator();
     exportMenu->Append(ID_COMPUTE_PO, "Compute Pattern Offsets...");
@@ -326,11 +323,7 @@ void MainFrame::OnComputeResult(wxCommandEvent& evt) {
     if (owned->data) {
         ApplyComputeResult(*owned);
     }
-    if (!owned->warning.empty()) {
-        SetStatusText("Warning: " + owned->warning, SB_STATUS);
-    } else {
-        SetStatusText("Ready", SB_STATUS);
-    }
+    SetStatusText("Ready", SB_STATUS);
 }
 
 void MainFrame::OnComputeProgress(wxCommandEvent& evt) {
@@ -764,24 +757,6 @@ void MainFrame::OnExportSimulator() {
 }
 
 void MainFrame::OnExportAlmanac(almanac::FirmwareFormat fmt) {
-#ifndef BP_HAVE_GDAL
-    {
-        using CS = Scenario::ConductivitySource;
-        using TS = Scenario::TerrainSource;
-        bool needs_gdal = (scenario_.conductivity_source != CS::BuiltIn ||
-                           scenario_.terrain_source      != TS::Flat);
-        if (needs_gdal) {
-            int rc = wxMessageBox(
-                "This scenario requests GDAL rasters (conductivity or terrain map) "
-                "that are not available in this build.\n\n"
-                "Pattern offset (po) values will be computed using the built-in "
-                "conductivity map and flat terrain, which may be less accurate.\n\n"
-                "Continue anyway?",
-                "GDAL Not Available", wxYES_NO | wxICON_WARNING, this);
-            if (rc != wxYES) return;
-        }
-    }
-#endif
     GridData gd;
     std::string text = almanac::generate_almanac(scenario_, gd, fmt);
 
@@ -946,25 +921,6 @@ void MainFrame::OnComputePatternOffsets(wxCommandEvent& /*evt*/) {
                      "Compute Pattern Offsets", wxICON_INFORMATION, this);
         return;
     }
-
-#ifndef BP_HAVE_GDAL
-    {
-        using CS = Scenario::ConductivitySource;
-        using TS = Scenario::TerrainSource;
-        bool needs_gdal = (scenario_.conductivity_source != CS::BuiltIn ||
-                           scenario_.terrain_source      != TS::Flat);
-        if (needs_gdal) {
-            int rc = wxMessageBox(
-                "This scenario requests GDAL rasters (conductivity or terrain map) "
-                "that are not available in this build.\n\n"
-                "Pattern offsets will be computed using the built-in conductivity "
-                "map and flat terrain, which may be less accurate.\n\n"
-                "Continue anyway?",
-                "GDAL Not Available", wxYES_NO | wxICON_WARNING, this);
-            if (rc != wxYES) return;
-        }
-    }
-#endif
 
     PoRefDialog dlg(this, scenario_);
     if (dlg.ShowModal() != wxID_OK) return;

@@ -22,8 +22,7 @@ struct ComputeRequest {
 struct ComputeResult {
     uint64_t                        request_id = 0;
     std::shared_ptr<const GridData> data;
-    std::string                     error;    // empty on success
-    std::string                     warning;  // non-empty if degraded (e.g. GDAL unavailable)
+    std::string                     error;   // empty on success
 };
 
 // Custom wxEvents for worker → UI communication

@@ -110,18 +110,6 @@ ComputeResult ComputeManager::RunPipeline(const Scenario& scenario,
     if (scenario.transmitters.empty()) return result;
     if (cancel.load()) return result;
 
-    // Warn if the scenario requests GDAL-based rasters but GDAL was not compiled in.
-#ifndef BP_HAVE_GDAL
-    {
-        using CS = Scenario::ConductivitySource;
-        using TS = Scenario::TerrainSource;
-        if (scenario.conductivity_source != CS::BuiltIn)
-            result.warning += "GDAL not available: conductivity raster ignored, using built-in map. ";
-        if (scenario.terrain_source != TS::Flat)
-            result.warning += "GDAL not available: terrain raster ignored, using flat terrain.";
-    }
-#endif
-
     // Stage 0 – grid build
     PostProgress("Building grid", 0);
     auto grid = buildGrid(scenario.grid, cancel);

@@ -29,15 +29,10 @@ add_library(tomlplusplus::tomlplusplus ALIAS tomlplusplus)
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(Catch2 3 CONFIG REQUIRED)
 
-# GDAL — required for conductivity raster (P2-03) and terrain (P2-04)
-find_package(GDAL QUIET)
-if(GDAL_FOUND)
-    message(STATUS "GDAL found: ${GDAL_VERSION}")
-    set(BP_HAVE_GDAL TRUE)
-else()
-    message(STATUS "GDAL not found; conductivity/terrain rasters and GeoTIFF export will be unavailable")
-    set(BP_HAVE_GDAL FALSE)
-endif()
+# GDAL — mandatory; used for conductivity raster (P2-03), terrain (P2-04),
+# and GeoTIFF export (P5-01). Install: apt libgdal-dev / brew gdal / vcpkg gdal
+find_package(GDAL REQUIRED)
+message(STATUS "GDAL found: ${GDAL_VERSION}")
 
 # MSVC does not expose M_PI from <cmath> by default; it requires _USE_MATH_DEFINES.
 # Set it globally so every source file in the project gets it without per-file changes.

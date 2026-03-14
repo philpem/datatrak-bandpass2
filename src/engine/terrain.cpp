@@ -5,12 +5,10 @@
 #include <cmath>
 #include <cstdio>
 
-#ifdef USE_GDAL
 #include <gdal_priv.h>
 #include <gdal.h>
 #include <filesystem>
 #include <unordered_map>
-#endif
 
 namespace bp {
 
@@ -51,8 +49,6 @@ std::vector<HeightPoint> TerrainMap::profile(double lat1, double lon1,
 // ---------------------------------------------------------------------------
 // GdalTerrainMap
 // ---------------------------------------------------------------------------
-
-#ifdef USE_GDAL
 
 struct GdalTerrainMap::Impl {
     // For GeoTIFF mode: single open dataset
@@ -178,25 +174,6 @@ double GdalTerrainMap::height_at(double lat, double lon) const {
     invert_gt(geo, inv);
     return bilinear_read(td, inv, nx, ny, lon, lat);
 }
-
-#else // !USE_GDAL
-
-struct GdalTerrainMap::Impl {};
-
-GdalTerrainMap::GdalTerrainMap(const std::string& path, bool)
-    : impl_(std::make_unique<Impl>())
-{
-    (void)path;
-    throw std::runtime_error("TerrainMap: GDAL support not compiled in");
-}
-
-GdalTerrainMap::~GdalTerrainMap() = default;
-
-double GdalTerrainMap::height_at(double /*lat*/, double /*lon*/) const {
-    return 0.0;
-}
-
-#endif // USE_GDAL
 
 // ---------------------------------------------------------------------------
 // Factory
