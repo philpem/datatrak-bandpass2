@@ -69,7 +69,7 @@ struct GdalTerrainMap::Impl {
 
     // Build SRTM filename for given 1°×1° tile (lower-left corner)
     static std::string srtm_filename(int lat_floor, int lon_floor) {
-        char buf[16];
+        char buf[32];
         std::snprintf(buf, sizeof(buf), "%c%02d%c%03d.hgt",
                       lat_floor >= 0 ? 'N' : 'S', std::abs(lat_floor),
                       lon_floor >= 0 ? 'E' : 'W', std::abs(lon_floor));
