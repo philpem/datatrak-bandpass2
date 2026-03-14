@@ -53,6 +53,7 @@ private:
     void OnReceiverMoved(double lat, double lon);
     void OnExportSimulator();
     void OnExportAlmanac(almanac::FirmwareFormat fmt);
+    void OnExportLayers(const std::string& format);
     void TriggerRecompute();
     void MarkDirty();
     bool ConfirmDiscardChanges();

@@ -1,4 +1,5 @@
 #include "MainFrame.h"
+#include "ExportManager.h"
 #include "../coords/NationalGrid.h"
 #include "../coords/Osgb.h"
 #include "../model/toml_io.h"
@@ -34,6 +35,9 @@ enum {
     ID_EDIT_DELETE_TX,
     ID_EXPORT_ALMANAC_V7,
     ID_EXPORT_ALMANAC_V16,
+    ID_EXPORT_LAYERS_CSV,
+    ID_EXPORT_LAYERS_PNG,
+    ID_EXPORT_LAYERS_GEOTIFF,
     SB_WGS84   = 0,
     SB_OSGB    = 1,
     SB_ML      = 2,
@@ -181,6 +185,10 @@ void MainFrame::BuildMenus() {
     auto* exportMenu = new wxMenu;
     exportMenu->Append(ID_EXPORT_ALMANAC_V7,  "Almanac Commands (V7)");
     exportMenu->Append(ID_EXPORT_ALMANAC_V16, "Almanac Commands (V16)");
+    exportMenu->AppendSeparator();
+    exportMenu->Append(ID_EXPORT_LAYERS_CSV,    "Active Layer as CSV...");
+    exportMenu->Append(ID_EXPORT_LAYERS_PNG,    "Active Layer as PNG...");
+    exportMenu->Append(ID_EXPORT_LAYERS_GEOTIFF, "Active Layer as GeoTIFF...");
     file->AppendSubMenu(exportMenu, "E&xport");
     file->AppendSeparator();
     file->Append(wxID_EXIT,      "E&xit");
@@ -211,6 +219,9 @@ void MainFrame::BuildMenus() {
     Bind(wxEVT_MENU, [this](wxCommandEvent&){ OnExportAlmanac(almanac::FirmwareFormat::V7);  }, ID_EXPORT_ALMANAC_V7);
     Bind(wxEVT_MENU, [this](wxCommandEvent&){ OnExportAlmanac(almanac::FirmwareFormat::V16); }, ID_EXPORT_ALMANAC_V16);
     Bind(wxEVT_MENU, &MainFrame::OnEditDeleteTx,      this, ID_EDIT_DELETE_TX);
+    Bind(wxEVT_MENU, [this](wxCommandEvent&){ OnExportLayers("csv");    }, ID_EXPORT_LAYERS_CSV);
+    Bind(wxEVT_MENU, [this](wxCommandEvent&){ OnExportLayers("png");    }, ID_EXPORT_LAYERS_PNG);
+    Bind(wxEVT_MENU, [this](wxCommandEvent&){ OnExportLayers("geotiff"); }, ID_EXPORT_LAYERS_GEOTIFF);
     Bind(wxEVT_MENU, &MainFrame::OnViewNetworkConfig, this, ID_VIEW_NETCFG);
     Bind(wxEVT_MENU, &MainFrame::OnViewLayerPanel,    this, ID_VIEW_LAYERS);
     Bind(wxEVT_MENU, &MainFrame::OnViewParamEditor,   this, ID_VIEW_PARAMS);
@@ -669,6 +680,62 @@ void MainFrame::OnExportAlmanac(almanac::FirmwareFormat fmt) {
         SetStatusText("Almanac exported.", SB_STATUS);
     } else {
         wxMessageBox("Could not write file.", "Export Error", wxICON_ERROR, this);
+    }
+}
+
+void MainFrame::OnExportLayers(const std::string& format) {
+    if (!last_grid_data_ || last_grid_data_->layers.empty()) {
+        wxMessageBox("No computed layers available. Run a computation first.",
+                     "Export Layers", wxICON_INFORMATION, this);
+        return;
+    }
+
+    // Pick the active layer (first visible layer in the grid data).
+    // If the layer panel has a selection, use that; otherwise use the first layer.
+    std::string layer_name;
+    if (layer_panel_) {
+        layer_name = layer_panel_->GetSelectedLayer();
+    }
+    if (layer_name.empty() || last_grid_data_->layers.find(layer_name) == last_grid_data_->layers.end()) {
+        layer_name = last_grid_data_->layers.begin()->first;
+    }
+    const GridArray& layer = last_grid_data_->layers.at(layer_name);
+
+    // Build file dialog filters based on format
+    wxString title, wildcard, defaultName;
+    if (format == "csv") {
+        title       = "Export Layer as CSV";
+        wildcard    = "CSV files (*.csv)|*.csv|All files (*.*)|*.*";
+        defaultName = wxString(layer_name) + ".csv";
+    } else if (format == "png") {
+        title       = "Export Layer as PNG";
+        wildcard    = "PNG images (*.png)|*.png|All files (*.*)|*.*";
+        defaultName = wxString(layer_name) + ".png";
+    } else {
+        title       = "Export Layer as GeoTIFF";
+        wildcard    = "GeoTIFF files (*.tif)|*.tif|All files (*.*)|*.*";
+        defaultName = wxString(layer_name) + ".tif";
+    }
+
+    wxFileDialog dlg(this, title, "", defaultName, wildcard,
+                     wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+    if (dlg.ShowModal() != wxID_OK) return;
+
+    std::string path = dlg.GetPath().ToStdString();
+    std::string err;
+
+    if (format == "csv") {
+        err = ExportManager::export_csv(layer, path);
+    } else if (format == "png") {
+        err = ExportManager::export_png(layer, path);
+    } else {
+        err = ExportManager::export_geotiff(layer, path);
+    }
+
+    if (err.empty()) {
+        SetStatusText(wxString::Format("Exported %s → %s", layer_name, path), SB_STATUS);
+    } else {
+        wxMessageBox(wxString::FromUTF8(err), "Export Error", wxICON_ERROR, this);
     }
 }
 

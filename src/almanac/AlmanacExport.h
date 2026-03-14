@@ -11,18 +11,16 @@ enum class FirmwareFormat { V7, V16 };
 
 // Generate the four almanac tables as plain ASCII text.
 //
-// Sg  — station grid (OSGB easting/northing per station)
+// Sg   — station grid (OSGB easting/northing per station)
 // Stxs — slot→station assignment
-// Po  — pattern offsets (ASF corrections in millilanes)
-//
-// The Zp (zone patterns) table requires the 32-zone polygon dataset
-// which is bundled in data/zones/uk_32zone.geojson; it is omitted
-// from this function if the GridData is empty.
+// Zp   — zone patterns (requires geojson_path to uk_32zone.geojson)
+// Po   — pattern offsets (ASF corrections in millilanes)
 //
 // Returns the full text block for serial entry or file save.
-std::string generate_almanac(const Scenario& scenario,
-                              const GridData&  grid_data,
-                              FirmwareFormat   fmt = FirmwareFormat::V7);
+std::string generate_almanac(const Scenario&    scenario,
+                              const GridData&    grid_data,
+                              FirmwareFormat     fmt          = FirmwareFormat::V7,
+                              const std::string& geojson_path = "");
 
 // Generate just the Sg commands
 std::string generate_sg(const Scenario& scenario);

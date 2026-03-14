@@ -1,4 +1,5 @@
 #include "AlmanacExport.h"
+#include "ZonePatterns.h"
 #include "../coords/Osgb.h"
 #include "../coords/NationalGrid.h"
 #include <sstream>
@@ -129,9 +130,10 @@ std::string generate_po(const Scenario& scenario,
 }
 
 // ---------------------------------------------------------------------------
-std::string generate_almanac(const Scenario& scenario,
-                              const GridData&  grid_data,
-                              FirmwareFormat   fmt)
+std::string generate_almanac(const Scenario&    scenario,
+                              const GridData&    grid_data,
+                              FirmwareFormat     fmt,
+                              const std::string& geojson_path)
 {
     std::string out;
     out += make_header(scenario, fmt);
@@ -140,6 +142,13 @@ std::string generate_almanac(const Scenario& scenario,
     out += "\n";
     out += generate_stxs(scenario);
     out += "\n";
+    if (!geojson_path.empty()) {
+        auto zones = compute_zone_patterns(scenario, grid_data, geojson_path);
+        if (!zones.empty()) {
+            out += generate_zp(zones);
+            out += "\n";
+        }
+    }
     out += generate_po(scenario, grid_data, fmt);
     return out;
 }

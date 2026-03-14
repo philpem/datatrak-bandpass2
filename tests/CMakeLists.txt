@@ -99,6 +99,39 @@ bp_add_test(test_asf
 bp_add_test(test_almanac_export
     almanac/test_almanac_export.cpp
     ${CMAKE_SOURCE_DIR}/src/almanac/AlmanacExport.cpp
+    ${CMAKE_SOURCE_DIR}/src/almanac/ZonePatterns.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/groundwave.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/conductivity.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/terrain.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/noise.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/snr.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/whdop.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/grid.cpp
+    ${CMAKE_SOURCE_DIR}/src/coords/Osgb.cpp
+    ${CMAKE_SOURCE_DIR}/src/coords/NationalGrid.cpp
+)
+
+# ExportManager tests (CSV only — PNG/GeoTIFF require wx/GDAL)
+bp_add_test(test_export_manager
+    engine/test_export_manager.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/ExportManager.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/grid.cpp
+    ${CMAKE_SOURCE_DIR}/src/coords/Osgb.cpp
+    ${CMAKE_SOURCE_DIR}/src/coords/NationalGrid.cpp
+)
+
+# Zone patterns tests
+bp_add_test(test_zone_patterns
+    almanac/test_zone_patterns.cpp
+    ${CMAKE_SOURCE_DIR}/src/almanac/ZonePatterns.cpp
+    ${CMAKE_SOURCE_DIR}/src/almanac/AlmanacExport.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/groundwave.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/conductivity.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/terrain.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/noise.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/snr.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/whdop.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/grid.cpp
     ${CMAKE_SOURCE_DIR}/src/coords/Osgb.cpp
     ${CMAKE_SOURCE_DIR}/src/coords/NationalGrid.cpp
 )
