@@ -60,7 +60,7 @@ double compute_whdop(const std::vector<StationGeometry>& all_stations,
         candidates.push_back(i);
     }
 
-    if ((int)candidates.size() < min_stations) return std::numeric_limits<double>::quiet_NaN();
+    if ((int)candidates.size() < min_stations) return -std::numeric_limits<double>::infinity();
 
     // Sort by SNR descending; pick top-8 (Appendix K rule: at most 8 slots)
     std::sort(candidates.begin(), candidates.end(), [&](int a, int b){
@@ -196,7 +196,7 @@ void computeWHDOP(GridData& data, const Scenario& scenario,
 
         // Repeatable accuracy: sigma_r = mean(sigma_phi) * WHDOP  [ml]
         if (it_rep != data.layers.end()) {
-            if (selected.empty() || std::isnan(whdop)) {
+            if (selected.empty() || !std::isfinite(whdop)) {
                 it_rep->second.values[i] = std::numeric_limits<double>::quiet_NaN();
             } else {
                 double sigma_sum = 0.0;

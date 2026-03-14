@@ -59,14 +59,15 @@ TEST_CASE("phase_uncertainty: good SNR (30 dB) is sub-millilane") {
 
 // ---- compute_whdop ----
 
-TEST_CASE("whdop: fewer than min_stations returns NaN") {
+TEST_CASE("whdop: fewer than min_stations returns -infinity") {
     std::vector<StationGeometry> stations;
     StationGeometry s;
     s.usable = true; s.snr_db = 20.0; s.dist_km = 100.0; s.azimuth_deg = 0.0;
     stations.push_back(s);
     std::vector<int> sel;
     double w = compute_whdop(stations, 4, 500.0, sel);
-    CHECK(std::isnan(w));
+    CHECK(std::isinf(w));
+    CHECK(w < 0.0);
 }
 
 TEST_CASE("whdop: ideal geometry (4 stations at 90 deg spacing) gives low WHDOP") {
@@ -108,5 +109,6 @@ TEST_CASE("whdop: stations beyond max range are excluded") {
     }
     std::vector<int> sel;
     double w = compute_whdop(stations, 4, 500.0, sel);
-    CHECK(std::isnan(w));
+    CHECK(std::isinf(w));
+    CHECK(w < 0.0);
 }

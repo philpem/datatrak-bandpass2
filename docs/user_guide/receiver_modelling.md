@@ -186,6 +186,41 @@ transmitter.  Treat the spike as a mathematical artefact of the near-zero range
 case; it does not affect the accuracy prediction anywhere a vehicle or vessel
 might actually be located.
 
+### Grey corners: not enough stations in range
+
+Corners of the map region that appear **grey** on the WHDOP layer indicate grid
+points where fewer than `min_stations` transmitters are simultaneously usable
+(above the noise floor, below `max_range_km`, and positive SNR).  Without a
+minimum complement of stations the WHDOP calculation is not attempted at all;
+these cells carry a "not enough stations" sentinel rather than a computed value.
+
+This is distinct from **transparent** (colourless) cells, which indicate a
+different failure: there are enough stations in range, but their azimuths from
+that point are so nearly collinear that the direction-cosine matrix is singular
+and WHDOP diverges to infinity.
+
+### Why collinearity occurs at opposite corners
+
+The two failures tend to appear at different corners of the map:
+
+- **No-coverage grey** appears at corners that are far from the transmitter
+  network in all directions — typically where all stations exceed `max_range_km`.
+- **Collinearity transparent** appears at corners where enough stations are
+  just within range, but the transmitter chain lies along a single bearing
+  from that corner.
+
+For a transmitter network whose stations run roughly NW-SE across the UK
+(as a typical Datatrak deployment would), the effect is pronounced at the
+**NE and SW corners** of the map: a receiver at the NE sees all transmitters
+to its SW, and vice versa.  The bearing to every usable station is nearly
+identical, the 2x2 position-fix matrix becomes rank-1, and WHDOP is
+geometrically undefined (a 2D position cannot be computed from bearing-lines
+that are all parallel).
+
+This is physically correct.  A Datatrak receiver at those corners cannot
+determine its cross-track position from the network; the grey/transparent
+boundary marks the edge of usable service area.
+
 ---
 
 ## Typical expected accuracy

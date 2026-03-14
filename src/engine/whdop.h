@@ -22,6 +22,9 @@ struct StationGeometry {
 
 // Select usable stations and compute WHDOP at one grid point.
 // Returns WHDOP (dimensionless; < 3 = good geometry, > 5 = poor).
+// Sentinel values:
+//   -infinity : fewer than min_stations usable stations in range ("no coverage")
+//   NaN       : direction-cosine matrix singular (stations geometrically collinear)
 // selected_out receives the subset of stations that were used.
 double compute_whdop(const std::vector<StationGeometry>& all_stations,
                      int min_stations,

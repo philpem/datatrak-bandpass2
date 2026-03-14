@@ -22,7 +22,7 @@ static std::pair<double, double> compute_display_range(
         double vmin = std::numeric_limits<double>::max();
         double vmax = std::numeric_limits<double>::lowest();
         for (double v : values) {
-            if (std::isnan(v)) continue;
+            if (!std::isfinite(v)) continue;  // skip NaN and sentinel ±inf
             vmin = std::min(vmin, v);
             vmax = std::max(vmax, v);
         }
@@ -181,13 +181,19 @@ std::string GridArray::to_geojson(ScaleMode scale) const {
             size_t i = (size_t)r * cols + c;
             if (i >= points.size() || i >= values.size()) continue;
             double v = values[i];
-            if (std::isnan(v)) continue;  // skip transparent no-data cells
+            if (std::isnan(v)) continue;  // geometric singularity: transparent
             if (!first) out << ',';
             first = false;
             const auto& p = points[i];
-            std::string col = (scale == ScaleMode::Log)
-                ? valueToColour(log_normalise(v, log_vmin, log_vmax), 0.0, 1.0)
-                : valueToColour(v, vmin, vmax);
+            // -infinity sentinel: not enough stations — show grey
+            std::string col;
+            if (std::isinf(v) && v < 0.0) {
+                col = "#888888";
+            } else if (scale == ScaleMode::Log) {
+                col = valueToColour(log_normalise(v, log_vmin, log_vmax), 0.0, 1.0);
+            } else {
+                col = valueToColour(v, vmin, vmax);
+            }
 
             out << R"({"type":"Feature","geometry":{"type":"Polygon","coordinates":[[)"
                 << '[' << (p.lon - dlon) << ',' << (p.lat - dlat) << ']' << ','
@@ -308,7 +314,13 @@ GridImageData GridArray::to_image_data(ScaleMode scale) const {
             size_t vi  = (size_t)grid_row * width + c;
             uint8_t* px = &pixels[((size_t)r * width + c) * 4];
             if (vi >= values.size() || std::isnan(values[vi])) {
-                px[0] = px[1] = px[2] = px[3] = 0;  // fully transparent
+                px[0] = px[1] = px[2] = px[3] = 0;  // geometric singularity: transparent
+                continue;
+            }
+            if (std::isinf(values[vi]) && values[vi] < 0.0) {
+                // Not enough stations sentinel: grey
+                px[0] = px[1] = px[2] = 0x88;
+                px[3] = 255;
                 continue;
             }
             double t = (scale == ScaleMode::Log)
