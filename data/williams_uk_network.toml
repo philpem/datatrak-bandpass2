@@ -1,0 +1,164 @@
+# Williams (2004) UK Datatrak Network
+#
+# Example scenario representing the 8-station UK Datatrak LF navigation
+# network as described in:
+#
+#   Williams, P.E.D. (2004), "Prediction of the Coverage and Performance
+#   of the Datatrak Low-Frequency Tracking System", PhD thesis,
+#   University of Wales, Bangor.
+#
+# Station locations are approximate WGS84 positions derived from the
+# OSGB National Grid references given in DTM-170 and the Williams thesis.
+# Power and antenna height values are representative of operational
+# Datatrak stations.
+#
+# Huntingdon is the master station (slot 1).  All other stations are
+# slaves synchronised to Huntingdon via their SPO and station delay
+# parameters.  Station delays shown here are representative values;
+# actual delays were set during commissioning calibration.
+
+[scenario]
+name        = "Williams UK Datatrak Network"
+created     = "2004-01-01"
+display_crs = "osgb_ng"
+
+[grid]
+lat_min       = 49.5
+lat_max       = 56.5
+lon_min       = -7.0
+lon_max       = 2.5
+resolution_km = 2.0
+
+[frequencies]
+f1_khz = 146.4375
+f2_khz = 131.2500
+
+[receiver]
+mode                 = "advanced"
+noise_floor_dbuvpm   = 14.0
+vehicle_noise_dbuvpm = 27.0
+max_range_km         = 350.0
+min_stations         = 4
+vp_ms                = 299892718
+ellipsoid            = "airy1830"
+
+# --- Transmitters ---
+# 8-station network in 8-slot mode.  Huntingdon is the master.
+# Approximate WGS84 positions from OSGB grid references in the thesis.
+
+[[transmitters]]
+name             = "Huntingdon"
+lat              = 52.3247
+lon              = -0.1848
+power_w          = 40.0
+height_m         = 50.0
+slot             = 1
+is_master        = true
+master_slot      = 0
+spo_us           = 0.0
+station_delay_us = 0.0
+
+[[transmitters]]
+name             = "Selsey"
+lat              = 50.7297
+lon              = -0.7872
+power_w          = 40.0
+height_m         = 50.0
+slot             = 2
+is_master        = false
+master_slot      = 1
+spo_us           = 0.0
+station_delay_us = 0.19
+
+[[transmitters]]
+name             = "Doynton"
+lat              = 51.4398
+lon              = -2.4586
+power_w          = 40.0
+height_m         = 50.0
+slot             = 3
+is_master        = false
+master_slot      = 1
+spo_us           = 0.0
+station_delay_us = 0.22
+
+[[transmitters]]
+name             = "Lichfield"
+lat              = 52.6838
+lon              = -1.8275
+power_w          = 40.0
+height_m         = 50.0
+slot             = 4
+is_master        = false
+master_slot      = 1
+spo_us           = 0.0
+station_delay_us = 0.17
+
+[[transmitters]]
+name             = "Bury St Edmunds"
+lat              = 52.2412
+lon              = 0.7147
+power_w          = 40.0
+height_m         = 50.0
+slot             = 5
+is_master        = false
+master_slot      = 1
+spo_us           = 0.0
+station_delay_us = 0.15
+
+[[transmitters]]
+name             = "Stenigot"
+lat              = 53.2783
+lon              = -0.1067
+power_w          = 40.0
+height_m         = 50.0
+slot             = 6
+is_master        = false
+master_slot      = 1
+spo_us           = 0.0
+station_delay_us = 0.21
+
+[[transmitters]]
+name             = "Morpeth"
+lat              = 55.1714
+lon              = -1.6917
+power_w          = 40.0
+height_m         = 50.0
+slot             = 7
+is_master        = false
+master_slot      = 1
+spo_us           = 0.0
+station_delay_us = 0.25
+
+[[transmitters]]
+name             = "Sandford"
+lat              = 50.8319
+lon              = -3.4183
+power_w          = 40.0
+height_m         = 50.0
+slot             = 8
+is_master        = false
+master_slot      = 1
+spo_us           = 0.0
+station_delay_us = 0.20
+
+# --- Monitor station ---
+# Huntingdon co-located monitor, used as the primary calibration
+# reference for pattern offset corrections.
+
+[[monitor_stations]]
+name = "Huntingdon Monitor"
+lat  = 52.3247
+lon  = -0.1848
+
+[conductivity]
+source = "builtin"
+
+[terrain]
+source = "flat"
+
+[datum]
+transform = "helmert"
+
+[output]
+layers = ["groundwave", "snr", "gdr", "whdop", "repeatable", "asf", "confidence", "coverage"]
