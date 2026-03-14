@@ -523,14 +523,33 @@ void MainFrame::OnReceiverPlaced(double lat, double lon) {
     receiver_panel_->SetResults(results);
 }
 
+void MainFrame::ClearMapTransmitters(int count) {
+    for (int i = count - 1; i >= 0; --i)
+        map_panel_->RemoveTransmitterMarker(i);
+}
+
+void MainFrame::SyncMapTransmitters() {
+    for (int i = 0; i < (int)scenario_.transmitters.size(); ++i) {
+        const auto& tx = scenario_.transmitters[i];
+        map_panel_->AddTransmitterMarker(i, tx.lat, tx.lon, tx.name, tx.locked);
+    }
+    // Set next_tx_id_ past the highest slot number in the loaded scenario
+    int max_slot = 0;
+    for (const auto& tx : scenario_.transmitters)
+        if (tx.slot > max_slot) max_slot = tx.slot;
+    next_tx_id_ = max_slot + 1;
+}
+
 void MainFrame::OnFileNew(wxCommandEvent& /*evt*/) {
     if (!ConfirmDiscardChanges()) return;
+    int old_count = (int)scenario_.transmitters.size();
     scenario_      = Scenario{};
     current_file_  = "";
     dirty_         = false;
     next_tx_id_    = 1;
     selected_tx_id_ = -1;
     placement_mode_ = false;
+    ClearMapTransmitters(old_count);
     net_config_->SetScenario(&scenario_);
     param_editor_->SetFrequency(scenario_.frequencies.f1_hz);
     param_editor_->SetTransmitterList(scenario_.transmitters);
@@ -547,6 +566,9 @@ void MainFrame::OnFileOpen(wxCommandEvent& /*evt*/) {
                      wxFD_OPEN | wxFD_FILE_MUST_EXIST);
     if (dlg.ShowModal() != wxID_OK) return;
     std::string path = dlg.GetPath().ToStdString();
+
+    int old_count = (int)scenario_.transmitters.size();
+
     try {
         scenario_     = toml_io::load(path);
         current_file_ = path;
@@ -555,10 +577,19 @@ void MainFrame::OnFileOpen(wxCommandEvent& /*evt*/) {
         wxMessageBox(e.what(), "Error opening file", wxOK | wxICON_ERROR, this);
         return;
     }
+
+    // Clear old transmitter markers, then add markers for loaded transmitters
+    ClearMapTransmitters(old_count);
+    selected_tx_id_ = -1;
+    placement_mode_ = false;
+    SyncMapTransmitters();
+
     net_config_->SetScenario(&scenario_);
     param_editor_->SetFrequency(scenario_.frequencies.f1_hz);
     param_editor_->SetTransmitterList(scenario_.transmitters);
     param_editor_->LoadReceiver(scenario_.receiver);
+    param_editor_->ClearSelection();
+    map_panel_->SelectTransmitterMarker(-1);
     UpdateStatusBarMl();
     UpdateTitle();
     TriggerRecompute();
