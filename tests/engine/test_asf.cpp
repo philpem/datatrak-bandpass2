@@ -527,7 +527,7 @@ TEST_CASE("computeASF: asf_gradient layer is non-zero inside network") {
 
 static GridData make_asf_grid(const Scenario& s) {
     std::atomic<bool> cancel{false};
-    auto pts = buildGrid(s.grid, cancel);
+    auto grid = buildGrid(s.grid, cancel);
     GridData data;
     for (const char* name : {"groundwave","skywave","atm_noise","snr","sgr","gdr",
                               "whdop","repeatable","asf","asf_gradient",
@@ -535,8 +535,9 @@ static GridData make_asf_grid(const Scenario& s) {
                               "absolute_accuracy_delta","confidence"}) {
         GridArray arr;
         arr.layer_name = name;
-        arr.points = pts;
-        arr.values.assign(pts.size(), 0.0);
+        arr.points = grid.points;
+        arr.values.assign(grid.points.size(), 0.0);
+        arr.width = grid.width; arr.height = grid.height;
         arr.lat_min = s.grid.lat_min; arr.lat_max = s.grid.lat_max;
         arr.lon_min = s.grid.lon_min; arr.lon_max = s.grid.lon_max;
         arr.resolution_km = s.grid.resolution_km;
