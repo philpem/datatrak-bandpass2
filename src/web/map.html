@@ -286,8 +286,11 @@
 
   window.updateLegend = function (name, vmin, vmax, units) {
     var fmt = function (v) {
-      return (Math.abs(v) >= 1000 || (Math.abs(v) < 0.01 && v !== 0))
-        ? v.toExponential(1) : v.toFixed(1);
+      var a = Math.abs(v);
+      if (a >= 1000)              return v.toExponential(1);
+      if (a < 0.001 && v !== 0)  return v.toExponential(1);
+      if (a < 0.1   && v !== 0)  return v.toFixed(2);
+      return v.toFixed(1);
     };
     document.getElementById('legend-title').textContent =
       name + (units ? '  (' + units + ')' : '');

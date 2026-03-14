@@ -24,6 +24,7 @@
 #include <wx/file.h>
 #include <cstdlib>
 #include <stdexcept>
+#include <limits>
 
 namespace bp {
 
@@ -341,6 +342,18 @@ void MainFrame::ApplyComputeResult(const ComputeResult& result) {
     PushLayerToMap(selected);
 }
 
+// Layers that use 9999.0 as a "can't compute" sentinel for grid cells where
+// the solution is undefined (too few stations, singular matrix, etc.).
+// Those cells are rendered transparent and excluded from the colour-ramp range.
+static double LayerNoData(const std::string& layer) {
+    if (layer == "whdop"                       ||
+        layer == "absolute_accuracy"           ||
+        layer == "absolute_accuracy_corrected" ||
+        layer == "repeatable")
+        return 9000.0;  // threshold — catches the 9999 sentinel
+    return std::numeric_limits<double>::quiet_NaN();  // no sentinel
+}
+
 // Layers that benefit from a logarithmic colour ramp (large dynamic range or
 // sentinel values like WHDOP=9999 that collapse the linear range to a single colour).
 static bool UseLogScale(const std::string& layer) {
@@ -391,18 +404,19 @@ void MainFrame::PushLayerToMap(const std::string& name) {
     // station coverage, giving the user no visual feedback.
     const bool log_scale = UseLogScale(name);
     const bp::ScaleMode scale = log_scale ? bp::ScaleMode::Log : bp::ScaleMode::Linear;
+    const double no_data = LayerNoData(name);
 
     SetStatusText("Updating map...", SB_STATUS);
     double vmin, vmax;
     if (arr.width > 0 && arr.height > 0) {
-        auto img = arr.to_image_data(scale);
+        auto img = arr.to_image_data(scale, no_data);
         vmin = img.display_vmin;
         vmax = img.display_vmax;
         map_panel_->UpdateLayerImage(name, img);
     } else {
-        auto [rv, rm] = arr.display_range(scale);
+        auto [rv, rm] = arr.display_range(scale, no_data);
         vmin = rv;  vmax = rm;
-        map_panel_->UpdateLayer(name, arr.to_geojson(scale));
+        map_panel_->UpdateLayer(name, arr.to_geojson(scale, no_data));
     }
     map_panel_->UpdateLegend(name, vmin, vmax, LayerUnits(name, log_scale));
     SetStatusText("Ready", SB_STATUS);

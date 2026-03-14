@@ -5,6 +5,7 @@
 #include <utility>
 #include <cstdint>
 #include <atomic>
+#include <limits>
 #include "../model/Scenario.h"
 
 namespace bp {
@@ -42,17 +43,26 @@ struct GridArray {
     double                 lon_min = 0, lon_max = 0;
     double                 resolution_km = 0;
 
+    // Sentinel value: values >= no_data are treated as "no data" — rendered
+    // transparent in image overlays and excluded from range computation.
+    // Default NaN = no sentinel (all values rendered).
+    static constexpr double NO_DATA_DEFAULT =
+        std::numeric_limits<double>::quiet_NaN();
+
     // Produce a GeoJSON FeatureCollection colour-ramp for Leaflet (legacy / small grids)
-    std::string to_geojson(ScaleMode scale = ScaleMode::Linear) const;
+    std::string to_geojson(ScaleMode scale = ScaleMode::Linear,
+                           double no_data   = NO_DATA_DEFAULT) const;
 
     // Produce raw RGBA pixel data (base64-encoded, row 0 = north) for canvas image overlay.
     // Returns an empty base64_rgba string if the grid has no structured dimensions.
-    GridImageData to_image_data(ScaleMode scale = ScaleMode::Linear) const;
+    GridImageData to_image_data(ScaleMode scale = ScaleMode::Linear,
+                                double no_data   = NO_DATA_DEFAULT) const;
 
     // Compute the display range [vmin, vmax] used for the colour ramp.
     // Linear: simple min/max.  Log: 2nd–98th percentile of positive values.
-    // Use this to populate legend labels consistently with to_image_data().
-    std::pair<double, double> display_range(ScaleMode scale) const;
+    // In both modes, values >= no_data are excluded.
+    std::pair<double, double> display_range(ScaleMode scale,
+                                            double no_data = NO_DATA_DEFAULT) const;
 };
 
 struct GridData {

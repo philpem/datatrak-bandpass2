@@ -10,26 +10,38 @@ namespace bp {
 
 // ── Scale-mode helpers ────────────────────────────────────────────────────────
 
+// Returns true when a value should be treated as "no data" (transparent, excluded).
+static inline bool is_no_data(double v, double no_data_threshold) {
+    return std::isfinite(no_data_threshold) && v >= no_data_threshold;
+}
+
 // Compute display [vmin, vmax] for the colour ramp.
-// Linear: simple min/max of all values.
-// Log: 2nd–98th percentile of positive finite values to exclude no-coverage
-//      sentinels (e.g. WHDOP=9999) that otherwise compress the entire colour range.
+// Linear: min/max of all valid (non-no-data) values.
+// Log: 2nd–98th percentile of positive finite valid values.
+// Values >= no_data_threshold are excluded from both modes.
 static std::pair<double, double> compute_display_range(
-        const std::vector<double>& values, ScaleMode scale) {
+        const std::vector<double>& values, ScaleMode scale,
+        double no_data_threshold = std::numeric_limits<double>::quiet_NaN()) {
     if (values.empty()) return {0.0, 1.0};
 
     if (scale == ScaleMode::Linear) {
-        double vmin = *std::min_element(values.begin(), values.end());
-        double vmax = *std::max_element(values.begin(), values.end());
+        double vmin = std::numeric_limits<double>::max();
+        double vmax = std::numeric_limits<double>::lowest();
+        for (double v : values) {
+            if (is_no_data(v, no_data_threshold)) continue;
+            vmin = std::min(vmin, v);
+            vmax = std::max(vmax, v);
+        }
+        if (vmin > vmax) { vmin = 0.0; vmax = 1.0; }
         if (vmax == vmin) vmax = vmin + 1.0;
         return {vmin, vmax};
     }
 
-    // Log scale: collect positive, finite values then use percentile clip.
+    // Log scale: collect positive, finite, non-no-data values then percentile clip.
     std::vector<double> pos;
     pos.reserve(values.size());
     for (double v : values)
-        if (std::isfinite(v) && v > 0.0)
+        if (std::isfinite(v) && v > 0.0 && !is_no_data(v, no_data_threshold))
             pos.push_back(v);
     if (pos.empty()) return {1e-3, 1.0};
 
@@ -118,16 +130,16 @@ static std::string valueToColour(double v, double vmin, double vmax) {
     return buf;
 }
 
-std::pair<double, double> GridArray::display_range(ScaleMode scale) const {
-    return compute_display_range(values, scale);
+std::pair<double, double> GridArray::display_range(ScaleMode scale, double no_data) const {
+    return compute_display_range(values, scale, no_data);
 }
 
-std::string GridArray::to_geojson(ScaleMode scale) const {
+std::string GridArray::to_geojson(ScaleMode scale, double no_data) const {
     if (points.empty() || values.empty()) {
         return R"({"type":"FeatureCollection","features":[]})";
     }
 
-    auto [vmin, vmax] = compute_display_range(values, scale);
+    auto [vmin, vmax] = compute_display_range(values, scale, no_data);
     double log_vmin = (scale == ScaleMode::Log) ? std::log(std::max(vmin, 1e-30)) : 0.0;
     double log_vmax = (scale == ScaleMode::Log) ? std::log(std::max(vmax, 1e-30)) : 0.0;
 
@@ -174,10 +186,11 @@ std::string GridArray::to_geojson(ScaleMode scale) const {
         for (int c = 0; c < cols; c += stride) {
             size_t i = (size_t)r * cols + c;
             if (i >= points.size() || i >= values.size()) continue;
+            double v = values[i];
+            if (is_no_data(v, no_data)) continue;  // skip transparent no-data cells
             if (!first) out << ',';
             first = false;
             const auto& p = points[i];
-            double v = values[i];
             std::string col = (scale == ScaleMode::Log)
                 ? valueToColour(log_normalise(v, log_vmin, log_vmax), 0.0, 1.0)
                 : valueToColour(v, vmin, vmax);
@@ -235,7 +248,7 @@ static void colourRampRGBA(double t, uint8_t* out) {
     out[3] = 255;  // fully opaque; opacity handled by Leaflet imageOverlay
 }
 
-GridImageData GridArray::to_image_data(ScaleMode scale) const {
+GridImageData GridArray::to_image_data(ScaleMode scale, double no_data) const {
     GridImageData result;
     result.width  = width;
     result.height = height;
@@ -255,7 +268,7 @@ GridImageData GridArray::to_image_data(ScaleMode scale) const {
     if (points.empty() || values.empty() || width <= 0 || height <= 0)
         return result;
 
-    auto [vmin, vmax] = compute_display_range(values, scale);
+    auto [vmin, vmax] = compute_display_range(values, scale, no_data);
     result.display_vmin = vmin;
     result.display_vmax = vmax;
 
@@ -298,15 +311,16 @@ GridImageData GridArray::to_image_data(ScaleMode scale) const {
         grid_row      = std::max(0, std::min(height - 1, grid_row));
 
         for (int c = 0; c < width; ++c) {
-            size_t vi = (size_t)grid_row * width + c;
-            double t  = 0.0;
-            if (vi < values.size()) {
-                if (scale == ScaleMode::Log)
-                    t = log_normalise(values[vi], log_vmin, log_vmax);
-                else
-                    t = (values[vi] - vmin) / (vmax - vmin);
+            size_t vi  = (size_t)grid_row * width + c;
+            uint8_t* px = &pixels[((size_t)r * width + c) * 4];
+            if (vi >= values.size() || is_no_data(values[vi], no_data)) {
+                px[0] = px[1] = px[2] = px[3] = 0;  // fully transparent
+                continue;
             }
-            colourRampRGBA(t, &pixels[((size_t)r * width + c) * 4]);
+            double t = (scale == ScaleMode::Log)
+                ? log_normalise(values[vi], log_vmin, log_vmax)
+                : (values[vi] - vmin) / (vmax - vmin);
+            colourRampRGBA(t, px);
         }
     }
 
