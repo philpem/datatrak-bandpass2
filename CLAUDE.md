@@ -500,7 +500,7 @@ display_crs  = "osgb_ng"    # wgs84 | osgb_ng
 
 [grid]
 lat_min      = 49.5
-lat_max      = 59.5
+lat_max      = 61.0
 lon_min      = -7.0
 lon_max      = 2.5
 resolution_km = 1.0
