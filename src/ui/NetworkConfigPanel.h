@@ -21,23 +21,29 @@ public:
 
 private:
     void OnFreqChanged(wxCommandEvent& evt);
+    void OnResChanged(wxCommandEvent& evt);
     void OnOtherChanged(wxCommandEvent& evt);
     void OnDebounceTimer(wxTimerEvent& evt);
     void ValidateFreqFields();
+    void ValidateResField();
     void UpdateMlDisplay();
+    void UpdateResCountDisplay();
 
-    wxTextCtrl*  f1_field_  = nullptr;
-    wxTextCtrl*  f2_field_  = nullptr;
-    wxStaticText* ml_label_ = nullptr;
-    wxChoice*    mode_      = nullptr;
-    wxTextCtrl*  res_field_ = nullptr;
-    wxChoice*    datum_     = nullptr;
+    wxTextCtrl*   f1_field_        = nullptr;
+    wxTextCtrl*   f2_field_        = nullptr;
+    wxStaticText* ml_label_        = nullptr;
+    wxChoice*     mode_            = nullptr;
+    wxTextCtrl*   res_field_       = nullptr;
+    wxStaticText* res_count_label_ = nullptr;
+    wxChoice*     datum_           = nullptr;
 
     wxTimer      debounce_;
     Scenario*    scenario_  = nullptr;
 
-    static constexpr double F_MIN_KHZ =  30.0;
-    static constexpr double F_MAX_KHZ = 300.0;
+    static constexpr double F_MIN_KHZ  =   30.0;
+    static constexpr double F_MAX_KHZ  =  300.0;
+    static constexpr double RES_MIN_KM =    0.5;
+    static constexpr double RES_MAX_KM = 1000.0;
 };
 
 } // namespace bp
