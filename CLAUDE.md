@@ -894,6 +894,11 @@ the interface is a text/serial protocol.
   For characters that are purely decorative (em dash, en dash, curly quotes),
   use plain ASCII instead. Raw hex sequences cause build/display issues on
   macOS and Windows.
+- **Never use hardcoded `/tmp/` paths in tests.** Use
+  `std::filesystem::temp_directory_path()` for cross-platform temp file
+  handling. `/tmp` does not exist on Windows — tests that write temp files
+  will silently fail to open the file, producing empty output and cascading
+  assertion failures.
 
 ---
 
