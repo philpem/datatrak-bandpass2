@@ -3,6 +3,9 @@
 #include "../almanac/AlmanacExport.h"
 #include "../coords/NationalGrid.h"
 #include <wx/msgdlg.h>
+#include <wx/sizer.h>
+#include <wx/statbox.h>
+#include <wx/button.h>
 #include <wx/valtext.h>
 #include <wx/panel.h>
 #include <cmath>
