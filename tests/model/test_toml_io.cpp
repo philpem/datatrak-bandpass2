@@ -92,6 +92,42 @@ TEST_CASE("Missing [frequencies] section uses defaults", "[toml_io]") {
     std::filesystem::remove(path);
 }
 
+TEST_CASE("Operation mode defaults to interlaced", "[toml_io]") {
+    Scenario s;
+    REQUIRE(s.mode == Scenario::OperationMode::Interlaced);
+}
+
+TEST_CASE("Operation mode round-trip: 8slot", "[toml_io]") {
+    Scenario s;
+    s.mode = Scenario::OperationMode::EightSlot;
+    auto path = std::filesystem::temp_directory_path() / "bp2_mode_8slot.toml";
+    toml_io::save(s, path);
+    auto s2 = toml_io::load(path);
+    REQUIRE(s2.mode == Scenario::OperationMode::EightSlot);
+    std::filesystem::remove(path);
+}
+
+TEST_CASE("Operation mode round-trip: interlaced", "[toml_io]") {
+    Scenario s;
+    s.mode = Scenario::OperationMode::Interlaced;
+    auto path = std::filesystem::temp_directory_path() / "bp2_mode_interlaced.toml";
+    toml_io::save(s, path);
+    auto s2 = toml_io::load(path);
+    REQUIRE(s2.mode == Scenario::OperationMode::Interlaced);
+    std::filesystem::remove(path);
+}
+
+TEST_CASE("Missing mode field in TOML defaults to interlaced", "[toml_io]") {
+    auto path = std::filesystem::temp_directory_path() / "bp2_no_mode.toml";
+    {
+        std::ofstream f(path);
+        f << "[scenario]\nname = \"test\"\n";
+    }
+    auto s = toml_io::load(path);
+    REQUIRE(s.mode == Scenario::OperationMode::Interlaced);
+    std::filesystem::remove(path);
+}
+
 TEST_CASE("Invalid TOML throws runtime_error", "[toml_io]") {
     auto path = std::filesystem::temp_directory_path() / "bp2_bad.toml";
     {

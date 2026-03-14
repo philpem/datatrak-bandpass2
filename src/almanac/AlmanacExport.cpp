@@ -32,6 +32,8 @@ static std::string make_header(const Scenario& scenario, FirmwareFormat fmt) {
     ss << "# BANDPASS II Almanac Export\n";
     ss << "# Scenario: " << scenario.name << "\n";
     ss << "# Format: " << (fmt == FirmwareFormat::V7 ? "V7" : "V16") << "\n";
+    ss << "# Mode: " << (scenario.mode == Scenario::OperationMode::Interlaced
+                         ? "interlaced (24 slots)" : "8-slot") << "\n";
     ss << std::fixed << std::setprecision(4);
     ss << "# F1: " << f1_khz << " kHz  lane width: "
        << std::setprecision(2) << lw1 << " m  (1 ml = "

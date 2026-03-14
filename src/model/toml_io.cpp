@@ -29,6 +29,9 @@ Scenario load(const std::filesystem::path& path) {
         std::string crs = str((*sc)["display_crs"], "osgb_ng");
         s.display_crs = (crs == "wgs84") ? Scenario::DisplayCRS::WGS84
                                          : Scenario::DisplayCRS::OSGB_NG;
+        std::string mode_str = str((*sc)["mode"], "interlaced");
+        s.mode = (mode_str == "8slot") ? Scenario::OperationMode::EightSlot
+                                       : Scenario::OperationMode::Interlaced;
     }
 
     // [grid]
@@ -164,6 +167,7 @@ void save(const Scenario& s, const std::filesystem::path& path) {
             {"name",        s.name},
             {"created",     s.created},
             {"display_crs", (s.display_crs == Scenario::DisplayCRS::WGS84) ? "wgs84" : "osgb_ng"},
+            {"mode",        (s.mode == Scenario::OperationMode::Interlaced) ? "interlaced" : "8slot"},
         }},
         {"grid", toml::table{
             {"lat_min",       s.grid.lat_min},

@@ -65,7 +65,7 @@ TEST_CASE("whdop: fewer than min_stations returns NaN") {
     s.usable = true; s.snr_db = 20.0; s.dist_km = 100.0; s.azimuth_deg = 0.0;
     stations.push_back(s);
     std::vector<int> sel;
-    double w = compute_whdop(stations, 4, 500.0, sel);
+    double w = compute_whdop(stations, 4, 500.0, 8, sel);
     CHECK(std::isnan(w));
 }
 
@@ -79,7 +79,7 @@ TEST_CASE("whdop: ideal geometry (4 stations at 90 deg spacing) gives low WHDOP"
         stations.push_back(s);
     }
     std::vector<int> sel;
-    double w = compute_whdop(stations, 4, 500.0, sel);
+    double w = compute_whdop(stations, 4, 500.0, 8, sel);
     CHECK(w < 5.0);
     CHECK(sel.size() == 4);
 }
@@ -94,7 +94,7 @@ TEST_CASE("whdop: poor geometry (collinear stations) gives high WHDOP") {
         stations.push_back(s);
     }
     std::vector<int> sel;
-    double w = compute_whdop(stations, 4, 500.0, sel);
+    double w = compute_whdop(stations, 4, 500.0, 8, sel);
     CHECK(w > 5.0);
 }
 
@@ -107,6 +107,39 @@ TEST_CASE("whdop: stations beyond max range are excluded") {
         stations.push_back(s);
     }
     std::vector<int> sel;
-    double w = compute_whdop(stations, 4, 500.0, sel);
+    double w = compute_whdop(stations, 4, 500.0, 8, sel);
     CHECK(std::isnan(w));
+}
+
+TEST_CASE("whdop: 8-slot mode caps selection at 8 stations") {
+    // 10 equally-spaced stations, all usable
+    std::vector<StationGeometry> stations;
+    for (int i = 0; i < 10; ++i) {
+        StationGeometry s;
+        s.usable = true; s.snr_db = 20.0; s.dist_km = 100.0;
+        s.azimuth_deg = i * 36.0;
+        s.sigma_phi_ml = 5.0;
+        stations.push_back(s);
+    }
+    std::vector<int> sel;
+    compute_whdop(stations, 4, 500.0, 8, sel);
+    CHECK(sel.size() <= 8);
+}
+
+TEST_CASE("whdop: interlaced mode allows up to 24 stations") {
+    // 20 equally-spaced stations, all usable
+    std::vector<StationGeometry> stations;
+    for (int i = 0; i < 20; ++i) {
+        StationGeometry s;
+        s.usable = true; s.snr_db = 20.0; s.dist_km = 100.0;
+        s.azimuth_deg = i * 18.0;
+        s.sigma_phi_ml = 5.0;
+        stations.push_back(s);
+    }
+    std::vector<int> sel8, sel24;
+    compute_whdop(stations, 4, 500.0,  8, sel8);
+    compute_whdop(stations, 4, 500.0, 24, sel24);
+    CHECK(sel8.size()  <= 8);
+    CHECK(sel24.size() <= 24);
+    CHECK(sel24.size() > sel8.size());
 }

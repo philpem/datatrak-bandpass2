@@ -149,6 +149,12 @@ std::vector<ZoneResult> compute_zone_patterns(
         };
         std::vector<PairResult> viable;
 
+        // Slot cap follows network mode (8-slot: 8, interlaced: 24).
+        // Pairs are always 2 stations, so the cap never truncates here;
+        // the parameter is forwarded for API consistency.
+        const int max_slots = (scenario.mode == Scenario::OperationMode::Interlaced)
+                              ? 24 : 8;
+
         for (int i = 0; i < (int)stations.size(); ++i) {
             if (!stations[i].usable) continue;
             for (int j = i + 1; j < (int)stations.size(); ++j) {
@@ -157,7 +163,8 @@ std::vector<ZoneResult> compute_zone_patterns(
                 std::vector<StationGeometry> pair_st = {stations[i], stations[j]};
                 std::vector<int> sel;
                 double whdop = compute_whdop(pair_st, 2,
-                                             scenario.receiver.max_range_km, sel);
+                                             scenario.receiver.max_range_km,
+                                             max_slots, sel);
                 if (whdop < 9990.0) {
                     viable.push_back({stations[i].slot, stations[j].slot, whdop});
                 }

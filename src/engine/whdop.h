@@ -23,9 +23,12 @@ struct StationGeometry {
 // Select usable stations and compute WHDOP at one grid point.
 // Returns WHDOP (dimensionless; < 3 = good geometry, > 5 = poor).
 // selected_out receives the subset of stations that were used.
+// max_slots: Appendix K cap on selected stations (8 for single-chain,
+//            24 for interlaced — derived from Scenario::OperationMode).
 double compute_whdop(const std::vector<StationGeometry>& all_stations,
                      int min_stations,
                      double max_range_km,
+                     int max_slots,
                      std::vector<int>& selected_indices_out);
 
 // Compute WHDOP and repeatable accuracy GridArrays.

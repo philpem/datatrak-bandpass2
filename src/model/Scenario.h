@@ -56,7 +56,7 @@ struct Scenario {
     DisplayCRS display_crs = DisplayCRS::OSGB_NG;
 
     enum class OperationMode { EightSlot, Interlaced };
-    OperationMode mode = OperationMode::EightSlot;
+    OperationMode mode = OperationMode::Interlaced;
 
     GridDef                     grid;
     Frequencies                 frequencies;
