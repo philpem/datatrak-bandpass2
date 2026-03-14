@@ -536,6 +536,7 @@ std::vector<SlotPhaseResult> computeAtPoint(
         r.f2minus_phase  = p2m;  r.f2minus_lane  = l2m;
         r.snr_db         = snr;
         r.gdr_db         = gdr;
+        r.distance_m     = dist_m;
         results.push_back(r);
     }
 

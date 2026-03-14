@@ -1,5 +1,6 @@
 #include "ReceiverPanel.h"
 #include "UiConstants.h"
+#include <algorithm>
 #include <wx/sizer.h>
 #include <wx/stattext.h>
 
@@ -15,17 +16,19 @@ ReceiverPanel::ReceiverPanel(wxWindow* parent)
 
     list_ = new wxListCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
                            wxLC_REPORT | wxLC_SINGLE_SEL);
-    list_->AppendColumn("Slot",   wxLIST_FORMAT_RIGHT,  40);
-    list_->AppendColumn("F1+",    wxLIST_FORMAT_RIGHT,  60);
-    list_->AppendColumn("F1-",    wxLIST_FORMAT_RIGHT,  60);
-    list_->AppendColumn("F2+",    wxLIST_FORMAT_RIGHT,  60);
-    list_->AppendColumn("F2-",    wxLIST_FORMAT_RIGHT,  60);
-    list_->AppendColumn("SNR dB", wxLIST_FORMAT_RIGHT,  65);
-    list_->AppendColumn("GDR dB", wxLIST_FORMAT_RIGHT,  65);
+    list_->AppendColumn("Slot",     wxLIST_FORMAT_RIGHT,  40);
+    list_->AppendColumn("F1+",      wxLIST_FORMAT_RIGHT,  60);
+    list_->AppendColumn("F1-",      wxLIST_FORMAT_RIGHT,  60);
+    list_->AppendColumn("F2+",      wxLIST_FORMAT_RIGHT,  60);
+    list_->AppendColumn("F2-",      wxLIST_FORMAT_RIGHT,  60);
+    list_->AppendColumn("SNR dB",   wxLIST_FORMAT_RIGHT,  65);
+    list_->AppendColumn("GDR dB",   wxLIST_FORMAT_RIGHT,  65);
+    list_->AppendColumn("Dist km",  wxLIST_FORMAT_RIGHT,  68);
     sizer->Add(list_, 1, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, 6);
 
-    // Bottom row: units selector + export button side by side
+    // Bottom row: units selector + sort selector + export button
     auto* bottom_row = new wxBoxSizer(wxHORIZONTAL);
+
     bottom_row->Add(new wxStaticText(this, wxID_ANY, "Units:"),
                     0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
     units_choice_ = new wxChoice(this, wxID_ANY);
@@ -34,9 +37,21 @@ ReceiverPanel::ReceiverPanel(wxWindow* parent)
     units_choice_->SetSelection(0);
     units_choice_->Bind(wxEVT_CHOICE, &ReceiverPanel::OnUnitsChanged, this);
     bottom_row->Add(units_choice_, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10);
+
+    bottom_row->Add(new wxStaticText(this, wxID_ANY, "Sort by:"),
+                    0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
+    sort_choice_ = new wxChoice(this, wxID_ANY);
+    sort_choice_->Append("Slot");
+    sort_choice_->Append("Distance");
+    sort_choice_->Append("SNR");
+    sort_choice_->SetSelection(0);
+    sort_choice_->Bind(wxEVT_CHOICE, &ReceiverPanel::OnSortChanged, this);
+    bottom_row->Add(sort_choice_, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10);
+
     export_btn_ = new wxButton(this, wxID_ANY, "Export for Simulator");
     export_btn_->Bind(wxEVT_BUTTON, &ReceiverPanel::OnExport, this);
     bottom_row->Add(export_btn_, 0, wxALIGN_CENTER_VERTICAL);
+
     sizer->Add(bottom_row, 0, wxALL, 6);
 
     SetSizer(sizer);
@@ -49,8 +64,9 @@ void ReceiverPanel::SetResults(const std::vector<SlotPhaseResult>& results) {
 
 void ReceiverPanel::RefreshTable() {
     bool degrees = (units_choice_->GetSelection() == 1);
+    int  sort_by = sort_choice_->GetSelection();  // 0=Slot, 1=Distance, 2=SNR
 
-    // Update column headers to reflect units
+    // Update phase column headers to reflect units
     wxListItem col;
     col.SetMask(wxLIST_MASK_TEXT);
     for (int c = 1; c <= 4; ++c) {
@@ -64,8 +80,34 @@ void ReceiverPanel::RefreshTable() {
         list_->SetColumnWidth(c, degrees ? 70 : 60);
     }
 
+    // Build a sorted copy of the results
+    std::vector<const SlotPhaseResult*> sorted;
+    sorted.reserve(results_.size());
+    for (const auto& r : results_) sorted.push_back(&r);
+
+    if (sort_by == 1) {
+        // Ascending distance
+        std::sort(sorted.begin(), sorted.end(),
+                  [](const SlotPhaseResult* a, const SlotPhaseResult* b) {
+                      return a->distance_m < b->distance_m;
+                  });
+    } else if (sort_by == 2) {
+        // Descending SNR (best first)
+        std::sort(sorted.begin(), sorted.end(),
+                  [](const SlotPhaseResult* a, const SlotPhaseResult* b) {
+                      return a->snr_db > b->snr_db;
+                  });
+    } else {
+        // Ascending slot number (default)
+        std::sort(sorted.begin(), sorted.end(),
+                  [](const SlotPhaseResult* a, const SlotPhaseResult* b) {
+                      return a->slot < b->slot;
+                  });
+    }
+
     list_->DeleteAllItems();
-    for (const auto& r : results_) {
+    for (const auto* rp : sorted) {
+        const auto& r = *rp;
         long idx = list_->InsertItem(list_->GetItemCount(),
                                      wxString::Format("%d", r.slot));
         if (degrees) {
@@ -81,6 +123,7 @@ void ReceiverPanel::RefreshTable() {
         }
         list_->SetItem(idx, 5, wxString::Format("%.1f", r.snr_db));
         list_->SetItem(idx, 6, wxString::Format("%.1f", r.gdr_db));
+        list_->SetItem(idx, 7, wxString::Format("%.1f", r.distance_m / 1000.0));
     }
 }
 
@@ -96,6 +139,10 @@ void ReceiverPanel::Clear() {
 }
 
 void ReceiverPanel::OnUnitsChanged(wxCommandEvent& /*evt*/) {
+    RefreshTable();
+}
+
+void ReceiverPanel::OnSortChanged(wxCommandEvent& /*evt*/) {
     RefreshTable();
 }
 
