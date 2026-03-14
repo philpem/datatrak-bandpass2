@@ -415,10 +415,10 @@ TEST_CASE("computeASF: absolute accuracy is finite and bounded for 4-TX network"
     REQUIRE(abs_acc.values.size() == grid.points.size());
 
     // At least one grid point inside the network should have a finite fix
-    // (not the 9999 m sentinel that indicates no usable geometry)
+    // (NaN indicates no usable geometry — those cells are transparent/excluded)
     bool any_finite = false;
     for (double v : abs_acc.values) {
-        if (v < 5000.0) { any_finite = true; break; }
+        if (std::isfinite(v) && v < 5000.0) { any_finite = true; break; }
     }
     CHECK(any_finite);
 }
@@ -446,6 +446,7 @@ TEST_CASE("computeASF: confidence factor is in [0,1]") {
     computeASF(data, s, cancel);
 
     for (double v : data.layers.at("confidence").values) {
+        if (std::isnan(v)) continue;  // NaN = no-data (no usable geometry)
         CHECK(v >= 0.0);
         CHECK(v <= 1.0);
     }
