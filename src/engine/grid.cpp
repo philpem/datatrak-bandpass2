@@ -3,6 +3,7 @@
 #include <sstream>
 #include <algorithm>
 #include <iomanip>
+#include <cstdint>
 
 namespace bp {
 
@@ -141,6 +142,79 @@ std::string GridArray::to_geojson() const {
 
     out << "]}";
     return out.str();
+}
+
+// ── Image overlay rendering ──────────────────────────────────────────────────
+
+static std::string base64_encode(const std::vector<uint8_t>& data) {
+    static const char* chars =
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    std::string out;
+    out.reserve(((data.size() + 2) / 3) * 4);
+    for (size_t i = 0; i < data.size(); i += 3) {
+        uint32_t b  = (uint32_t)data[i] << 16;
+        if (i + 1 < data.size()) b |= (uint32_t)data[i + 1] << 8;
+        if (i + 2 < data.size()) b |= (uint32_t)data[i + 2];
+        out += chars[(b >> 18) & 0x3F];
+        out += chars[(b >> 12) & 0x3F];
+        out += (i + 1 < data.size()) ? chars[(b >>  6) & 0x3F] : '=';
+        out += (i + 2 < data.size()) ? chars[(b      ) & 0x3F] : '=';
+    }
+    return out;
+}
+
+// Apply the same blue→cyan→yellow→red ramp as valueToColour, writing RGBA into out[].
+static void colourRampRGBA(double t, uint8_t* out) {
+    t = std::max(0.0, std::min(1.0, t));
+    double r, g, b;
+    if (t < 1.0 / 3.0) {
+        double s = t * 3.0;
+        r = 0;    g = s;    b = 1.0 - s * 0.5;
+    } else if (t < 2.0 / 3.0) {
+        double s = (t - 1.0 / 3.0) * 3.0;
+        r = s;    g = 1.0;  b = 0.5 - s * 0.5;
+    } else {
+        double s = (t - 2.0 / 3.0) * 3.0;
+        r = 1.0;  g = 1.0 - s;  b = 0;
+    }
+    out[0] = (uint8_t)std::max(0, std::min(255, (int)(r * 255)));
+    out[1] = (uint8_t)std::max(0, std::min(255, (int)(g * 255)));
+    out[2] = (uint8_t)std::max(0, std::min(255, (int)(b * 255)));
+    out[3] = 255;  // fully opaque; opacity handled by Leaflet imageOverlay
+}
+
+GridImageData GridArray::to_image_data() const {
+    GridImageData result;
+    result.width   = width;
+    result.height  = height;
+    result.lat_min = lat_min;
+    result.lat_max = lat_max;
+    result.lon_min = lon_min;
+    result.lon_max = lon_max;
+
+    if (points.empty() || values.empty() || width <= 0 || height <= 0)
+        return result;
+
+    double vmin = *std::min_element(values.begin(), values.end());
+    double vmax = *std::max_element(values.begin(), values.end());
+    if (vmax == vmin) vmax = vmin + 1.0;
+
+    // RGBA pixel buffer: row 0 = northernmost row (lat_max).
+    // The grid is stored south→north (row 0 = lat_min), so flip vertically.
+    std::vector<uint8_t> pixels((size_t)height * width * 4);
+    for (int r = 0; r < height; ++r) {
+        int grid_row = height - 1 - r;  // flip south→north to north→south
+        for (int c = 0; c < width; ++c) {
+            size_t vi = (size_t)grid_row * width + c;
+            double t  = (vi < values.size())
+                        ? (values[vi] - vmin) / (vmax - vmin)
+                        : 0.0;
+            colourRampRGBA(t, &pixels[((size_t)r * width + c) * 4]);
+        }
+    }
+
+    result.base64_rgba = base64_encode(pixels);
+    return result;
 }
 
 } // namespace bp

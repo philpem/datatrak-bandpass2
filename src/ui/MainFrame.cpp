@@ -316,7 +316,11 @@ void MainFrame::PushLayerToMap(const std::string& name) {
     double vmax = *std::max_element(arr.values.begin(), arr.values.end());
     if (vmax == vmin) return;
     SetStatusText("Updating map...", SB_STATUS);
-    map_panel_->UpdateLayer(name, arr.to_geojson());
+    if (arr.width > 0 && arr.height > 0) {
+        map_panel_->UpdateLayerImage(name, arr.to_image_data());
+    } else {
+        map_panel_->UpdateLayer(name, arr.to_geojson());
+    }
     map_panel_->UpdateLegend(name, vmin, vmax, LayerUnits(name));
     SetStatusText("Ready", SB_STATUS);
 }

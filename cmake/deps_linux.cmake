@@ -29,4 +29,8 @@ endif()
 
 # GeographicLib ships a FindModule rather than a config file on Ubuntu
 list(APPEND CMAKE_MODULE_PATH "/usr/share/cmake/geographiclib")
-find_package(GeographicLib REQUIRED)
+if(BP_TESTS_ONLY)
+    find_package(GeographicLib QUIET)
+else()
+    find_package(GeographicLib REQUIRED)
+endif()

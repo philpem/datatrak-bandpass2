@@ -215,11 +215,41 @@
     layerGroups[layerName] = layer;
   };
 
+  // Render a structured grid as a canvas image overlay at true grid resolution.
+  // base64rgba: raw RGBA bytes (width×height×4), base64-encoded, row 0 = northernmost.
+  // south/west/north/east: WGS84 bounds.
+  window.updateLayerImage = function (layerName, base64rgba, width, height, south, west, north, east) {
+    if (layerGroups[layerName]) map.removeLayer(layerGroups[layerName]);
+
+    // Decode base64 → Uint8ClampedArray
+    var raw = atob(base64rgba);
+    var rgba = new Uint8ClampedArray(raw.length);
+    for (var i = 0; i < raw.length; i++) rgba[i] = raw.charCodeAt(i);
+
+    // Draw onto an offscreen canvas
+    var canvas = document.createElement('canvas');
+    canvas.width  = width;
+    canvas.height = height;
+    canvas.getContext('2d').putImageData(new ImageData(rgba, width, height), 0, 0);
+
+    // Use canvas data URL as Leaflet image overlay
+    var overlay = L.imageOverlay(canvas.toDataURL('image/png'),
+      [[south, west], [north, east]],
+      { opacity: currentOpacity, interactive: false });
+    overlay.addTo(map);
+    layerGroups[layerName] = overlay;
+  };
+
   window.setLayerOpacity = function (opacity) {
     currentOpacity = opacity;
     for (var name in layerGroups) {
       if (layerGroups.hasOwnProperty(name)) {
-        layerGroups[name].setStyle({ fillOpacity: opacity });
+        var layer = layerGroups[name];
+        if (typeof layer.setStyle === 'function') {
+          layer.setStyle({ fillOpacity: opacity });
+        } else if (typeof layer.setOpacity === 'function') {
+          layer.setOpacity(opacity);
+        }
       }
     }
   };

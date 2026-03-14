@@ -412,7 +412,7 @@ TEST_CASE("computeASF: absolute accuracy is finite and bounded for 4-TX network"
     computeASF(data, s, cancel);
 
     const auto& abs_acc = data.layers.at("absolute_accuracy");
-    REQUIRE(abs_acc.values.size() == pts.size());
+    REQUIRE(abs_acc.values.size() == grid.points.size());
 
     // At least one grid point inside the network should have a finite fix
     // (not the 9999 m sentinel that indicates no usable geometry)

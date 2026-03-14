@@ -3,6 +3,7 @@
 #include <wx/stdpaths.h>
 #include <nlohmann/json.hpp>
 #include <sstream>
+#include <iomanip>
 #include <cstdio>
 
 namespace bp {
@@ -143,6 +144,19 @@ void MapPanel::LockReceiver(bool locked) {
 void MapPanel::UpdateLayer(const std::string& layer_name, const std::string& geojson) {
     std::ostringstream js;
     js << "updateLayer('" << layer_name << "', " << geojson << ");";
+    RunScript(js.str());
+}
+
+void MapPanel::UpdateLayerImage(const std::string& layer_name, const GridImageData& img) {
+    if (img.base64_rgba.empty()) return;
+    // Call: updateLayerImage(name, base64rgba, width, height, south, west, north, east)
+    std::ostringstream js;
+    js << std::fixed << std::setprecision(6);
+    js << "updateLayerImage('" << layer_name << "','"
+       << img.base64_rgba << "',"
+       << img.width << "," << img.height << ","
+       << img.lat_min << "," << img.lon_min << ","
+       << img.lat_max << "," << img.lon_max << ");";
     RunScript(js.str());
 }
 
