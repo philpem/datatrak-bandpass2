@@ -1,7 +1,7 @@
 # Linux system package dependencies
 # Install with:
 #   sudo apt-get install libwxgtk3.2-dev libwxgtk-webview3.2-dev \
-#     libsqlite3-dev libcurl4-gnutls-dev libgeographiclib-dev \
+#     libgdal-dev libsqlite3-dev libcurl4-gnutls-dev libgeographiclib-dev \
 #     nlohmann-json3-dev catch2 cmake ninja-build
 # (toml++ is vendored in third_party/ — no package needed)
 

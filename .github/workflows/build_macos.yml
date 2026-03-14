@@ -14,7 +14,7 @@ jobs:
 
       - name: Install Homebrew dependencies
         run: |
-          brew install wxwidgets sqlite curl geographiclib \
+          brew install wxwidgets gdal sqlite curl geographiclib \
                nlohmann-json catch2 cmake ninja
 
       - name: Configure

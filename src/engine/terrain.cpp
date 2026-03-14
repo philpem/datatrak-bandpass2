@@ -5,12 +5,10 @@
 #include <cmath>
 #include <cstdio>
 
-#ifdef USE_GDAL
 #include <gdal_priv.h>
 #include <gdal.h>
 #include <filesystem>
 #include <unordered_map>
-#endif
 
 namespace bp {
 
@@ -51,8 +49,6 @@ std::vector<HeightPoint> TerrainMap::profile(double lat1, double lon1,
 // ---------------------------------------------------------------------------
 // GdalTerrainMap
 // ---------------------------------------------------------------------------
-
-#ifdef USE_GDAL
 
 struct GdalTerrainMap::Impl {
     // For GeoTIFF mode: single open dataset
@@ -110,7 +106,8 @@ static double bilinear_read(GDALDataset* ds, const double* inv,
         xi = std::max(0, std::min(rx-1, xi));
         yi = std::max(0, std::min(ry-1, yi));
         float v = 0.f;
-        rb->RasterIO(GF_Read, xi, yi, 1, 1, &v, 1, 1, GDT_Float32, 0, 0);
+        if (rb->RasterIO(GF_Read, xi, yi, 1, 1, &v, 1, 1, GDT_Float32, 0, 0) != CE_None)
+            return 0.0;  // read error → treat as sea level
         if (ok && std::abs((double)v - nodata) < 0.5) return 0.0;
         return (double)v;
     };
@@ -178,25 +175,6 @@ double GdalTerrainMap::height_at(double lat, double lon) const {
     invert_gt(geo, inv);
     return bilinear_read(td, inv, nx, ny, lon, lat);
 }
-
-#else // !USE_GDAL
-
-struct GdalTerrainMap::Impl {};
-
-GdalTerrainMap::GdalTerrainMap(const std::string& path, bool)
-    : impl_(std::make_unique<Impl>())
-{
-    (void)path;
-    throw std::runtime_error("TerrainMap: GDAL support not compiled in");
-}
-
-GdalTerrainMap::~GdalTerrainMap() = default;
-
-double GdalTerrainMap::height_at(double /*lat*/, double /*lon*/) const {
-    return 0.0;
-}
-
-#endif // USE_GDAL
 
 // ---------------------------------------------------------------------------
 // Factory

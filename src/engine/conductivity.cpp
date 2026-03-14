@@ -1,13 +1,8 @@
 #include "conductivity.h"
-#include <stdexcept>
-#include <cmath>
-
-// GDAL headers — only compiled when USE_GDAL is defined (always on Linux/macOS/Windows
-// builds since GDAL is a required dependency; see CMakeLists.txt).
-#ifdef USE_GDAL
 #include <gdal_priv.h>
 #include <ogr_spatialref.h>
-#endif
+#include <stdexcept>
+#include <cmath>
 
 namespace bp {
 
@@ -66,8 +61,6 @@ GroundConstants BuiltInConductivityMap::lookup(double lat, double lon) const {
 // GdalConductivityMap — bilinear interpolation from a GeoTIFF
 // ---------------------------------------------------------------------------
 
-#ifdef USE_GDAL
-
 struct GdalConductivityMap::Impl {
     GDALDataset* ds = nullptr;
     double       geo[6] = {};      // GeoTransform: origin + pixel size
@@ -112,7 +105,8 @@ double GdalConductivityMap::Impl::read_bilinear(int band_idx, double px, double 
         yi = std::max(0, std::min(raster_y - 1, yi));
         float val = 0.0f;
         GDALRasterBand* rb = ds->GetRasterBand(band_idx);
-        rb->RasterIO(GF_Read, xi, yi, 1, 1, &val, 1, 1, GDT_Float32, 0, 0);
+        if (rb->RasterIO(GF_Read, xi, yi, 1, 1, &val, 1, 1, GDT_Float32, 0, 0) != CE_None)
+            return (band_idx == 1) ? 0.005 : 15.0;  // read error → land default
         // Replace nodata with land default
         int ok = 0;
         double nd = rb->GetNoDataValue(&ok);
@@ -161,26 +155,6 @@ GroundConstants GdalConductivityMap::lookup(double lat, double lon) const {
     }
     return { sigma, eps_r };
 }
-
-#else // !USE_GDAL
-
-// GDAL not available — GdalConductivityMap is a stub that always returns land defaults.
-struct GdalConductivityMap::Impl {};
-
-GdalConductivityMap::GdalConductivityMap(const std::string& path)
-    : impl_(std::make_unique<Impl>())
-{
-    (void)path;
-    throw std::runtime_error("ConductivityMap: GDAL support not compiled in");
-}
-
-GdalConductivityMap::~GdalConductivityMap() = default;
-
-GroundConstants GdalConductivityMap::lookup(double /*lat*/, double /*lon*/) const {
-    return { 0.005, 15.0 };
-}
-
-#endif // USE_GDAL
 
 // ---------------------------------------------------------------------------
 // Factory

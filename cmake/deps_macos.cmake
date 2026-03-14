@@ -1,6 +1,6 @@
 # macOS dependencies via Homebrew
 # Install with:
-#   brew install wxwidgets sqlite curl geographiclib
+#   brew install wxwidgets gdal sqlite curl geographiclib
 
 find_package(wxWidgets REQUIRED COMPONENTS webview aui adv core base net)
 include(${wxWidgets_USE_FILE})

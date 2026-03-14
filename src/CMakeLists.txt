@@ -61,10 +61,7 @@ if(GeographicLib_FOUND)
     target_link_libraries(bandpass2 PRIVATE ${GeographicLib_LIBRARIES})
 endif()
 
-if(GDAL_FOUND)
-    target_link_libraries(bandpass2 PRIVATE GDAL::GDAL)
-    target_compile_definitions(bandpass2 PRIVATE BP_HAVE_GDAL USE_GDAL)
-endif()
+target_link_libraries(bandpass2 PRIVATE GDAL::GDAL)
 
 if(WIN32)
     target_link_libraries(bandpass2 PRIVATE ws2_32)

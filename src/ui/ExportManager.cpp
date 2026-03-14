@@ -15,12 +15,9 @@
 #  include <wx/image.h>
 #endif
 
-#if defined(BP_HAVE_GDAL) || defined(USE_GDAL)
-#  include <gdal.h>
-#  include <gdal_priv.h>
-#  include <ogr_spatialref.h>
-#  define BP_USE_GDAL 1
-#endif
+#include <gdal.h>
+#include <gdal_priv.h>
+#include <ogr_spatialref.h>
 
 namespace bp {
 
@@ -136,10 +133,6 @@ std::string ExportManager::export_png(const GridArray& layer,
 std::string ExportManager::export_geotiff(const GridArray& layer,
                                            const std::string& path)
 {
-#ifndef BP_USE_GDAL
-    (void)layer; (void)path;
-    return "GeoTIFF export requires GDAL (not available in this build).";
-#else
     if (layer.points.empty() || layer.values.empty())
         return "Layer is empty.";
 
@@ -203,7 +196,6 @@ std::string ExportManager::export_geotiff(const GridArray& layer,
 
     GDALClose(ds);
     return {};
-#endif
 }
 
 // ---------------------------------------------------------------------------

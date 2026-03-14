@@ -13,6 +13,7 @@ RUN apt-get update && apt-get install -y \
     pkg-config \
     libwxgtk3.2-dev \
     libwxgtk-webview3.2-dev \
+    libgdal-dev \
     libsqlite3-dev \
     libcurl4-gnutls-dev \
     libgeographiclib-dev \
@@ -37,6 +38,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y \
     libwxgtk3.2-0t64 \
     libwxgtk-webview3.2-0t64 \
+    libgdal35t64 \
     libsqlite3-0 \
     libcurl4t64 \
     libgeographiclib26 \
