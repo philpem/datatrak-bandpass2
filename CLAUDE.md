@@ -702,7 +702,7 @@ build → test → archive artifact.
 | Task | Status | Description |
 |---|---|---|
 | P2-01 | ✓ | ITU P.368 groundwave: empirical polynomial fit parameterised by conductivity + configured frequency. Uses `scenario.frequencies.f1_hz`. **Note: polynomial approximation, not full Sommerfeld/Wait/GRWAVE.** |
-| P2-02 | ✗ | Millington mixed-path extension over land/sea boundaries — **not implemented**. Groundwave currently uses midpoint conductivity only. |
+| P2-02 | ✓ | Millington mixed-path extension over land/sea boundaries. `millington_field_dbuvm()` implements the Millington (1949) forward/backward averaging method over N great-circle segments with per-segment `ConductivityMap` lookup. Used in `computeGroundwave()` (20 segments), `computeASF()` (20 segments), and `computeAtPoint()` (50 segments). |
 | P2-03 | ✓ | Conductivity raster: `BuiltInConductivityMap` (land/sea heuristic, British Isles region) + `GdalConductivityMap` (GeoTIFF, `#ifdef USE_GDAL`). Factory: `make_conductivity_map()`. |
 | P2-04 | ✓ | Terrain raster: `FlatTerrainMap` + `GdalTerrainMap` (GeoTIFF single-file and SRTM HGT directory). `TerrainMap::profile()` samples great-circle path via GeographicLib. Factory: `make_terrain_map()`. |
 | P2-05 | ✓ | Monteath terrain method: `engine/monteath.cpp::monteath_asf_ml()` — surface-impedance path integration along great-circle profile; conductivity looked up at segment midpoints; terrain slope correction included. Used by P4-01 ASF computation and P5-10 po reference. |
@@ -783,10 +783,8 @@ accuracy so this approximation is acceptable for typical Datatrak geometry.
 
 ### All major Phase 5 items complete
 
-137 tests pass. Build clean on Linux. The only remaining items are:
+143 tests pass. Build clean on Linux. The only remaining item is:
 - P5-03 scenario comparison mode (not designed — requires future planning).
-- P2-02 Millington mixed-path extension (still ✗, groundwave uses midpoint
-  conductivity only; does not affect typical UK-geometry accuracy materially).
 
 ### Monitor calibration (P5-14 / P5-15) — implemented
 

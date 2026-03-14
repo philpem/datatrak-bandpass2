@@ -21,10 +21,10 @@ namespace bp {
 // Free-space reference (ITU-R P.368, short monopole over perfect ground):
 //   E0 = 300 mV/m at d=1 km for P=1 kW  →  E0 [µV/m] = 300e3 * sqrt(P_kW) / d_km
 //
-// NOTE on terrain: this function uses only the path mid-point conductivity.
-// The Millington mixed-path method (P2-02) is not yet implemented; terrain
-// height profile is not used here.  Monteath terrain phase delay is applied
-// separately in asf.cpp::monteath_asf_ml().
+// NOTE: this function uses a single conductivity value for the whole path.
+// For mixed land/sea paths use millington_field_dbuvm() instead.
+// Terrain height profile is not used here; Monteath terrain phase delay
+// is applied separately in asf.cpp::monteath_asf_ml().
 // ---------------------------------------------------------------------------
 double groundwave_field_dbuvm(double freq_hz,
                                double dist_km,
