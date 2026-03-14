@@ -70,6 +70,37 @@ TEST_CASE("Empty GridArray to_geojson is safe", "[grid]") {
     REQUIRE(geojson.find("\"features\":[]") != std::string::npos);
 }
 
+TEST_CASE("buildGrid: finer resolution produces more grid points", "[grid]") {
+    GridDef def;
+    def.lat_min = 49.5; def.lat_max = 59.5;
+    def.lon_min = -7.0; def.lon_max =  2.5;
+
+    std::atomic<bool> cancel{false};
+
+    def.resolution_km = 50.0;
+    auto coarse = buildGrid(def, cancel);
+
+    def.resolution_km = 10.0;
+    auto medium = buildGrid(def, cancel);
+
+    def.resolution_km = 5.0;
+    auto fine = buildGrid(def, cancel);
+
+    // Finer resolution must produce more points.
+    REQUIRE(coarse.points.size() < medium.points.size());
+    REQUIRE(medium.points.size() < fine.points.size());
+
+    // Point count scales roughly as (1/res)^2: 10km should have ~25x more
+    // points than 50km and ~4x fewer than 5km.
+    REQUIRE(medium.points.size() > coarse.points.size() * 10);
+    REQUIRE(fine.points.size()   > medium.points.size() * 2);
+
+    // width * height must equal total point count for all resolutions.
+    REQUIRE(coarse.width * coarse.height == (int)coarse.points.size());
+    REQUIRE(medium.width * medium.height == (int)medium.points.size());
+    REQUIRE(fine.width   * fine.height   == (int)fine.points.size());
+}
+
 TEST_CASE("buildGrid: zero resolution returns empty", "[grid]") {
     GridDef def;
     def.resolution_km = 0.0;
