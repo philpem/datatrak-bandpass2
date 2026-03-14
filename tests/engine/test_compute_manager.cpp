@@ -101,36 +101,20 @@ TEST_CASE("buildGrid: finer resolution produces more grid points", "[grid]") {
     REQUIRE(fine.width   * fine.height   == (int)fine.points.size());
 }
 
-TEST_CASE("buildGrid: zero resolution and zero max_points returns empty", "[grid]") {
+TEST_CASE("buildGrid: zero resolution returns empty", "[grid]") {
     GridDef def;
     def.resolution_km = 0.0;
-    def.max_points    = 0;   // both zero → nothing to build
     std::atomic<bool> cancel{false};
     auto grid = buildGrid(def, cancel);
     CHECK(grid.points.empty());
 }
 
-TEST_CASE("buildGrid: negative resolution with zero max_points returns empty", "[grid]") {
+TEST_CASE("buildGrid: negative resolution returns empty", "[grid]") {
     GridDef def;
     def.resolution_km = -5.0;
-    def.max_points    = 0;
     std::atomic<bool> cancel{false};
     auto grid = buildGrid(def, cancel);
     CHECK(grid.points.empty());
-}
-
-TEST_CASE("buildGrid: max_points limits grid size", "[grid]") {
-    GridDef def;
-    def.lat_min   = 49.5; def.lat_max = 59.5;
-    def.lon_min   = -7.0; def.lon_max =  2.5;
-    def.max_points = 100;
-    def.resolution_km = 0.0;
-    std::atomic<bool> cancel{false};
-    auto grid = buildGrid(def, cancel);
-    REQUIRE(!grid.points.empty());
-    // With max_points=100 the grid should stay near that size
-    CHECK((int)grid.points.size() <= 200);   // allow some rounding
-    CHECK(grid.resolution_km > 0.0);
 }
 
 TEST_CASE("buildGrid: cancel flag aborts mid-grid", "[grid]") {

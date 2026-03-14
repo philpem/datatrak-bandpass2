@@ -64,9 +64,8 @@ struct GridData {
 
 struct GridBuildResult {
     std::vector<GridPoint> points;
-    int    width         = 0;   // columns (longitude steps)
-    int    height        = 0;   // rows    (latitude steps)
-    double resolution_km = 0.0; // actual cell spacing used (derived from max_points or GridDef)
+    int width  = 0;   // columns (longitude steps)
+    int height = 0;   // rows    (latitude steps)
 };
 
 // Build the grid point array from a GridDef.

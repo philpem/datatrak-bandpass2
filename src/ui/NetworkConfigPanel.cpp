@@ -75,17 +75,17 @@ NetworkConfigPanel::NetworkConfigPanel(wxWindow* parent)
     lon_max_field_->Bind(wxEVT_KILL_FOCUS, &NetworkConfigPanel::OnFieldKillFocus, this);
     gs->Add(lon_max_field_, 1, wxEXPAND | wxBOTTOM, 2);
 
-    // ── Point-count limit ──
-    gs->Add(new wxStaticText(this, wxID_ANY, "Max points"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
-    max_pts_field_ = new wxTextCtrl(this, wxID_ANY, "10000");
-    max_pts_field_->Bind(wxEVT_TEXT,       &NetworkConfigPanel::OnMaxPtsChanged,  this);
-    max_pts_field_->Bind(wxEVT_KILL_FOCUS, &NetworkConfigPanel::OnFieldKillFocus, this);
-    gs->Add(max_pts_field_, 1, wxEXPAND | wxBOTTOM, 2);
+    // ── Grid resolution ──
+    gs->Add(new wxStaticText(this, wxID_ANY, "Grid res (km)"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
+    res_field_ = new wxTextCtrl(this, wxID_ANY, "10.0");
+    res_field_->Bind(wxEVT_TEXT,       &NetworkConfigPanel::OnResChanged,     this);
+    res_field_->Bind(wxEVT_KILL_FOCUS, &NetworkConfigPanel::OnFieldKillFocus, this);
+    gs->Add(res_field_, 1, wxEXPAND | wxBOTTOM, 2);
 
-    // Resolution info
+    // Point count display (below resolution field)
     gs->Add(new wxStaticText(this, wxID_ANY, ""), 0);
-    res_info_label_ = new wxStaticText(this, wxID_ANY, "");
-    gs->Add(res_info_label_, 0, wxBOTTOM, 6);
+    res_count_label_ = new wxStaticText(this, wxID_ANY, "");
+    gs->Add(res_count_label_, 0, wxBOTTOM, 6);
 
     auto* sizer = new wxBoxSizer(wxVERTICAL);
     sizer->Add(new wxStaticText(this, wxID_ANY, "Network Configuration"), 0, wxALL, 6);
@@ -104,13 +104,13 @@ void NetworkConfigPanel::SetScenario(Scenario* scenario) {
     lat_max_field_->ChangeValue(wxString::Format("%.4f", scenario_->grid.lat_max));
     lon_min_field_->ChangeValue(wxString::Format("%.4f", scenario_->grid.lon_min));
     lon_max_field_->ChangeValue(wxString::Format("%.4f", scenario_->grid.lon_max));
-    max_pts_field_->ChangeValue(wxString::Format("%d",   scenario_->grid.max_points));
+    res_field_->ChangeValue(wxString::Format("%.1f", scenario_->grid.resolution_km));
     mode_->SetSelection(scenario_->mode == Scenario::OperationMode::Interlaced ? 1 : 0);
     datum_->SetSelection(scenario_->datum_transform == Scenario::DatumTransform::OSTN15 ? 1 : 0);
     UpdateMlDisplay();
     ValidateBoundsFields();
-    ValidateMaxPtsField();
-    UpdateResInfoDisplay();
+    ValidateResField();
+    UpdateResCountDisplay();
 }
 
 void NetworkConfigPanel::SaveToScenario() {
@@ -133,9 +133,8 @@ void NetworkConfigPanel::SaveToScenario() {
         scenario_->grid.lon_max = lon_max;
     }
 
-    long pts = 0;
-    if (max_pts_field_->GetValue().ToLong(&pts) && pts >= PTS_MIN && pts <= PTS_MAX)
-        scenario_->grid.max_points = (int)pts;
+    double res = wxAtof(res_field_->GetValue());
+    if (res >= RES_MIN_KM && res <= RES_MAX_KM) scenario_->grid.resolution_km = res;
 
     scenario_->mode = (mode_->GetSelection() == 1) ? Scenario::OperationMode::Interlaced
                                                     : Scenario::OperationMode::EightSlot;
@@ -150,7 +149,8 @@ void NetworkConfigPanel::SetBoundsFromMap(double lat_min, double lat_max,
     lon_min_field_->ChangeValue(wxString::Format("%.4f", lon_min));
     lon_max_field_->ChangeValue(wxString::Format("%.4f", lon_max));
     ValidateBoundsFields();
-    UpdateResInfoDisplay();
+    ValidateResField();
+    UpdateResCountDisplay();
 }
 
 void NetworkConfigPanel::OnFreqChanged(wxCommandEvent& /*evt*/) {
@@ -161,14 +161,15 @@ void NetworkConfigPanel::OnFreqChanged(wxCommandEvent& /*evt*/) {
 
 void NetworkConfigPanel::OnBoundsChanged(wxCommandEvent& /*evt*/) {
     ValidateBoundsFields();
-    UpdateResInfoDisplay();
-    debounce_.StartOnce(500);
+    ValidateResField();
+    UpdateResCountDisplay();
+    if (IsResValid()) debounce_.StartOnce(500);
 }
 
-void NetworkConfigPanel::OnMaxPtsChanged(wxCommandEvent& /*evt*/) {
-    ValidateMaxPtsField();
-    UpdateResInfoDisplay();
-    debounce_.StartOnce(500);
+void NetworkConfigPanel::OnResChanged(wxCommandEvent& /*evt*/) {
+    ValidateResField();
+    UpdateResCountDisplay();
+    if (IsResValid()) debounce_.StartOnce(500);
 }
 
 void NetworkConfigPanel::OnOtherChanged(wxCommandEvent& /*evt*/) {
@@ -186,12 +187,14 @@ void NetworkConfigPanel::OnFieldKillFocus(wxFocusEvent& evt) {
     if (!debounce_.IsRunning()) return;
     debounce_.Stop();
     if (!scenario_ || !on_changed) return;
+    if (!IsResValid()) return;  // don't trigger compute when over point limit
     SaveToScenario();
     on_changed(*scenario_);
 }
 
 void NetworkConfigPanel::OnDebounceTimer(wxTimerEvent& /*evt*/) {
     if (!scenario_ || !on_changed) return;
+    if (!IsResValid()) return;  // guard: bounds changed after timer was started
     SaveToScenario();
     on_changed(*scenario_);
 }
@@ -220,36 +223,54 @@ void NetworkConfigPanel::ValidateBoundsFields() {
     lon_max_field_->SetBackgroundColour(lon_ok ? wxNullColour : *wxRED); lon_max_field_->Refresh();
 }
 
-void NetworkConfigPanel::ValidateMaxPtsField() {
-    long pts = 0;
-    bool ok = max_pts_field_->GetValue().ToLong(&pts) && pts >= PTS_MIN && pts <= PTS_MAX;
-    max_pts_field_->SetBackgroundColour(ok ? wxNullColour : *wxRED);
-    max_pts_field_->Refresh();
-}
-
-void NetworkConfigPanel::UpdateResInfoDisplay() {
-    long pts = 0;
-    if (!max_pts_field_->GetValue().ToLong(&pts) || pts < PTS_MIN || pts > PTS_MAX) {
-        res_info_label_->SetLabel("");
-        return;
-    }
+bool NetworkConfigPanel::IsResValid() const {
+    double res_km  = wxAtof(res_field_->GetValue());
     double lat_min = wxAtof(lat_min_field_->GetValue());
     double lat_max = wxAtof(lat_max_field_->GetValue());
     double lon_min = wxAtof(lon_min_field_->GetValue());
     double lon_max = wxAtof(lon_max_field_->GetValue());
-    if (lat_min >= lat_max || lon_min >= lon_max) {
-        res_info_label_->SetLabel("");
+    if (res_km < RES_MIN_KM || res_km > RES_MAX_KM) return false;
+    if (lat_min >= lat_max || lon_min >= lon_max)    return false;
+    double mid_lat = (lat_min + lat_max) / 2.0;
+    constexpr double DEG_PER_KM_LAT = 1.0 / 110.574;
+    double deg_per_km_lon = 1.0 / (111.320 * std::cos(mid_lat * M_PI / 180.0));
+    int rows = std::max(1, (int)((lat_max - lat_min) / (res_km * DEG_PER_KM_LAT)) + 1);
+    int cols = std::max(1, (int)((lon_max - lon_min) / (res_km * deg_per_km_lon)) + 1);
+    return (rows * cols <= MAX_GRID_PTS);
+}
+
+void NetworkConfigPanel::ValidateResField() {
+    bool ok = IsResValid();
+    res_field_->SetBackgroundColour(ok ? wxNullColour : *wxRED);
+    res_field_->Refresh();
+}
+
+void NetworkConfigPanel::UpdateResCountDisplay() {
+    double res_km  = wxAtof(res_field_->GetValue());
+    double lat_min = wxAtof(lat_min_field_->GetValue());
+    double lat_max = wxAtof(lat_max_field_->GetValue());
+    double lon_min = wxAtof(lon_min_field_->GetValue());
+    double lon_max = wxAtof(lon_max_field_->GetValue());
+    if (res_km < RES_MIN_KM || res_km > RES_MAX_KM || lat_min >= lat_max || lon_min >= lon_max) {
+        res_count_label_->SetLabel("");
         return;
     }
     double mid_lat = (lat_min + lat_max) / 2.0;
-    double cos_mid = std::cos(mid_lat * M_PI / 180.0);
-    double lat_range_km = (lat_max - lat_min) * 110.574;
-    double lon_range_km = (cos_mid > 1e-6) ? (lon_max - lon_min) * 111.320 * cos_mid : lat_range_km;
-    double area_km2 = std::max(lat_range_km * lon_range_km, 1.0);
-    double res_km = std::sqrt(area_km2 / pts);
-    if (res_km < 0.05) res_km = 0.05;
-    wxString label = wxString::Format("~%.2f km spacing", res_km);
-    res_info_label_->SetLabel(label);
+    constexpr double DEG_PER_KM_LAT = 1.0 / 110.574;
+    double deg_per_km_lon = 1.0 / (111.320 * std::cos(mid_lat * M_PI / 180.0));
+    int rows = std::max(1, (int)((lat_max - lat_min) / (res_km * DEG_PER_KM_LAT)) + 1);
+    int cols = std::max(1, (int)((lon_max - lon_min) / (res_km * deg_per_km_lon)) + 1);
+    int total = rows * cols;
+    wxString label;
+    if (total > MAX_GRID_PTS)
+        label = wxString::Format("~%dk points (too large)", total / 1000);
+    else if (total >= 1000000)
+        label = wxString::Format("~%.1fM points", total / 1000000.0);
+    else if (total >= 1000)
+        label = wxString::Format("~%dk points", total / 1000);
+    else
+        label = wxString::Format("~%d points", total);
+    res_count_label_->SetLabel(label);
 }
 
 void NetworkConfigPanel::UpdateMlDisplay() {

@@ -33,14 +33,11 @@ struct Frequencies {
 };
 
 struct GridDef {
-    double lat_min      = 49.5;
-    double lat_max      = 61.0;
-    double lon_min      = -7.0;
-    double lon_max      =  2.5;
-    // Complexity limit: the grid is sized so rows*cols <= max_points.
-    // Set resolution_km > 0 to override and use a fixed spacing instead.
-    int    max_points    = 10000;
-    double resolution_km = 0.0;  // 0 = derive from max_points and bounds
+    double lat_min       = 49.5;
+    double lat_max       = 61.0;
+    double lon_min       = -7.0;
+    double lon_max       =  2.5;
+    double resolution_km = 10.0;
 };
 
 struct PatternOffset {
