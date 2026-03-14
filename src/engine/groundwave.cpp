@@ -147,6 +147,50 @@ double millington_field_dbuvm(double freq_hz,
 }
 
 // ---------------------------------------------------------------------------
+// Homogeneous-path groundwave: single midpoint conductivity lookup.
+// ---------------------------------------------------------------------------
+double homogeneous_field_dbuvm(double freq_hz,
+                                double lat_tx, double lon_tx,
+                                double lat_rx, double lon_rx,
+                                const ConductivityMap& cond,
+                                double power_w)
+{
+    if (power_w <= 0.0) return -200.0;
+
+    const GeographicLib::Geodesic& geod = GeographicLib::Geodesic::WGS84();
+    double total_dist_m = 0.0;
+    geod.Inverse(lat_tx, lon_tx, lat_rx, lon_rx, total_dist_m);
+    double total_dist_km = total_dist_m / 1000.0;
+    if (total_dist_km < 0.1) return -200.0;
+
+    double mid_lat = 0.5 * (lat_tx + lat_rx);
+    double mid_lon = 0.5 * (lon_tx + lon_rx);
+    GroundConstants gc = cond.lookup(mid_lat, mid_lon);
+    return groundwave_field_dbuvm(freq_hz, total_dist_km, gc, power_w);
+}
+
+// ---------------------------------------------------------------------------
+// Model dispatch
+// ---------------------------------------------------------------------------
+double groundwave_for_model(double freq_hz,
+                            double lat_tx, double lon_tx,
+                            double lat_rx, double lon_rx,
+                            const ConductivityMap& cond,
+                            double power_w,
+                            Scenario::PropagationModel model,
+                            int nsamples)
+{
+    if (model == Scenario::PropagationModel::Homogeneous) {
+        return homogeneous_field_dbuvm(freq_hz,
+                                       lat_tx, lon_tx, lat_rx, lon_rx,
+                                       cond, power_w);
+    }
+    return millington_field_dbuvm(freq_hz,
+                                  lat_tx, lon_tx, lat_rx, lon_rx,
+                                  cond, power_w, nsamples);
+}
+
+// ---------------------------------------------------------------------------
 // Grid computation
 // ---------------------------------------------------------------------------
 void computeGroundwave(GridData&               data,
@@ -183,12 +227,12 @@ void computeGroundwave(GridData&               data,
         std::vector<double> vals(n);
         for (size_t i = 0; i < n; ++i) {
             if (cancel.load()) return;
-            // Millington mixed-path field strength (P2-02).
-            // Uses 20 path segments to capture land/sea boundaries.
-            double e = millington_field_dbuvm(
+            // Groundwave field strength using selected propagation model.
+            double e = groundwave_for_model(
                 scenario.frequencies.f1_hz,
                 tx.lat, tx.lon, pts[i].lat, pts[i].lon,
-                *cond_map, tx.power_w, 20);
+                *cond_map, tx.power_w,
+                scenario.propagation_model, 20);
             vals[i] = e;
             double lin = std::pow(10.0, e / 20.0);
             rss_total[i] += lin * lin;

@@ -42,6 +42,7 @@ private:
     wxTextCtrl*   res_field_       = nullptr;
     wxStaticText* res_count_label_ = nullptr;
     wxChoice*     datum_           = nullptr;
+    wxChoice*     prop_model_      = nullptr;
 
     wxTimer      debounce_;
     Scenario*    scenario_  = nullptr;

@@ -226,11 +226,12 @@ void computeASF(GridData& data, const Scenario& scenario,
                                          tx.lat, tx.lon, az_deg);
             double dist_km = std::max(dist_m / 1000.0, 0.1);
 
-            // Groundwave SNR using Millington mixed-path method (P2-02).
-            double e_gw = millington_field_dbuvm(
+            // Groundwave SNR using selected propagation model.
+            double e_gw = groundwave_for_model(
                 scenario.frequencies.f1_hz,
                 tx.lat, tx.lon, pts[i].lat, pts[i].lon,
-                *cond_map, tx.power_w, 20);
+                *cond_map, tx.power_w,
+                scenario.propagation_model, 20);
             double snr  = compute_snr_db(e_gw, atm_noise_v, veh_noise);
 
             StationGeometry sg;
@@ -531,10 +532,11 @@ std::vector<SlotPhaseResult> computeAtPoint(
         if (p2m >= 1.0) p2m -= 1.0;
         int    l2m = l2p;   // same physical distance → same lane count
 
-        // SNR and GDR using Millington mixed-path method (P2-02).
-        double e_gw  = millington_field_dbuvm(scenario.frequencies.f1_hz,
-                                               tx.lat, tx.lon, lat_rx, lon_rx,
-                                               *cond_map, tx.power_w, 50);
+        // SNR and GDR using selected propagation model.
+        double e_gw  = groundwave_for_model(scenario.frequencies.f1_hz,
+                                             tx.lat, tx.lon, lat_rx, lon_rx,
+                                             *cond_map, tx.power_w,
+                                             scenario.propagation_model, 50);
         double e_sky = skywave_field_dbuvm(scenario.frequencies.f1_hz,
                                             dist_km, tx.power_w,
                                             tx.lat, lat_rx);

@@ -155,6 +155,13 @@ Scenario load(const std::filesystem::path& path) {
                                              : Scenario::DatumTransform::Helmert;
     }
 
+    // [propagation]
+    if (auto p = tbl["propagation"].as_table()) {
+        std::string mdl = str((*p)["model"], "millington");
+        s.propagation_model = (mdl == "homogeneous") ? Scenario::PropagationModel::Homogeneous
+                                                      : Scenario::PropagationModel::Millington;
+    }
+
     return s;
 }
 
@@ -255,6 +262,11 @@ void save(const Scenario& s, const std::filesystem::path& path) {
     if      (s.terrain_source == Scenario::TerrainSource::SRTM) terr_src = "srtm";
     else if (s.terrain_source == Scenario::TerrainSource::File) terr_src = s.terrain_file;
     tbl.insert("terrain", toml::table{{"source", terr_src}});
+
+    // Propagation model
+    std::string prop_mdl = (s.propagation_model == Scenario::PropagationModel::Homogeneous)
+                           ? "homogeneous" : "millington";
+    tbl.insert("propagation", toml::table{{"model", prop_mdl}});
 
     std::ofstream f(path);
     if (!f) throw std::runtime_error("Cannot open file for writing: " + path.string());

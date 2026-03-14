@@ -294,3 +294,73 @@ TEST_CASE("millington: both sea-to-land and land-to-sea lie between extremes") {
     CHECK(E_ls > E_land);
     CHECK(E_ls < E_sea);
 }
+
+// ---- homogeneous_field_dbuvm ----
+
+TEST_CASE("homogeneous: matches groundwave_field_dbuvm with midpoint conductivity") {
+    // For a uniform conductivity map, homogeneous_field_dbuvm should match
+    // the single-call groundwave_field_dbuvm at the geodesic distance.
+    GroundConstants gc { 0.005, 15.0 };
+    FixedConductivityMap cmap(gc.sigma, gc.eps_r);
+
+    double lat1 = 52.0, lon1 = -0.5;
+    double lat2 = 51.5, lon2 =  1.0;
+
+    double dist_km = geodesic_dist_km(lat1, lon1, lat2, lon2);
+    double E_ref = groundwave_field_dbuvm(146437.5, dist_km, gc, 40.0);
+    double E_hom = homogeneous_field_dbuvm(146437.5, lat1, lon1, lat2, lon2,
+                                            cmap, 40.0);
+    CHECK(E_hom == Approx(E_ref).margin(0.01));
+}
+
+TEST_CASE("homogeneous: uses midpoint conductivity, not path average") {
+    // With a step conductivity map, homogeneous looks up only the midpoint.
+    StepConductivityMap cmap;
+    cmap.boundary_lon = -3.5;
+    cmap.gc_west = GroundConstants{4.0, 70.0};   // sea
+    cmap.gc_east = GroundConstants{0.005, 15.0};  // land
+
+    double lat_tx = 52.5, lon_tx = -5.5;  // sea
+    double lat_rx = 52.5, lon_rx = -1.0;  // land
+    // Midpoint lon = -3.25, east of boundary -> land conductivity
+
+    double E_hom = homogeneous_field_dbuvm(146437.5, lat_tx, lon_tx, lat_rx, lon_rx,
+                                            cmap, 40.0);
+    double dist_km = geodesic_dist_km(lat_tx, lon_tx, lat_rx, lon_rx);
+    double E_land = groundwave_field_dbuvm(146437.5, dist_km, cmap.gc_east, 40.0);
+
+    // Should match the land-only value since midpoint falls in land zone
+    CHECK(E_hom == Approx(E_land).margin(0.01));
+}
+
+// ---- groundwave_for_model dispatch ----
+
+TEST_CASE("groundwave_for_model: Homogeneous dispatches to homogeneous") {
+    GroundConstants gc { 0.005, 15.0 };
+    FixedConductivityMap cmap(gc.sigma, gc.eps_r);
+
+    double lat1 = 52.0, lon1 = -0.5;
+    double lat2 = 51.5, lon2 =  1.0;
+
+    double E_hom = homogeneous_field_dbuvm(146437.5, lat1, lon1, lat2, lon2,
+                                            cmap, 40.0);
+    double E_disp = groundwave_for_model(146437.5, lat1, lon1, lat2, lon2,
+                                          cmap, 40.0,
+                                          Scenario::PropagationModel::Homogeneous);
+    CHECK(E_disp == Approx(E_hom).margin(0.001));
+}
+
+TEST_CASE("groundwave_for_model: Millington dispatches to millington") {
+    GroundConstants gc { 0.005, 15.0 };
+    FixedConductivityMap cmap(gc.sigma, gc.eps_r);
+
+    double lat1 = 52.0, lon1 = -0.5;
+    double lat2 = 51.5, lon2 =  1.0;
+
+    double E_mil = millington_field_dbuvm(146437.5, lat1, lon1, lat2, lon2,
+                                          cmap, 40.0, 20);
+    double E_disp = groundwave_for_model(146437.5, lat1, lon1, lat2, lon2,
+                                          cmap, 40.0,
+                                          Scenario::PropagationModel::Millington);
+    CHECK(E_disp == Approx(E_mil).margin(0.001));
+}

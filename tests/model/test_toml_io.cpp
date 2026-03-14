@@ -92,6 +92,36 @@ TEST_CASE("Missing [frequencies] section uses defaults", "[toml_io]") {
     std::filesystem::remove(path);
 }
 
+TEST_CASE("Propagation model round-trip: Millington (default)", "[toml_io]") {
+    Scenario s;
+    auto path = std::filesystem::temp_directory_path() / "bp2_prop_mil.toml";
+    toml_io::save(s, path);
+    auto s2 = toml_io::load(path);
+    REQUIRE(s2.propagation_model == Scenario::PropagationModel::Millington);
+    std::filesystem::remove(path);
+}
+
+TEST_CASE("Propagation model round-trip: Homogeneous", "[toml_io]") {
+    Scenario s;
+    s.propagation_model = Scenario::PropagationModel::Homogeneous;
+    auto path = std::filesystem::temp_directory_path() / "bp2_prop_hom.toml";
+    toml_io::save(s, path);
+    auto s2 = toml_io::load(path);
+    REQUIRE(s2.propagation_model == Scenario::PropagationModel::Homogeneous);
+    std::filesystem::remove(path);
+}
+
+TEST_CASE("Missing [propagation] section defaults to Millington", "[toml_io]") {
+    auto path = std::filesystem::temp_directory_path() / "bp2_no_prop.toml";
+    {
+        std::ofstream f(path);
+        f << "[scenario]\nname = \"test\"\n";
+    }
+    auto s = toml_io::load(path);
+    REQUIRE(s.propagation_model == Scenario::PropagationModel::Millington);
+    std::filesystem::remove(path);
+}
+
 TEST_CASE("Invalid TOML throws runtime_error", "[toml_io]") {
     auto path = std::filesystem::temp_directory_path() / "bp2_bad.toml";
     {

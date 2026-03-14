@@ -76,6 +76,13 @@ struct Scenario {
     enum class DatumTransform { Helmert, OSTN15 };
     DatumTransform datum_transform = DatumTransform::Helmert;
 
+    // Groundwave propagation model selection.
+    // Homogeneous: single midpoint conductivity, fast (ITU P.368 only).
+    // Millington:  mixed-path forward/backward averaging, accurate for
+    //              land/sea transitions but ~20x slower per grid point.
+    enum class PropagationModel { Homogeneous, Millington };
+    PropagationModel propagation_model = PropagationModel::Millington;
+
     std::vector<std::string> output_layers = {
         "groundwave", "snr", "gdr", "whdop",
         "repeatable", "asf", "confidence"

@@ -67,6 +67,15 @@ NetworkConfigPanel::NetworkConfigPanel(wxWindow* parent)
     datum_->Bind(wxEVT_CHOICE, &NetworkConfigPanel::OnOtherChanged, this);
     gs->Add(datum_, 1, wxEXPAND | wxBOTTOM, 2);
 
+    // Propagation model
+    gs->Add(new wxStaticText(this, wxID_ANY, "Propagation"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
+    wxArrayString models;
+    models.Add("Homogeneous (fast)"); models.Add("Millington mixed-path");
+    prop_model_ = new wxChoice(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, models);
+    prop_model_->SetSelection(1);  // Millington default
+    prop_model_->Bind(wxEVT_CHOICE, &NetworkConfigPanel::OnOtherChanged, this);
+    gs->Add(prop_model_, 1, wxEXPAND | wxBOTTOM, 2);
+
     auto* sizer = new wxBoxSizer(wxVERTICAL);
     sizer->Add(new wxStaticText(this, wxID_ANY, "Network Configuration"), 0, wxALL, 6);
     sizer->Add(gs, 0, wxALL | wxEXPAND, 8);
@@ -83,6 +92,7 @@ void NetworkConfigPanel::SetScenario(Scenario* scenario) {
     res_field_->ChangeValue(wxString::Format("%.1f", scenario_->grid.resolution_km));
     mode_->SetSelection(scenario_->mode == Scenario::OperationMode::Interlaced ? 1 : 0);
     datum_->SetSelection(scenario_->datum_transform == Scenario::DatumTransform::OSTN15 ? 1 : 0);
+    prop_model_->SetSelection(scenario_->propagation_model == Scenario::PropagationModel::Millington ? 1 : 0);
     UpdateMlDisplay();
     ValidateResField();
     UpdateResCountDisplay();
@@ -101,6 +111,8 @@ void NetworkConfigPanel::SaveToScenario() {
                                                     : Scenario::OperationMode::EightSlot;
     scenario_->datum_transform = (datum_->GetSelection() == 1) ? Scenario::DatumTransform::OSTN15
                                                                 : Scenario::DatumTransform::Helmert;
+    scenario_->propagation_model = (prop_model_->GetSelection() == 1) ? Scenario::PropagationModel::Millington
+                                                                       : Scenario::PropagationModel::Homogeneous;
 }
 
 void NetworkConfigPanel::OnFreqChanged(wxCommandEvent& /*evt*/) {
