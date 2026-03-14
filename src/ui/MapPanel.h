@@ -6,6 +6,7 @@
 #include <wx/panel.h>
 #include <wx/sizer.h>
 #include <wx/webview.h>
+#include "../engine/grid.h"
 
 namespace bp {
 
@@ -23,6 +24,8 @@ public:
     void RemoveReceiverMarker();
     void LockReceiver(bool locked);
     void UpdateLayer(const std::string& layer_name, const std::string& geojson);
+    // Render a structured grid layer as a canvas image overlay (true 1 km resolution).
+    void UpdateLayerImage(const std::string& layer_name, const GridImageData& img);
     void ClearLayer(const std::string& layer_name);
     void UpdateLegend(const std::string& name, double vmin, double vmax,
                       const std::string& units);

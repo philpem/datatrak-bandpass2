@@ -85,6 +85,8 @@ void computeGroundwave(GridData&               data,
         arr.layer_name    = key;
         arr.points        = pts;
         arr.values        = std::move(vals);
+        arr.width         = it->second.width;
+        arr.height        = it->second.height;
         arr.lat_min       = scenario.grid.lat_min;
         arr.lat_max       = scenario.grid.lat_max;
         arr.lon_min       = scenario.grid.lon_min;

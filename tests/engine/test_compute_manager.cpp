@@ -17,10 +17,13 @@ TEST_CASE("buildGrid returns correct point count", "[grid]") {
     def.resolution_km = 10.0;
 
     std::atomic<bool> cancel{false};
-    auto pts = buildGrid(def, cancel);
+    auto grid = buildGrid(def, cancel);
     // Should have a reasonable number of points for a 1°×1° area at 10 km resolution
-    REQUIRE(pts.size() > 10);
-    REQUIRE(pts.size() < 1000);
+    REQUIRE(grid.points.size() > 10);
+    REQUIRE(grid.points.size() < 1000);
+    REQUIRE(grid.width > 0);
+    REQUIRE(grid.height > 0);
+    REQUIRE(grid.width * grid.height == (int)grid.points.size());
 }
 
 TEST_CASE("buildGrid points have valid lat/lon", "[grid]") {
@@ -32,9 +35,9 @@ TEST_CASE("buildGrid points have valid lat/lon", "[grid]") {
     def.resolution_km = 50.0;
 
     std::atomic<bool> cancel{false};
-    auto pts = buildGrid(def, cancel);
-    REQUIRE(!pts.empty());
-    for (const auto& p : pts) {
+    auto grid = buildGrid(def, cancel);
+    REQUIRE(!grid.points.empty());
+    for (const auto& p : grid.points) {
         REQUIRE(p.lat >= 49.9);
         REQUIRE(p.lat <= 51.1);
         REQUIRE(p.lon >= -2.1);
@@ -71,16 +74,16 @@ TEST_CASE("buildGrid: zero resolution returns empty", "[grid]") {
     GridDef def;
     def.resolution_km = 0.0;
     std::atomic<bool> cancel{false};
-    auto pts = buildGrid(def, cancel);
-    CHECK(pts.empty());
+    auto grid = buildGrid(def, cancel);
+    CHECK(grid.points.empty());
 }
 
 TEST_CASE("buildGrid: negative resolution returns empty", "[grid]") {
     GridDef def;
     def.resolution_km = -5.0;
     std::atomic<bool> cancel{false};
-    auto pts = buildGrid(def, cancel);
-    CHECK(pts.empty());
+    auto grid = buildGrid(def, cancel);
+    CHECK(grid.points.empty());
 }
 
 TEST_CASE("buildGrid: cancel flag aborts mid-grid", "[grid]") {
@@ -91,8 +94,8 @@ TEST_CASE("buildGrid: cancel flag aborts mid-grid", "[grid]") {
     std::atomic<bool> cancel{false};
     // Pre-cancel: should return empty immediately
     cancel.store(true);
-    auto pts = buildGrid(def, cancel);
-    CHECK(pts.empty());
+    auto grid = buildGrid(def, cancel);
+    CHECK(grid.points.empty());
 }
 
 TEST_CASE("Frequencies default values", "[scenario]") {
