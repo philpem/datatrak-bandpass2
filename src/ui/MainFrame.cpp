@@ -477,6 +477,14 @@ void MainFrame::OnFileSaveAs(wxCommandEvent& /*evt*/) {
                      wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
     if (dlg.ShowModal() != wxID_OK) return;
     current_file_ = dlg.GetPath().ToStdString();
+    // On Linux/GTK the file dialog does not auto-append the filter extension.
+    // If the TOML filter is selected and the path lacks a .toml extension, add it.
+    if (dlg.GetFilterIndex() == 0) {
+        std::filesystem::path p(current_file_);
+        if (p.extension() != ".toml") {
+            current_file_ += ".toml";
+        }
+    }
     try {
         toml_io::save(scenario_, current_file_);
         dirty_ = false;

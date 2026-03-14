@@ -28,7 +28,6 @@ void ComputeManager::PostRequest(std::shared_ptr<const Scenario> scenario) {
     {
         std::lock_guard<std::mutex> lock(queue_mutex_);
         while (!queue_.empty()) queue_.pop();  // discard stale requests
-        cancel_flag_.store(false);
         ComputeRequest req;
         req.scenario   = std::move(scenario);
         req.request_id = id;
@@ -71,6 +70,11 @@ void ComputeManager::WorkerLoop() {
         if (req.is_shutdown) break;
         if (req.request_id < current_id) continue;  // superseded
         current_id = req.request_id;
+
+        // Reset cancel flag here (not in PostRequest) so that the old
+        // computation is guaranteed to observe cancel==true and abort
+        // before the new computation begins.
+        cancel_flag_.store(false);
 
         ComputeResult result = RunPipeline(*req.scenario, cancel_flag_);
         result.request_id = req.request_id;
