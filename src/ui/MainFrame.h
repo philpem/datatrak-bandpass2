@@ -56,6 +56,8 @@ private:
     void OnExportLayers(const std::string& format);
     void OnImportMonitorLog(wxCommandEvent& evt);
     void OnComputePatternOffsets(wxCommandEvent& evt);
+    void ClearMapTransmitters(int count);
+    void SyncMapTransmitters();
     void TriggerRecompute();
     void MarkDirty();
     bool ConfirmDiscardChanges();
