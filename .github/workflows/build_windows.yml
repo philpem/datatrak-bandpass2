@@ -9,6 +9,9 @@ on:
 jobs:
   build:
     runs-on: windows-latest
+    env:
+      VCPKG_DEFAULT_TRIPLET: x64-windows-release
+      VCPKG_OVERLAY_TRIPLETS: ${{ github.workspace }}/cmake/ci-triplets
     steps:
       - uses: actions/checkout@v6.0.2
 
@@ -17,23 +20,34 @@ jobs:
         with:
           vcpkgJsonGlob: 'vcpkg.json'
 
+      - name: Cache vcpkg installed packages
+        uses: actions/cache@v4
+        with:
+          path: build/vcpkg_installed
+          key: vcpkg-installed-windows-release-${{ hashFiles('vcpkg.json') }}
+
+      - name: Setup MSVC dev environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
       - name: Configure
         run: |
-          cmake -B build -G "Visual Studio 17 2022" -A x64 `
+          cmake -B build -G Ninja `
             -DCMAKE_BUILD_TYPE=Release `
             -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
 
       - name: Build
-        run: cmake --build build --config Release --parallel
+        run: cmake --build build --parallel
 
       - name: Test
-        run: ctest --test-dir build -C Release --output-on-failure
+        run: ctest --test-dir build --output-on-failure
 
       - name: Package
         run: |
           New-Item -ItemType Directory -Force dist\bandpass2
-          Copy-Item build\src\Release\bandpass2.exe dist\bandpass2\
-          Copy-Item -Recurse build\src\Release\web dist\bandpass2\web
+          Copy-Item build\src\bandpass2.exe dist\bandpass2\
+          Copy-Item -Recurse build\src\web dist\bandpass2\web
           Compress-Archive -Path dist\bandpass2 -DestinationPath bandpass2-windows-x64.zip
 
       - name: Upload artifact
