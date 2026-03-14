@@ -130,7 +130,8 @@ MainFrame::MainFrame()
         // Clear all overlay layers and the legend first
         for (const char* n : {"groundwave","skywave","atm_noise","snr","sgr","gdr",
                                "whdop","repeatable","asf","asf_gradient",
-                               "absolute_accuracy","absolute_accuracy_corrected","confidence"}) {
+                               "absolute_accuracy","absolute_accuracy_corrected",
+                               "absolute_accuracy_delta","confidence"}) {
             map_panel_->ClearLayer(n);
         }
         map_panel_->ClearLegend();
@@ -363,7 +364,10 @@ void MainFrame::PushLayerToMap(const std::string& name) {
     if (arr.values.empty()) return;
     double vmin = *std::min_element(arr.values.begin(), arr.values.end());
     double vmax = *std::max_element(arr.values.begin(), arr.values.end());
-    if (vmax == vmin) return;
+    // Do not bail out when all values are equal — to_image_data/to_geojson handle
+    // this gracefully (rendering a uniform colour).  Bailing out here silently hides
+    // layers like "whdop" or "confidence" that are uniformly 9999/0 when there is no
+    // station coverage, giving the user no visual feedback.
     SetStatusText("Updating map...", SB_STATUS);
     if (arr.width > 0 && arr.height > 0) {
         map_panel_->UpdateLayerImage(name, arr.to_image_data());
@@ -443,7 +447,8 @@ void MainFrame::OnToolCompute(wxCommandEvent& evt) {
         // Clear all map layers when computation is disabled
         for (auto& name : {"groundwave","skywave","atm_noise","snr","sgr","gdr",
                             "whdop","repeatable","asf","asf_gradient",
-                            "absolute_accuracy","absolute_accuracy_corrected","confidence"}) {
+                            "absolute_accuracy","absolute_accuracy_corrected",
+                            "absolute_accuracy_delta","confidence"}) {
             map_panel_->ClearLayer(name);
         }
         SetStatusText("Computation disabled", SB_STATUS);
