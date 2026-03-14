@@ -77,7 +77,7 @@ MainFrame::MainFrame()
     results_panel_ = new ResultsPanel(this);
 
     net_config_->SetScenario(&scenario_);
-    net_config_->on_changed = [this](const Scenario&){ TriggerRecompute(); };
+    net_config_->on_changed = [this](const Scenario&){ MarkDirty(); TriggerRecompute(); };
     results_panel_->SetScenario(&scenario_);
 
     param_editor_->on_transmitter_changed = [this](int id, const Transmitter& tx) {

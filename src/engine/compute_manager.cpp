@@ -98,6 +98,11 @@ ComputeResult ComputeManager::RunPipeline(const Scenario& scenario,
         return result;
     }
 
+    if (scenario.grid.resolution_km <= 0.0) {
+        result.error = "Grid resolution must be > 0 km";
+        return result;
+    }
+
     if (scenario.transmitters.empty()) return result;
     if (cancel.load()) return result;
 
