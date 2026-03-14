@@ -61,7 +61,34 @@ struct Scenario {
     GridDef                     grid;
     Frequencies                 frequencies;
     ReceiverModel               receiver;
-    std::vector<Transmitter>    transmitters;
+    std::vector<TransmitterSite> transmitter_sites;
+
+    // Flat (site × slot) list for the physics pipeline and almanac export.
+    // Each element merges site-level properties (position, power, height) with
+    // one SlotConfig; the order is site-major, slot-minor.
+    std::vector<Transmitter> flatTransmitters() const {
+        std::vector<Transmitter> result;
+        for (const auto& site : transmitter_sites) {
+            for (const auto& sc : site.slots) {
+                Transmitter tx;
+                tx.name             = site.name;
+                tx.lat              = site.lat;
+                tx.lon              = site.lon;
+                tx.osgb_easting     = site.osgb_easting;
+                tx.osgb_northing    = site.osgb_northing;
+                tx.power_w          = site.power_w;
+                tx.height_m         = site.height_m;
+                tx.locked           = site.locked;
+                tx.slot             = sc.slot;
+                tx.is_master        = sc.is_master;
+                tx.master_slot      = sc.master_slot;
+                tx.spo_us           = sc.spo_us;
+                tx.station_delay_us = sc.station_delay_us;
+                result.push_back(tx);
+            }
+        }
+        return result;
+    }
     std::vector<MonitorStation> monitor_stations;
     std::vector<PatternOffset>  pattern_offsets;
 

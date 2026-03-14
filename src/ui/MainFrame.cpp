@@ -97,11 +97,14 @@ MainFrame::MainFrame()
     };
     results_panel_->SetScenario(&scenario_);
 
-    param_editor_->on_transmitter_changed = [this](int id, const Transmitter& tx) {
-        if (id >= 0 && id < (int)scenario_.transmitters.size()) {
-            scenario_.transmitters[id] = tx;
+    param_editor_->on_site_changed = [this](int id, const TransmitterSite& site) {
+        if (id >= 0 && id < (int)scenario_.transmitter_sites.size()) {
+            scenario_.transmitter_sites[id] = site;
             // Refresh master-slot dropdown in case name or slot number changed
-            param_editor_->SetTransmitterList(scenario_.transmitters);
+            param_editor_->SetSiteList(scenario_.transmitter_sites);
+            // Update map marker icon in case slot count changed
+            map_panel_->AddTransmitterMarker(id, site.lat, site.lon, site.name,
+                                             site.locked, site.slot_count());
             MarkDirty();
             TriggerRecompute();
         }
@@ -111,9 +114,9 @@ MainFrame::MainFrame()
         MarkDirty();
         TriggerRecompute();
     };
-    param_editor_->on_tx_lock_changed = [this](int id, bool locked) {
-        if (id >= 0 && id < (int)scenario_.transmitters.size()) {
-            scenario_.transmitters[id].locked = locked;
+    param_editor_->on_site_lock_changed = [this](int id, bool locked) {
+        if (id >= 0 && id < (int)scenario_.transmitter_sites.size()) {
+            scenario_.transmitter_sites[id].locked = locked;
             map_panel_->LockTransmitter(id, locked);
             MarkDirty();
         }
@@ -122,8 +125,8 @@ MainFrame::MainFrame()
         rx_locked_ = locked;
         map_panel_->LockReceiver(locked);
     };
-    param_editor_->on_transmitter_deleted = [this](int id) {
-        DeleteTransmitter(id);
+    param_editor_->on_site_deleted = [this](int id) {
+        DeleteSite(id);
     };
 
     layer_panel_->on_select = [this](const std::string& layer) {
@@ -176,7 +179,7 @@ MainFrame::MainFrame()
 
     // Populate parameter editor with defaults
     param_editor_->SetFrequency(scenario_.frequencies.f1_hz);
-    param_editor_->SetTransmitterList(scenario_.transmitters);
+    param_editor_->SetSiteList(scenario_.transmitter_sites);
     param_editor_->LoadReceiver(scenario_.receiver);
 
     // Initial recompute
@@ -381,29 +384,32 @@ void MainFrame::PushLayerToMap(const std::string& name) {
 void MainFrame::OnMapClick(double lat, double lon) {
     if (!placement_mode_) return;
 
-    Transmitter tx;
-    tx.name     = "TX-" + std::to_string(next_tx_id_);
-    tx.lat      = lat;
-    tx.lon      = lon;
-    tx.slot     = next_tx_id_;
-    tx.is_master = (next_tx_id_ == 1);
+    TransmitterSite site;
+    site.name = "TX-" + std::to_string(next_tx_id_);
+    site.lat  = lat;
+    site.lon  = lon;
+    SlotConfig sc;
+    sc.slot      = next_tx_id_;
+    sc.is_master = (next_tx_id_ == 1);
+    site.slots.push_back(sc);
 
-    int id = (int)scenario_.transmitters.size();
-    scenario_.transmitters.push_back(tx);
+    int id = (int)scenario_.transmitter_sites.size();
+    scenario_.transmitter_sites.push_back(site);
 
-    map_panel_->AddTransmitterMarker(id, lat, lon, tx.name, tx.locked);
-    selected_tx_id_ = id;
-    param_editor_->SetTransmitterList(scenario_.transmitters);
-    param_editor_->LoadTransmitter(id, tx);
+    map_panel_->AddTransmitterMarker(id, lat, lon, site.name, site.locked,
+                                     site.slot_count());
+    selected_site_id_ = id;
+    param_editor_->SetSiteList(scenario_.transmitter_sites);
+    param_editor_->LoadSite(id, site);
     ++next_tx_id_;
     MarkDirty();
     TriggerRecompute();
 }
 
 void MainFrame::OnTransmitterMoved(int id, double lat, double lon) {
-    if (id < 0 || id >= (int)scenario_.transmitters.size()) return;
-    scenario_.transmitters[id].lat = lat;
-    scenario_.transmitters[id].lon = lon;
+    if (id < 0 || id >= (int)scenario_.transmitter_sites.size()) return;
+    scenario_.transmitter_sites[id].lat = lat;
+    scenario_.transmitter_sites[id].lon = lon;
     MarkDirty();
     TriggerRecompute();
 }
@@ -456,48 +462,49 @@ void MainFrame::OnToolCompute(wxCommandEvent& evt) {
 }
 
 void MainFrame::OnTransmitterSelected(int id) {
-    if (id >= 0 && id < (int)scenario_.transmitters.size()) {
-        selected_tx_id_ = id;
-        param_editor_->LoadTransmitter(id, scenario_.transmitters[id]);
+    if (id >= 0 && id < (int)scenario_.transmitter_sites.size()) {
+        selected_site_id_ = id;
+        param_editor_->LoadSite(id, scenario_.transmitter_sites[id]);
         map_panel_->SelectTransmitterMarker(id);
     }
 }
 
 void MainFrame::OnEditDeleteTx(wxCommandEvent& /*evt*/) {
-    if (selected_tx_id_ < 0 || selected_tx_id_ >= (int)scenario_.transmitters.size()) {
+    if (selected_site_id_ < 0 || selected_site_id_ >= (int)scenario_.transmitter_sites.size()) {
         wxMessageBox("No transmitter selected.", "Delete Transmitter",
                      wxOK | wxICON_INFORMATION, this);
         return;
     }
-    DeleteTransmitter(selected_tx_id_);
+    DeleteSite(selected_site_id_);
 }
 
-void MainFrame::DeleteTransmitter(int id) {
-    if (id < 0 || id >= (int)scenario_.transmitters.size()) return;
+void MainFrame::DeleteSite(int id) {
+    if (id < 0 || id >= (int)scenario_.transmitter_sites.size()) return;
 
-    std::string name = scenario_.transmitters[id].name;
+    std::string name = scenario_.transmitter_sites[id].name;
     int ret = wxMessageBox(
-        wxString::Format("Delete transmitter \"%s\"?", name.c_str()),
-        "Delete Transmitter", wxYES_NO | wxNO_DEFAULT | wxICON_QUESTION, this);
+        wxString::Format("Delete transmitter site \"%s\"?", name.c_str()),
+        "Delete Site", wxYES_NO | wxNO_DEFAULT | wxICON_QUESTION, this);
     if (ret != wxYES) return;
 
     // Remove from scenario
-    scenario_.transmitters.erase(scenario_.transmitters.begin() + id);
+    scenario_.transmitter_sites.erase(scenario_.transmitter_sites.begin() + id);
 
     // Remove all transmitter markers from the map and re-add with new indices
     // (IDs are vector indices, so they shift after erasure)
     map_panel_->RemoveTransmitterMarker(id);
     // Re-index: remove markers after the deleted one, then re-add them
-    for (int i = id; i < (int)scenario_.transmitters.size(); ++i) {
+    for (int i = id; i < (int)scenario_.transmitter_sites.size(); ++i) {
         map_panel_->RemoveTransmitterMarker(i + 1);  // old index
-        const auto& tx = scenario_.transmitters[i];
-        map_panel_->AddTransmitterMarker(i, tx.lat, tx.lon, tx.name, tx.locked);
+        const auto& site = scenario_.transmitter_sites[i];
+        map_panel_->AddTransmitterMarker(i, site.lat, site.lon, site.name,
+                                         site.locked, site.slot_count());
     }
 
     // Clear selection
-    selected_tx_id_ = -1;
+    selected_site_id_ = -1;
     param_editor_->ClearSelection();
-    param_editor_->SetTransmitterList(scenario_.transmitters);
+    param_editor_->SetSiteList(scenario_.transmitter_sites);
     map_panel_->SelectTransmitterMarker(-1);
 
     MarkDirty();
@@ -534,30 +541,32 @@ void MainFrame::ClearMapTransmitters(int count) {
 }
 
 void MainFrame::SyncMapTransmitters() {
-    for (int i = 0; i < (int)scenario_.transmitters.size(); ++i) {
-        const auto& tx = scenario_.transmitters[i];
-        map_panel_->AddTransmitterMarker(i, tx.lat, tx.lon, tx.name, tx.locked);
+    for (int i = 0; i < (int)scenario_.transmitter_sites.size(); ++i) {
+        const auto& site = scenario_.transmitter_sites[i];
+        map_panel_->AddTransmitterMarker(i, site.lat, site.lon, site.name,
+                                         site.locked, site.slot_count());
     }
     // Set next_tx_id_ past the highest slot number in the loaded scenario
     int max_slot = 0;
-    for (const auto& tx : scenario_.transmitters)
-        if (tx.slot > max_slot) max_slot = tx.slot;
+    for (const auto& site : scenario_.transmitter_sites)
+        for (const auto& sc : site.slots)
+            if (sc.slot > max_slot) max_slot = sc.slot;
     next_tx_id_ = max_slot + 1;
 }
 
 void MainFrame::OnFileNew(wxCommandEvent& /*evt*/) {
     if (!ConfirmDiscardChanges()) return;
-    int old_count = (int)scenario_.transmitters.size();
-    scenario_      = Scenario{};
-    current_file_  = "";
-    dirty_         = false;
-    next_tx_id_    = 1;
-    selected_tx_id_ = -1;
-    placement_mode_ = false;
+    int old_count = (int)scenario_.transmitter_sites.size();
+    scenario_        = Scenario{};
+    current_file_    = "";
+    dirty_           = false;
+    next_tx_id_      = 1;
+    selected_site_id_ = -1;
+    placement_mode_  = false;
     ClearMapTransmitters(old_count);
     net_config_->SetScenario(&scenario_);
     param_editor_->SetFrequency(scenario_.frequencies.f1_hz);
-    param_editor_->SetTransmitterList(scenario_.transmitters);
+    param_editor_->SetSiteList(scenario_.transmitter_sites);
     param_editor_->LoadReceiver(scenario_.receiver);
     UpdateStatusBarMl();
     UpdateTitle();
@@ -572,7 +581,7 @@ void MainFrame::OnFileOpen(wxCommandEvent& /*evt*/) {
     if (dlg.ShowModal() != wxID_OK) return;
     std::string path = dlg.GetPath().ToStdString();
 
-    int old_count = (int)scenario_.transmitters.size();
+    int old_count = (int)scenario_.transmitter_sites.size();
 
     try {
         scenario_     = toml_io::load(path);
@@ -585,13 +594,13 @@ void MainFrame::OnFileOpen(wxCommandEvent& /*evt*/) {
 
     // Clear old transmitter markers, then add markers for loaded transmitters
     ClearMapTransmitters(old_count);
-    selected_tx_id_ = -1;
-    placement_mode_ = false;
+    selected_site_id_ = -1;
+    placement_mode_   = false;
     SyncMapTransmitters();
 
     net_config_->SetScenario(&scenario_);
     param_editor_->SetFrequency(scenario_.frequencies.f1_hz);
-    param_editor_->SetTransmitterList(scenario_.transmitters);
+    param_editor_->SetSiteList(scenario_.transmitter_sites);
     param_editor_->LoadReceiver(scenario_.receiver);
     param_editor_->ClearSelection();
     map_panel_->SelectTransmitterMarker(-1);
@@ -916,7 +925,7 @@ void MainFrame::OnImportMonitorLog(wxCommandEvent& /*evt*/) {
 }
 
 void MainFrame::OnComputePatternOffsets(wxCommandEvent& /*evt*/) {
-    if (scenario_.transmitters.empty()) {
+    if (scenario_.transmitter_sites.empty()) {
         wxMessageBox("Add transmitters to the scenario first.",
                      "Compute Pattern Offsets", wxICON_INFORMATION, this);
         return;

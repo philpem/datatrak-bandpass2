@@ -28,19 +28,19 @@ static Scenario make_zp_scenario() {
     s.receiver.min_stations = 2;
 
     // Use 4000 W (high ERP) so groundwave > noise floor at 40-80 km distances
-    Transmitter tx1;
-    tx1.name = "NearZone9a"; tx1.lat = 52.5; tx1.lon = -0.5;
-    tx1.slot = 1; tx1.is_master = true; tx1.power_w = 4000.0;
-
-    Transmitter tx2;
-    tx2.name = "NearZone9b"; tx2.lat = 51.5; tx2.lon = 0.5;
-    tx2.slot = 2; tx2.power_w = 4000.0;
-
-    Transmitter tx3;
-    tx3.name = "NearZone9c"; tx3.lat = 51.5; tx3.lon = -1.0;
-    tx3.slot = 3; tx3.power_w = 4000.0;
-
-    s.transmitters = {tx1, tx2, tx3};
+    auto make_site = [](const std::string& name, double lat, double lon,
+                        int slot, bool is_master, double power_w) {
+        TransmitterSite site;
+        site.name = name; site.lat = lat; site.lon = lon; site.power_w = power_w;
+        SlotConfig sc; sc.slot = slot; sc.is_master = is_master;
+        site.slots.push_back(sc);
+        return site;
+    };
+    s.transmitter_sites = {
+        make_site("NearZone9a", 52.5, -0.5, 1, true,  4000.0),
+        make_site("NearZone9b", 51.5,  0.5, 2, false, 4000.0),
+        make_site("NearZone9c", 51.5, -1.0, 3, false, 4000.0),
+    };
     return s;
 }
 

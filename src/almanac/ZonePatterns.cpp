@@ -116,9 +116,10 @@ std::vector<ZoneResult> compute_zone_patterns(
 
         // Build StationGeometry for each transmitter at this zone centroid
         std::vector<StationGeometry> stations;
-        stations.reserve(scenario.transmitters.size());
+        const auto flat_txs = scenario.flatTransmitters();
+        stations.reserve(flat_txs.size());
 
-        for (const auto& tx : scenario.transmitters) {
+        for (const auto& tx : flat_txs) {
             StationGeometry sg;
             sg.slot    = tx.slot;
             sg.lat_tx  = tx.lat;

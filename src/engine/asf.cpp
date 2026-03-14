@@ -205,15 +205,17 @@ void computeASF(GridData& data, const Scenario& scenario,
     // ASF values grid: store for gradient computation after main loop
     std::vector<double> asf_grid(n, 0.0);
 
+    const auto flat_txs = scenario.flatTransmitters();
+
     for (size_t i = 0; i < n; ++i) {
         if (cancel.load()) return;
 
         std::vector<StationGeometry> stations;
         std::vector<double>          asf_m_vals;     // ASF in metres per station
-        std::vector<size_t>          tx_idx_map;     // station k → scenario.transmitters[idx]
+        std::vector<size_t>          tx_idx_map;     // station k → flat_txs[idx]
 
-        for (size_t ti = 0; ti < scenario.transmitters.size(); ++ti) {
-            const auto& tx = scenario.transmitters[ti];
+        for (size_t ti = 0; ti < flat_txs.size(); ++ti) {
+            const auto& tx = flat_txs[ti];
             if (tx.power_w <= 0.0) continue;
 
             // Azimuth and distance (Airy ellipsoid, matching firmware P4-04)
@@ -297,7 +299,7 @@ void computeASF(GridData& data, const Scenario& scenario,
         {
             std::vector<double> corrected_asf(asf_m_vals);
             for (size_t k = 0; k < stations.size(); ++k) {
-                const auto& tx = scenario.transmitters[tx_idx_map[k]];
+                const auto& tx = flat_txs[tx_idx_map[k]];
                 if (!tx.is_master && tx.master_slot > 0) {
                     std::string pat = std::to_string(tx.slot) + ","
                                     + std::to_string(tx.master_slot);
@@ -445,7 +447,7 @@ std::vector<SlotPhaseResult> computeAtPoint(
 
     std::vector<SlotPhaseResult> results;
 
-    for (const auto& tx : scenario.transmitters) {
+    for (const auto& tx : scenario.flatTransmitters()) {
         // Distance and azimuth (Airy ellipsoid, matching firmware)
         double az_unused = 0.0;
         double dist_m = airy_inverse(lat_rx, lon_rx, tx.lat, tx.lon, az_unused);

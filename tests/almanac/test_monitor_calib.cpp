@@ -28,15 +28,17 @@ static Scenario make_scenario() {
     s.frequencies.f2_hz = 131250.0;
     s.frequencies.recompute();
 
-    Transmitter t1;
-    t1.name = "Huntingdon"; t1.lat = 52.32; t1.lon = -0.18;
-    t1.slot = 1; t1.is_master = true; t1.master_slot = 0; t1.power_w = 40.0;
-    s.transmitters.push_back(t1);
+    TransmitterSite site1;
+    site1.name = "Huntingdon"; site1.lat = 52.32; site1.lon = -0.18;
+    site1.power_w = 40.0;
+    { SlotConfig sc; sc.slot = 1; sc.is_master = true; sc.master_slot = 0; site1.slots.push_back(sc); }
+    s.transmitter_sites.push_back(site1);
 
-    Transmitter t2;
-    t2.name = "Selsey"; t2.lat = 50.73; t2.lon = -0.79;
-    t2.slot = 2; t2.is_master = false; t2.master_slot = 1; t2.power_w = 40.0;
-    s.transmitters.push_back(t2);
+    TransmitterSite site2;
+    site2.name = "Selsey"; site2.lat = 50.73; site2.lon = -0.79;
+    site2.power_w = 40.0;
+    { SlotConfig sc; sc.slot = 2; sc.is_master = false; sc.master_slot = 1; site2.slots.push_back(sc); }
+    s.transmitter_sites.push_back(site2);
 
     return s;
 }

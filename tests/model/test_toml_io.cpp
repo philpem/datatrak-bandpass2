@@ -57,26 +57,29 @@ TEST_CASE("Round-trip at non-standard frequencies", "[toml_io]") {
 
 TEST_CASE("Transmitter round-trip", "[toml_io]") {
     Scenario s;
-    Transmitter tx;
-    tx.name     = "Huntingdon";
-    tx.lat      = 52.3247;
-    tx.lon      = -0.1848;
-    tx.power_w  = 40.0;
-    tx.slot     = 1;
-    tx.is_master = true;
-    tx.station_delay_us = 0.19;
-    s.transmitters.push_back(tx);
+    TransmitterSite site;
+    site.name    = "Huntingdon";
+    site.lat     = 52.3247;
+    site.lon     = -0.1848;
+    site.power_w = 40.0;
+    SlotConfig sc;
+    sc.slot             = 1;
+    sc.is_master        = true;
+    sc.station_delay_us = 0.19;
+    site.slots.push_back(sc);
+    s.transmitter_sites.push_back(site);
 
     auto path = std::filesystem::temp_directory_path() / "bp2_tx_roundtrip.toml";
     toml_io::save(s, path);
     auto s2 = toml_io::load(path);
-    REQUIRE(s2.transmitters.size() == 1);
-    REQUIRE(s2.transmitters[0].name == "Huntingdon");
-    REQUIRE_THAT(s2.transmitters[0].lat, WithinAbs(52.3247, 1e-6));
-    REQUIRE_THAT(s2.transmitters[0].lon, WithinAbs(-0.1848, 1e-6));
-    REQUIRE(s2.transmitters[0].slot == 1);
-    REQUIRE(s2.transmitters[0].is_master);
-    REQUIRE_THAT(s2.transmitters[0].station_delay_us, WithinAbs(0.19, 1e-9));
+    REQUIRE(s2.transmitter_sites.size() == 1);
+    REQUIRE(s2.transmitter_sites[0].name == "Huntingdon");
+    REQUIRE_THAT(s2.transmitter_sites[0].lat, WithinAbs(52.3247, 1e-6));
+    REQUIRE_THAT(s2.transmitter_sites[0].lon, WithinAbs(-0.1848, 1e-6));
+    REQUIRE(s2.transmitter_sites[0].slots.size() == 1);
+    REQUIRE(s2.transmitter_sites[0].slots[0].slot == 1);
+    REQUIRE(s2.transmitter_sites[0].slots[0].is_master);
+    REQUIRE_THAT(s2.transmitter_sites[0].slots[0].station_delay_us, WithinAbs(0.19, 1e-9));
     std::filesystem::remove(path);
 }
 

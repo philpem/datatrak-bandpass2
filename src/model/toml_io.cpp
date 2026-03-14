@@ -62,22 +62,51 @@ Scenario load(const std::filesystem::path& path) {
                                                 : ReceiverModel::Ellipsoid::Airy1830;
     }
 
-    // [[transmitters]]
-    if (auto arr = tbl["transmitters"].as_array()) {
+    // [[transmitter_sites]]  (current format)
+    if (auto arr = tbl["transmitter_sites"].as_array()) {
         for (auto& elem : *arr) {
             if (auto t = elem.as_table()) {
-                Transmitter tx;
-                tx.name             = str((*t)["name"], "");
-                if (auto v = (*t)["lat"].value<double>())              tx.lat              = *v;
-                if (auto v = (*t)["lon"].value<double>())              tx.lon              = *v;
-                if (auto v = (*t)["power_w"].value<double>())          tx.power_w          = *v;
-                if (auto v = (*t)["height_m"].value<double>())         tx.height_m         = *v;
-                if (auto v = (*t)["slot"].value<int64_t>())            tx.slot             = (int)*v;
-                if (auto v = (*t)["is_master"].value<bool>())          tx.is_master        = *v;
-                if (auto v = (*t)["master_slot"].value<int64_t>())     tx.master_slot      = (int)*v;
-                if (auto v = (*t)["spo_us"].value<double>())           tx.spo_us           = *v;
-                if (auto v = (*t)["station_delay_us"].value<double>()) tx.station_delay_us = *v;
-                s.transmitters.push_back(tx);
+                TransmitterSite site;
+                site.name = str((*t)["name"], "");
+                if (auto v = (*t)["lat"].value<double>())      site.lat      = *v;
+                if (auto v = (*t)["lon"].value<double>())      site.lon      = *v;
+                if (auto v = (*t)["power_w"].value<double>())  site.power_w  = *v;
+                if (auto v = (*t)["height_m"].value<double>()) site.height_m = *v;
+                if (auto slots_arr = (*t)["slots"].as_array()) {
+                    for (auto& se : *slots_arr) {
+                        if (auto st = se.as_table()) {
+                            SlotConfig sc;
+                            if (auto v = (*st)["slot"].value<int64_t>())            sc.slot             = (int)*v;
+                            if (auto v = (*st)["is_master"].value<bool>())          sc.is_master        = *v;
+                            if (auto v = (*st)["master_slot"].value<int64_t>())     sc.master_slot      = (int)*v;
+                            if (auto v = (*st)["spo_us"].value<double>())           sc.spo_us           = *v;
+                            if (auto v = (*st)["station_delay_us"].value<double>()) sc.station_delay_us = *v;
+                            site.slots.push_back(sc);
+                        }
+                    }
+                }
+                s.transmitter_sites.push_back(site);
+            }
+        }
+    }
+    // [[transmitters]]  (legacy format — migrate each entry to a single-slot site)
+    else if (auto arr = tbl["transmitters"].as_array()) {
+        for (auto& elem : *arr) {
+            if (auto t = elem.as_table()) {
+                TransmitterSite site;
+                site.name = str((*t)["name"], "");
+                if (auto v = (*t)["lat"].value<double>())      site.lat      = *v;
+                if (auto v = (*t)["lon"].value<double>())      site.lon      = *v;
+                if (auto v = (*t)["power_w"].value<double>())  site.power_w  = *v;
+                if (auto v = (*t)["height_m"].value<double>()) site.height_m = *v;
+                SlotConfig sc;
+                if (auto v = (*t)["slot"].value<int64_t>())            sc.slot             = (int)*v;
+                if (auto v = (*t)["is_master"].value<bool>())          sc.is_master        = *v;
+                if (auto v = (*t)["master_slot"].value<int64_t>())     sc.master_slot      = (int)*v;
+                if (auto v = (*t)["spo_us"].value<double>())           sc.spo_us           = *v;
+                if (auto v = (*t)["station_delay_us"].value<double>()) sc.station_delay_us = *v;
+                site.slots.push_back(sc);
+                s.transmitter_sites.push_back(site);
             }
         }
     }
@@ -190,23 +219,30 @@ void save(const Scenario& s, const std::filesystem::path& path) {
         }},
     };
 
-    // Transmitters as array of tables
+    // Transmitter sites as array of tables
     auto tx_arr = toml::array{};
-    for (const auto& tx : s.transmitters) {
-        tx_arr.push_back(toml::table{
-            {"name",             tx.name},
-            {"lat",              tx.lat},
-            {"lon",              tx.lon},
-            {"power_w",          tx.power_w},
-            {"height_m",         tx.height_m},
-            {"slot",             (int64_t)tx.slot},
-            {"is_master",        tx.is_master},
-            {"master_slot",      (int64_t)tx.master_slot},
-            {"spo_us",           tx.spo_us},
-            {"station_delay_us", tx.station_delay_us},
-        });
+    for (const auto& site : s.transmitter_sites) {
+        auto slots_arr = toml::array{};
+        for (const auto& sc : site.slots) {
+            slots_arr.push_back(toml::table{
+                {"slot",             (int64_t)sc.slot},
+                {"is_master",        sc.is_master},
+                {"master_slot",      (int64_t)sc.master_slot},
+                {"spo_us",           sc.spo_us},
+                {"station_delay_us", sc.station_delay_us},
+            });
+        }
+        auto site_tbl = toml::table{
+            {"name",     site.name},
+            {"lat",      site.lat},
+            {"lon",      site.lon},
+            {"power_w",  site.power_w},
+            {"height_m", site.height_m},
+        };
+        site_tbl.insert("slots", slots_arr);
+        tx_arr.push_back(site_tbl);
     }
-    tbl.insert("transmitters", tx_arr);
+    tbl.insert("transmitter_sites", tx_arr);
 
     // Monitor stations
     auto ms_arr = toml::array{};

@@ -107,7 +107,7 @@ ComputeResult ComputeManager::RunPipeline(const Scenario& scenario,
         return result;
     }
 
-    if (scenario.transmitters.empty()) return result;
+    if (scenario.transmitter_sites.empty()) return result;
     if (cancel.load()) return result;
 
     // Stage 0 – grid build

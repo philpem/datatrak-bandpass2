@@ -166,9 +166,10 @@ void computeGroundwave(GridData&               data,
 
     std::vector<double> rss_total(n, 0.0);
 
-    for (size_t ti = 0; ti < scenario.transmitters.size(); ++ti) {
+    const auto flat_txs = scenario.flatTransmitters();
+    for (size_t ti = 0; ti < flat_txs.size(); ++ti) {
         if (cancel.load()) return;
-        const auto& tx = scenario.transmitters[ti];
+        const auto& tx = flat_txs[ti];
         if (tx.power_w <= 0.0) continue;
 
         std::vector<double> vals(n);

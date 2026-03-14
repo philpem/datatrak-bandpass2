@@ -107,12 +107,14 @@ void MapPanel::RunScript(const std::string& js) {
 }
 
 void MapPanel::AddTransmitterMarker(int id, double lat, double lon,
-                                     const std::string& name, bool locked) {
+                                     const std::string& name, bool locked,
+                                     int slot_count) {
     std::string safe_name = name;
     for (auto& c : safe_name) if (c == '\'' || c == '\\') c = '_';
-    RunScript(wxString::Format("addTransmitter(%d, %f, %f, '%s', %s);",
+    RunScript(wxString::Format("addTransmitter(%d, %f, %f, '%s', %s, %d);",
                                id, lat, lon, safe_name.c_str(),
-                               locked ? "true" : "false").ToStdString());
+                               locked ? "true" : "false",
+                               slot_count).ToStdString());
 }
 
 void MapPanel::MoveTransmitterMarker(int id, double lat, double lon) {

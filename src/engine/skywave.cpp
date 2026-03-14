@@ -54,7 +54,7 @@ void computeSkywave(GridData& data, const Scenario& scenario,
 
     std::vector<double> rss(n, 0.0);
 
-    for (const auto& tx : scenario.transmitters) {
+    for (const auto& tx : scenario.flatTransmitters()) {
         if (cancel.load()) return;
         if (tx.power_w <= 0.0) continue;
         for (size_t i = 0; i < n; ++i) {
