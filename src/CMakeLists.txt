@@ -24,7 +24,7 @@ set(BP_SOURCES
     almanac/AlmanacExport.cpp
 )
 
-add_executable(bandpass2 ${BP_SOURCES})
+add_executable(bandpass2 WIN32 ${BP_SOURCES})
 
 target_include_directories(bandpass2 PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
