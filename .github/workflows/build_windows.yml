@@ -12,19 +12,26 @@ jobs:
     env:
       VCPKG_DEFAULT_TRIPLET: x64-windows-release
       VCPKG_OVERLAY_TRIPLETS: ${{ github.workspace }}/cmake/ci-triplets
+      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/vcpkg_binary_cache,readwrite"
     steps:
       - uses: actions/checkout@v6.0.2
+
+      - name: Create vcpkg binary cache directory
+        run: New-Item -ItemType Directory -Force "${{ github.workspace }}/vcpkg_binary_cache"
+
+      - name: Restore vcpkg binary cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ github.workspace }}/vcpkg_binary_cache
+            build/vcpkg_installed
+          key: vcpkg-win-release-${{ hashFiles('vcpkg.json') }}
 
       - name: Setup vcpkg
         uses: lukka/run-vcpkg@v11.5
         with:
           vcpkgJsonGlob: 'vcpkg.json'
-
-      - name: Cache vcpkg installed packages
-        uses: actions/cache@v4
-        with:
-          path: build/vcpkg_installed
-          key: vcpkg-installed-windows-release-${{ hashFiles('vcpkg.json') }}
+          doNotCache: true
 
       - name: Setup MSVC dev environment
         uses: ilammy/msvc-dev-cmd@v1
