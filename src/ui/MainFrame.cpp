@@ -9,6 +9,7 @@
 #include "PoRefDialog.h"
 #include <wx/msgdlg.h>
 #include <wx/filedlg.h>
+#include <wx/choicdlg.h>
 #include <wx/aboutdlg.h>
 #include <wx/toolbar.h>
 #include <wx/menu.h>
