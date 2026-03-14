@@ -45,7 +45,7 @@ created     = "2004-01-01"
 display_crs = "osgb_ng"
 [grid]
 lat_min       = 49.5
-lat_max       = 59.5
+lat_max       = 61.0
 lon_min       = -7.0
 lon_max       = 2.5
 resolution_km = 2.0
