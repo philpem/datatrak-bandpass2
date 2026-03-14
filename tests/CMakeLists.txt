@@ -121,6 +121,12 @@ bp_add_test(test_export_manager
     ${CMAKE_SOURCE_DIR}/src/coords/Osgb.cpp
     ${CMAKE_SOURCE_DIR}/src/coords/NationalGrid.cpp
 )
+# ExportManager.cpp includes <wx/image.h> when __WXGTK__ is defined (set
+# globally by include(${wxWidgets_USE_FILE}) in deps_linux.cmake).  Link
+# wxWidgets so the PNG export symbols resolve even in the test binary.
+if(wxWidgets_FOUND)
+    target_link_libraries(test_export_manager PRIVATE ${wxWidgets_LIBRARIES})
+endif()
 
 # Zone patterns tests
 bp_add_test(test_zone_patterns
