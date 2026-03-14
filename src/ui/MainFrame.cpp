@@ -1,6 +1,7 @@
 #include "MainFrame.h"
 #include "ExportManager.h"
 #include "UiConstants.h"
+#include "toolbar_icons.h"
 #include "version_generated.h"
 #include "../coords/NationalGrid.h"
 #include "../coords/Osgb.h"
@@ -260,10 +261,10 @@ void MainFrame::BuildMenus() {
 void MainFrame::BuildToolbar() {
     auto* tb = CreateToolBar(wxTB_HORIZONTAL | wxTB_TEXT);
     tb->AddTool(ID_TOOL_PLACE_TX, "Place TX",
-                wxArtProvider::GetBitmap(wxART_NEW, wxART_TOOLBAR),
+                wxBitmap(tx_mast_xpm),
                 "Click map to place a transmitter", wxITEM_CHECK);
     tb->AddTool(ID_TOOL_PLACE_RX, "Place RX",
-                wxArtProvider::GetBitmap(wxART_FIND, wxART_TOOLBAR),
+                wxBitmap(rx_car_xpm),
                 "Click map to place the receiver", wxITEM_CHECK);
     tb->AddSeparator();
     tb->AddTool(ID_TOOL_COMPUTE, "Auto-compute",
