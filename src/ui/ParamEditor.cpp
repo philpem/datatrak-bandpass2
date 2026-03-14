@@ -49,16 +49,24 @@ void ParamEditor::BuildTransmitterPage(wxWindow* page) {
     gs->Add(new wxStaticText(page, wxID_ANY, "Slot"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
     tx_slot_ = new wxSpinCtrl(page, wxID_ANY, "1", wxDefaultPosition, wxDefaultSize,
                                wxSP_ARROW_KEYS, 1, 24, 1);
+    tx_slot_->SetToolTip("Slot number (1\xe2\x80\x9324). Each slot is one transmission per cycle. "
+                         "To model a physical site that transmits on multiple slots, "
+                         "add a separate transmitter entry at the same location for each slot.");
     gs->Add(tx_slot_, 1, wxEXPAND | wxBOTTOM, 4);
 
-    gs->Add(new wxStaticText(page, wxID_ANY, "Master"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
+    gs->Add(new wxStaticText(page, wxID_ANY, "Is master"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
     tx_master_ = new wxCheckBox(page, wxID_ANY, "");
+    tx_master_->SetToolTip("Check if this transmitter is the chain master (slot-0 reference). "
+                           "Only one transmitter per chain should be marked as master.");
     gs->Add(tx_master_, 0, wxBOTTOM, 4);
 
     gs->Add(new wxStaticText(page, wxID_ANY, "Master slot"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
-    tx_mslot_ = new wxSpinCtrl(page, wxID_ANY, "0", wxDefaultPosition, wxDefaultSize,
-                                wxSP_ARROW_KEYS, 0, 24, 0);
-    gs->Add(tx_mslot_, 1, wxEXPAND | wxBOTTOM, 4);
+    tx_mslot_choice_ = new wxChoice(page, wxID_ANY);
+    tx_mslot_choice_->SetToolTip("The master transmitter whose slot timing this station slaves to. "
+                                 "Set to None only if this station is itself the master.");
+    tx_mslot_choice_->Append("None (is master)");
+    master_slot_values_.push_back(0);
+    gs->Add(tx_mslot_choice_, 1, wxEXPAND | wxBOTTOM, 4);
 
     tx_spo_   = MakeField(page, "SPO (\xce\xbcs)",         gs);
     tx_spo_->SetToolTip("System Phase Offset: fine phase alignment applied at the "
@@ -91,9 +99,9 @@ void ParamEditor::BuildTransmitterPage(wxWindow* page) {
     tx_slot_->Bind(wxEVT_SPINCTRL, [this](wxSpinEvent&){
         wxCommandEvent e; OnTxField(e); });
     tx_master_->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent&){
+        UpdateMasterSlotState();
         wxCommandEvent e; OnTxField(e); });
-    tx_mslot_->Bind(wxEVT_SPINCTRL, [this](wxSpinEvent&){
-        wxCommandEvent e; OnTxField(e); });
+    tx_mslot_choice_->Bind(wxEVT_CHOICE, &ParamEditor::OnTxField, this);
     tx_locked_->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent&) {
         if (updating_ || current_tx_id_ < 0 || !on_tx_lock_changed) return;
         on_tx_lock_changed(current_tx_id_, tx_locked_->GetValue());
@@ -162,13 +170,21 @@ void ParamEditor::LoadTransmitter(int id, const Transmitter& tx) {
     tx_height_->ChangeValue(wxString::Format("%.1f", tx.height_m));
     tx_slot_->SetValue(tx.slot);
     tx_master_->SetValue(tx.is_master);
-    tx_mslot_->SetValue(tx.master_slot);
     tx_spo_->ChangeValue(wxString::Format("%.3f", tx.spo_us));
     tx_delay_->ChangeValue(wxString::Format("%.3f", tx.station_delay_us));
     tx_locked_->SetValue(tx.locked);
     tx_delete_->Enable(true);
     notebook_->SetSelection(0);
     updating_ = false;
+
+    RebuildMasterSlotChoices(id);
+    // Select the entry matching tx.master_slot (default to index 0 = None)
+    int sel = 0;
+    for (int i = 0; i < (int)master_slot_values_.size(); ++i) {
+        if (master_slot_values_[i] == tx.master_slot) { sel = i; break; }
+    }
+    tx_mslot_choice_->SetSelection(sel);
+    UpdateMasterSlotState();
 }
 
 void ParamEditor::LoadReceiver(const ReceiverModel& rx) {
@@ -204,7 +220,11 @@ void ParamEditor::OnTxField(wxCommandEvent& /*evt*/) {
     tx.height_m         = wxAtof(tx_height_->GetValue());
     tx.slot             = tx_slot_->GetValue();
     tx.is_master        = tx_master_->GetValue();
-    tx.master_slot      = tx_mslot_->GetValue();
+    {
+        int sel = tx_mslot_choice_->GetSelection();
+        tx.master_slot = (sel >= 0 && sel < (int)master_slot_values_.size())
+                         ? master_slot_values_[sel] : 0;
+    }
     tx.spo_us           = wxAtof(tx_spo_->GetValue());
     tx.station_delay_us = wxAtof(tx_delay_->GetValue());
     tx.locked           = tx_locked_->GetValue();
@@ -230,6 +250,44 @@ void ParamEditor::OnRxMode(wxCommandEvent& /*evt*/) {
     rx.min_stations         = rx_minstns_->GetValue();
     current_rx_ = rx;
     on_receiver_changed(rx);
+}
+
+void ParamEditor::SetTransmitterList(const std::vector<Transmitter>& txs) {
+    tx_list_ = txs;
+    if (current_tx_id_ < 0) return;
+    // Remember the currently selected master slot value, rebuild, then restore
+    int current_master = 0;
+    int sel = tx_mslot_choice_->GetSelection();
+    if (sel >= 0 && sel < (int)master_slot_values_.size())
+        current_master = master_slot_values_[sel];
+    RebuildMasterSlotChoices(current_tx_id_);
+    int new_sel = 0;
+    for (int i = 0; i < (int)master_slot_values_.size(); ++i) {
+        if (master_slot_values_[i] == current_master) { new_sel = i; break; }
+    }
+    tx_mslot_choice_->SetSelection(new_sel);
+}
+
+void ParamEditor::RebuildMasterSlotChoices(int current_id) {
+    tx_mslot_choice_->Clear();
+    master_slot_values_.clear();
+
+    tx_mslot_choice_->Append("None (is master)");
+    master_slot_values_.push_back(0);
+
+    for (int i = 0; i < (int)tx_list_.size(); ++i) {
+        if (i == current_id) continue;  // don't offer self as master
+        const auto& t = tx_list_[i];
+        wxString label = wxString::Format("Slot %d \xe2\x80\x94 %s",
+                                          t.slot, wxString::FromUTF8(t.name));
+        tx_mslot_choice_->Append(label);
+        master_slot_values_.push_back(t.slot);
+    }
+}
+
+void ParamEditor::UpdateMasterSlotState() {
+    // When this transmitter IS the master it has no upstream slot to slave to.
+    tx_mslot_choice_->Enable(!tx_master_->GetValue());
 }
 
 void ParamEditor::UpdateRxFieldStates() {

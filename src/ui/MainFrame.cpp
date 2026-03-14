@@ -94,6 +94,8 @@ MainFrame::MainFrame()
     param_editor_->on_transmitter_changed = [this](int id, const Transmitter& tx) {
         if (id >= 0 && id < (int)scenario_.transmitters.size()) {
             scenario_.transmitters[id] = tx;
+            // Refresh master-slot dropdown in case name or slot number changed
+            param_editor_->SetTransmitterList(scenario_.transmitters);
             MarkDirty();
             TriggerRecompute();
         }
@@ -165,7 +167,8 @@ MainFrame::MainFrame()
     Bind(EVT_COMPUTE_RESULT,   &MainFrame::OnComputeResult,   this);
     Bind(EVT_COMPUTE_PROGRESS, &MainFrame::OnComputeProgress, this);
 
-    // Populate receiver panel with default values
+    // Populate parameter editor with defaults
+    param_editor_->SetTransmitterList(scenario_.transmitters);
     param_editor_->LoadReceiver(scenario_.receiver);
 
     // Initial recompute
@@ -379,6 +382,7 @@ void MainFrame::OnMapClick(double lat, double lon) {
 
     map_panel_->AddTransmitterMarker(id, lat, lon, tx.name, tx.locked);
     selected_tx_id_ = id;
+    param_editor_->SetTransmitterList(scenario_.transmitters);
     param_editor_->LoadTransmitter(id, tx);
     ++next_tx_id_;
     MarkDirty();
@@ -481,6 +485,7 @@ void MainFrame::DeleteTransmitter(int id) {
     // Clear selection
     selected_tx_id_ = -1;
     param_editor_->ClearSelection();
+    param_editor_->SetTransmitterList(scenario_.transmitters);
     map_panel_->SelectTransmitterMarker(-1);
 
     MarkDirty();
@@ -520,6 +525,7 @@ void MainFrame::OnFileNew(wxCommandEvent& /*evt*/) {
     selected_tx_id_ = -1;
     placement_mode_ = false;
     net_config_->SetScenario(&scenario_);
+    param_editor_->SetTransmitterList(scenario_.transmitters);
     param_editor_->LoadReceiver(scenario_.receiver);
     UpdateStatusBarMl();
     UpdateTitle();
@@ -542,6 +548,7 @@ void MainFrame::OnFileOpen(wxCommandEvent& /*evt*/) {
         return;
     }
     net_config_->SetScenario(&scenario_);
+    param_editor_->SetTransmitterList(scenario_.transmitters);
     param_editor_->LoadReceiver(scenario_.receiver);
     UpdateStatusBarMl();
     UpdateTitle();

@@ -30,19 +30,23 @@ PoRefDialog::PoRefDialog(wxWindow* parent, const Scenario& scenario)
     top->Add(desc, 0, wxALL | wxEXPAND, 8);
 
     // ---- Mode selection
-    auto* mode_box  = new wxStaticBoxSizer(wxVERTICAL, this, "Reference mode");
+    auto* mode_box  = new wxStaticBoxSizer(wxVERTICAL, this,
+        "Reference point for po calculation");
     rb_mode1_ = new wxRadioButton(this, wxID_ANY,
-        "Mode 1 — Baseline midpoint (quick estimate, no survey needed)",
+        "Baseline midpoint  (geometric mid-point of each station pair; "
+        "quick estimate, no survey data needed)",
         wxDefaultPosition, wxDefaultSize, wxRB_GROUP);
     rb_mode2_ = new wxRadioButton(this, wxID_ANY,
-        "Mode 2 — User-defined reference marker (surveyed position)");
+        "Surveyed reference marker  (one or more positions you enter below; "
+        "use for monitor-station or known-point calibration)");
     mode_box->Add(rb_mode1_, 0, wxALL, 4);
     mode_box->Add(rb_mode2_, 0, wxALL, 4);
     rb_mode1_->SetValue(true);
     top->Add(mode_box, 0, wxALL | wxEXPAND, 8);
 
     // ---- Mode 2 controls
-    auto* mode2_box = new wxStaticBoxSizer(wxVERTICAL, this, "Mode 2: reference markers");
+    auto* mode2_box = new wxStaticBoxSizer(wxVERTICAL, this,
+        "Surveyed reference marker(s)");
 
     auto* coord_row = new wxBoxSizer(wxHORIZONTAL);
     coord_row->Add(new wxStaticText(this, wxID_ANY, "Coordinate:"),
@@ -72,7 +76,7 @@ PoRefDialog::PoRefDialog(wxWindow* parent, const Scenario& scenario)
 
     // ---- Buttons
     auto* btn_sizer = new wxStdDialogButtonSizer;
-    auto* ok_btn    = new wxButton(this, wxID_OK,     "Compute & Apply");
+    auto* ok_btn    = new wxButton(this, wxID_OK,     "Compute && Apply");
     auto* cancel_btn = new wxButton(this, wxID_CANCEL, "Cancel");
     btn_sizer->AddButton(ok_btn);
     btn_sizer->AddButton(cancel_btn);
