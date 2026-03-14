@@ -56,7 +56,7 @@ void ParamEditor::BuildTransmitterPage(wxWindow* page) {
     gs->Add(new wxStaticText(page, wxID_ANY, "Slot"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
     tx_slot_ = new wxSpinCtrl(page, wxID_ANY, "1", wxDefaultPosition, wxDefaultSize,
                                wxSP_ARROW_KEYS, 1, 24, 1);
-    tx_slot_->SetToolTip("Slot number (1\xe2\x80\x9324). Each slot is one transmission per cycle. "
+    tx_slot_->SetToolTip("Slot number (1\xe2\x80\x93" "24). Each slot is one transmission per cycle. "
                          "To model a physical site that transmits on multiple slots, "
                          "add a separate transmitter entry at the same location for each slot.");
     gs->Add(tx_slot_, 1, wxEXPAND | wxBOTTOM, 4);
@@ -85,7 +85,7 @@ void ParamEditor::BuildTransmitterPage(wxWindow* page) {
             "System Phase Offset (\xce\xbcs): fine phase alignment applied at the "
             "transmitter to correct the slot timing relative to the master.\n\n"
             "During commissioning this is measured and trimmed. For initial planning "
-            "click \xe2\x80\x9cEstimate\xe2\x80\x9d to compute the SPO that makes the received "
+            "click \xe2\x80\x9c" "Estimate\xe2\x80\x9d to compute the SPO that makes the received "
             "phase from this slave an integer number of lanes at the master site "
             "(free-space, ignoring ASF).");
         btn_spo_calc_ = new wxButton(page, wxID_ANY, "Estimate",
