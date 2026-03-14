@@ -41,10 +41,13 @@ private:
     void OnComputeResult(wxCommandEvent& evt);
     void OnComputeProgress(wxCommandEvent& evt);
 
+    void OnEditDeleteTx(wxCommandEvent& evt);
+
     // Map / scenario callbacks
     void OnMapClick(double lat, double lon);
     void OnTransmitterMoved(int id, double lat, double lon);
     void OnTransmitterSelected(int id);
+    void DeleteTransmitter(int id);
     void OnReceiverPlaced(double lat, double lon);
     void OnCursorMoved(double lat, double lon);
     void OnReceiverMoved(double lat, double lon);
@@ -80,6 +83,7 @@ private:
     bool               rx_locked_          = false;
     bool               compute_enabled_    = true;
     int                next_tx_id_         = 1;
+    int                selected_tx_id_     = -1;
     std::shared_ptr<const GridData> last_grid_data_;
     double             rx_lat_          = 0.0;
     double             rx_lon_          = 0.0;

@@ -31,6 +31,7 @@ enum {
     ID_TOOL_PLACE_TX,
     ID_TOOL_PLACE_RX,
     ID_TOOL_COMPUTE,
+    ID_EDIT_DELETE_TX,
     ID_EXPORT_ALMANAC_V7,
     ID_EXPORT_ALMANAC_V16,
     SB_WGS84   = 0,
@@ -102,6 +103,9 @@ MainFrame::MainFrame()
     param_editor_->on_rx_lock_changed = [this](bool locked) {
         rx_locked_ = locked;
         map_panel_->LockReceiver(locked);
+    };
+    param_editor_->on_transmitter_deleted = [this](int id) {
+        DeleteTransmitter(id);
     };
 
     layer_panel_->on_select = [this](const std::string& layer) {
@@ -182,6 +186,11 @@ void MainFrame::BuildMenus() {
     file->Append(wxID_EXIT,      "E&xit");
     mb->Append(file, "&File");
 
+    auto* edit = new wxMenu;
+    edit->Append(ID_EDIT_DELETE_TX, "&Delete Transmitter\tDelete",
+                 "Delete the currently selected transmitter");
+    mb->Append(edit, "&Edit");
+
     auto* view = new wxMenu;
     view->Append(ID_VIEW_NETCFG, "&Network Configuration\tCtrl+Shift+N");
     view->Append(ID_VIEW_LAYERS, "&Layer Panel\tCtrl+Shift+L");
@@ -201,6 +210,7 @@ void MainFrame::BuildMenus() {
     Bind(wxEVT_MENU, [this](wxCommandEvent&){ Close(); }, wxID_EXIT);
     Bind(wxEVT_MENU, [this](wxCommandEvent&){ OnExportAlmanac(almanac::FirmwareFormat::V7);  }, ID_EXPORT_ALMANAC_V7);
     Bind(wxEVT_MENU, [this](wxCommandEvent&){ OnExportAlmanac(almanac::FirmwareFormat::V16); }, ID_EXPORT_ALMANAC_V16);
+    Bind(wxEVT_MENU, &MainFrame::OnEditDeleteTx,      this, ID_EDIT_DELETE_TX);
     Bind(wxEVT_MENU, &MainFrame::OnViewNetworkConfig, this, ID_VIEW_NETCFG);
     Bind(wxEVT_MENU, &MainFrame::OnViewLayerPanel,    this, ID_VIEW_LAYERS);
     Bind(wxEVT_MENU, &MainFrame::OnViewParamEditor,   this, ID_VIEW_PARAMS);
@@ -339,6 +349,7 @@ void MainFrame::OnMapClick(double lat, double lon) {
     scenario_.transmitters.push_back(tx);
 
     map_panel_->AddTransmitterMarker(id, lat, lon, tx.name, tx.locked);
+    selected_tx_id_ = id;
     param_editor_->LoadTransmitter(id, tx);
     ++next_tx_id_;
     MarkDirty();
@@ -401,9 +412,50 @@ void MainFrame::OnToolCompute(wxCommandEvent& evt) {
 
 void MainFrame::OnTransmitterSelected(int id) {
     if (id >= 0 && id < (int)scenario_.transmitters.size()) {
+        selected_tx_id_ = id;
         param_editor_->LoadTransmitter(id, scenario_.transmitters[id]);
         map_panel_->SelectTransmitterMarker(id);
     }
+}
+
+void MainFrame::OnEditDeleteTx(wxCommandEvent& /*evt*/) {
+    if (selected_tx_id_ < 0 || selected_tx_id_ >= (int)scenario_.transmitters.size()) {
+        wxMessageBox("No transmitter selected.", "Delete Transmitter",
+                     wxOK | wxICON_INFORMATION, this);
+        return;
+    }
+    DeleteTransmitter(selected_tx_id_);
+}
+
+void MainFrame::DeleteTransmitter(int id) {
+    if (id < 0 || id >= (int)scenario_.transmitters.size()) return;
+
+    std::string name = scenario_.transmitters[id].name;
+    int ret = wxMessageBox(
+        wxString::Format("Delete transmitter \"%s\"?", name),
+        "Delete Transmitter", wxYES_NO | wxNO_DEFAULT | wxICON_QUESTION, this);
+    if (ret != wxYES) return;
+
+    // Remove from scenario
+    scenario_.transmitters.erase(scenario_.transmitters.begin() + id);
+
+    // Remove all transmitter markers from the map and re-add with new indices
+    // (IDs are vector indices, so they shift after erasure)
+    map_panel_->RemoveTransmitterMarker(id);
+    // Re-index: remove markers after the deleted one, then re-add them
+    for (int i = id; i < (int)scenario_.transmitters.size(); ++i) {
+        map_panel_->RemoveTransmitterMarker(i + 1);  // old index
+        const auto& tx = scenario_.transmitters[i];
+        map_panel_->AddTransmitterMarker(i, tx.lat, tx.lon, tx.name, tx.locked);
+    }
+
+    // Clear selection
+    selected_tx_id_ = -1;
+    param_editor_->ClearSelection();
+    map_panel_->SelectTransmitterMarker(-1);
+
+    MarkDirty();
+    TriggerRecompute();
 }
 
 static wxString FormatReceiverPosition(double lat, double lon) {
@@ -436,6 +488,7 @@ void MainFrame::OnFileNew(wxCommandEvent& /*evt*/) {
     current_file_  = "";
     dirty_         = false;
     next_tx_id_    = 1;
+    selected_tx_id_ = -1;
     placement_mode_ = false;
     net_config_->SetScenario(&scenario_);
     param_editor_->LoadReceiver(scenario_.receiver);

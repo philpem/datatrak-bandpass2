@@ -7,6 +7,7 @@
 #include <wx/spinctrl.h>
 #include <wx/checkbox.h>
 #include <wx/choice.h>
+#include <wx/button.h>
 #include "../model/Transmitter.h"
 #include "../model/ReceiverModel.h"
 
@@ -24,6 +25,7 @@ public:
     std::function<void(const ReceiverModel&)>        on_receiver_changed;
     std::function<void(int id, bool locked)>         on_tx_lock_changed;
     std::function<void(bool locked)>                 on_rx_lock_changed;
+    std::function<void(int id)>                      on_transmitter_deleted;
 
 private:
     void BuildTransmitterPage(wxWindow* page);
@@ -46,6 +48,7 @@ private:
     wxTextCtrl* tx_spo_     = nullptr;
     wxTextCtrl* tx_delay_   = nullptr;
     wxCheckBox* tx_locked_  = nullptr;
+    wxButton*   tx_delete_  = nullptr;
 
     // Receiver page
     wxChoice*   rx_mode_    = nullptr;
