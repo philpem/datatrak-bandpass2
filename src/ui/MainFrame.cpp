@@ -305,15 +305,17 @@ static const char* LayerUnits(const std::string& layer) {
 
 void MainFrame::PushLayerToMap(const std::string& name) {
     if (!last_grid_data_) return;
-    auto it = last_grid_data_->layers.find(name);
-    if (it == last_grid_data_->layers.end()) return;
+    // Take a local copy of the shared_ptr so the GridData stays alive even
+    // if a new compute result replaces last_grid_data_ during event processing.
+    auto pinned = last_grid_data_;
+    auto it = pinned->layers.find(name);
+    if (it == pinned->layers.end()) return;
     const auto& arr = it->second;
     if (arr.values.empty()) return;
     double vmin = *std::min_element(arr.values.begin(), arr.values.end());
     double vmax = *std::max_element(arr.values.begin(), arr.values.end());
     if (vmax == vmin) return;
     SetStatusText("Updating map...", SB_STATUS);
-    wxYield();   // allow status bar to repaint before the (potentially slow) JSON build
     map_panel_->UpdateLayer(name, arr.to_geojson());
     map_panel_->UpdateLegend(name, vmin, vmax, LayerUnits(name));
     SetStatusText("Ready", SB_STATUS);
