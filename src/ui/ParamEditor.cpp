@@ -71,9 +71,18 @@ void ParamEditor::BuildTransmitterPage(wxWindow* page) {
     tx_locked_ = new wxCheckBox(page, wxID_ANY, "");
     gs->Add(tx_locked_, 0, wxBOTTOM, 4);
 
+    tx_delete_ = new wxButton(page, wxID_ANY, "Delete Transmitter");
+    tx_delete_->Enable(false);
+
     auto* sizer = new wxBoxSizer(wxVERTICAL);
     sizer->Add(gs, 0, wxALL | wxEXPAND, 8);
+    sizer->Add(tx_delete_, 0, wxLEFT | wxRIGHT | wxBOTTOM, 8);
     page->SetSizer(sizer);
+
+    tx_delete_->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
+        if (current_tx_id_ >= 0 && on_transmitter_deleted)
+            on_transmitter_deleted(current_tx_id_);
+    });
 
     // Bind change events
     for (auto* tc : {tx_name_, tx_lat_, tx_lon_, tx_power_, tx_height_, tx_spo_, tx_delay_}) {
@@ -151,6 +160,7 @@ void ParamEditor::LoadTransmitter(int id, const Transmitter& tx) {
     tx_spo_->ChangeValue(wxString::Format("%.3f", tx.spo_us));
     tx_delay_->ChangeValue(wxString::Format("%.3f", tx.station_delay_us));
     tx_locked_->SetValue(tx.locked);
+    tx_delete_->Enable(true);
     notebook_->SetSelection(0);
     updating_ = false;
 }
@@ -173,6 +183,7 @@ void ParamEditor::ClearSelection() {
     tx_name_->ChangeValue("");
     tx_lat_->ChangeValue("");
     tx_lon_->ChangeValue("");
+    tx_delete_->Enable(false);
     updating_ = false;
 }
 
