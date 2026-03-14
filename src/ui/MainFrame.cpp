@@ -432,6 +432,7 @@ void MainFrame::OnFileNew(wxCommandEvent& /*evt*/) {
     next_tx_id_    = 1;
     placement_mode_ = false;
     net_config_->SetScenario(&scenario_);
+    param_editor_->LoadReceiver(scenario_.receiver);
     UpdateStatusBarMl();
     UpdateTitle();
     TriggerRecompute();
@@ -453,6 +454,7 @@ void MainFrame::OnFileOpen(wxCommandEvent& /*evt*/) {
         return;
     }
     net_config_->SetScenario(&scenario_);
+    param_editor_->LoadReceiver(scenario_.receiver);
     UpdateStatusBarMl();
     UpdateTitle();
     TriggerRecompute();
