@@ -7,6 +7,7 @@
 #include <string>
 #include <sstream>
 #include <fstream>
+#include <filesystem>
 
 using namespace bp;
 using namespace bp::almanac;
@@ -43,9 +44,14 @@ static Scenario make_zp_scenario() {
     return s;
 }
 
+// Cross-platform temp path helper
+static std::string temp_path(const std::string& filename) {
+    return (std::filesystem::temp_directory_path() / filename).string();
+}
+
 // Write a minimal GeoJSON with 2 zones to a temp file
 static std::string write_minimal_geojson() {
-    std::string path = "/tmp/test_zones.geojson";
+    std::string path = temp_path("test_zones.geojson");
     std::ofstream f(path);
     f << R"({
   "type": "FeatureCollection",
@@ -85,7 +91,7 @@ TEST_CASE("ZonePatterns: empty path returns no results") {
 TEST_CASE("ZonePatterns: nonexistent file returns no results") {
     auto s = make_zp_scenario();
     GridData gd;
-    auto res = compute_zone_patterns(s, gd, "/tmp/does_not_exist_xyz.geojson");
+    auto res = compute_zone_patterns(s, gd, temp_path("does_not_exist_xyz.geojson"));
     CHECK(res.empty());
 }
 

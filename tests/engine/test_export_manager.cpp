@@ -6,8 +6,18 @@
 #include <sstream>
 #include <string>
 #include <cstdio>
+#include <filesystem>
 
 using namespace bp;
+
+// Cross-platform temp directory
+static std::string temp_dir() {
+    return (std::filesystem::temp_directory_path()).string();
+}
+
+static std::string temp_path(const std::string& filename) {
+    return (std::filesystem::temp_directory_path() / filename).string();
+}
 
 // Build a minimal 2×2 GridArray for testing
 static GridArray make_test_layer() {
@@ -37,7 +47,7 @@ static GridArray make_test_layer() {
 
 TEST_CASE("ExportManager::export_csv: empty layer returns error") {
     GridArray g;
-    auto err = ExportManager::export_csv(g, "/tmp/bp_test_empty.csv");
+    auto err = ExportManager::export_csv(g, temp_path("bp_test_empty.csv"));
     CHECK_FALSE(err.empty());
 }
 
@@ -49,15 +59,16 @@ TEST_CASE("ExportManager::export_csv: bad path returns error") {
 
 TEST_CASE("ExportManager::export_csv: success returns empty string") {
     auto g   = make_test_layer();
-    auto err = ExportManager::export_csv(g, "/tmp/bp_test_layer.csv");
+    auto err = ExportManager::export_csv(g, temp_path("bp_test_layer.csv"));
     CHECK(err.empty());
 }
 
 TEST_CASE("ExportManager::export_csv: header contains layer name") {
     auto g = make_test_layer();
-    ExportManager::export_csv(g, "/tmp/bp_test_layer.csv");
+    auto path = temp_path("bp_test_layer.csv");
+    ExportManager::export_csv(g, path);
 
-    std::ifstream f("/tmp/bp_test_layer.csv");
+    std::ifstream f(path);
     std::string header;
     std::getline(f, header);
     CHECK(header.find("test_layer") != std::string::npos);
@@ -67,9 +78,10 @@ TEST_CASE("ExportManager::export_csv: header contains layer name") {
 
 TEST_CASE("ExportManager::export_csv: correct number of data rows") {
     auto g = make_test_layer();
-    ExportManager::export_csv(g, "/tmp/bp_test_layer.csv");
+    auto path = temp_path("bp_test_layer.csv");
+    ExportManager::export_csv(g, path);
 
-    std::ifstream f("/tmp/bp_test_layer.csv");
+    std::ifstream f(path);
     int lines = 0;
     std::string line;
     while (std::getline(f, line)) ++lines;
@@ -79,9 +91,10 @@ TEST_CASE("ExportManager::export_csv: correct number of data rows") {
 
 TEST_CASE("ExportManager::export_csv: values appear in output") {
     auto g = make_test_layer();
-    ExportManager::export_csv(g, "/tmp/bp_test_layer.csv");
+    auto path = temp_path("bp_test_layer.csv");
+    ExportManager::export_csv(g, path);
 
-    std::ifstream f("/tmp/bp_test_layer.csv");
+    std::ifstream f(path);
     std::string content((std::istreambuf_iterator<char>(f)),
                          std::istreambuf_iterator<char>());
     // The four values should appear somewhere in the file
@@ -93,9 +106,10 @@ TEST_CASE("ExportManager::export_csv: values appear in output") {
 
 TEST_CASE("ExportManager::export_csv: lat/lon values appear in output") {
     auto g = make_test_layer();
-    ExportManager::export_csv(g, "/tmp/bp_test_layer.csv");
+    auto path = temp_path("bp_test_layer.csv");
+    ExportManager::export_csv(g, path);
 
-    std::ifstream f("/tmp/bp_test_layer.csv");
+    std::ifstream f(path);
     std::string content((std::istreambuf_iterator<char>(f)),
                          std::istreambuf_iterator<char>());
     CHECK(content.find("51.") != std::string::npos);
@@ -105,9 +119,10 @@ TEST_CASE("ExportManager::export_csv: lat/lon values appear in output") {
 TEST_CASE("ExportManager::export_csv: empty layer_name uses 'value' column") {
     auto g = make_test_layer();
     g.layer_name = "";
-    ExportManager::export_csv(g, "/tmp/bp_test_noname.csv");
+    auto path = temp_path("bp_test_noname.csv");
+    ExportManager::export_csv(g, path);
 
-    std::ifstream f("/tmp/bp_test_noname.csv");
+    std::ifstream f(path);
     std::string header;
     std::getline(f, header);
     CHECK(header.find("value") != std::string::npos);
@@ -119,17 +134,18 @@ TEST_CASE("ExportManager::export_csv: empty layer_name uses 'value' column") {
 
 TEST_CASE("ExportManager::export_geotiff: empty layer returns error") {
     GridArray g;
-    auto err = ExportManager::export_geotiff(g, "/tmp/bp_test.tif");
+    auto err = ExportManager::export_geotiff(g, temp_path("bp_test.tif"));
     CHECK_FALSE(err.empty());
 }
 
 #if defined(BP_USE_GDAL) || defined(USE_GDAL)
 TEST_CASE("ExportManager::export_geotiff: valid layer writes file") {
     auto g   = make_test_layer();
-    auto err = ExportManager::export_geotiff(g, "/tmp/bp_test_layer.tif");
+    auto tpath = temp_path("bp_test_layer.tif");
+    auto err = ExportManager::export_geotiff(g, tpath);
     if (err.empty()) {
         // Check file was created
-        std::ifstream f("/tmp/bp_test_layer.tif", std::ios::binary);
+        std::ifstream f(tpath, std::ios::binary);
         CHECK(f.is_open());
     } else {
         // GDAL might not have GTiff driver — just ensure error is descriptive
@@ -144,7 +160,7 @@ TEST_CASE("ExportManager::export_geotiff: valid layer writes file") {
 
 TEST_CASE("ExportManager::export_png: empty layer returns error") {
     GridArray g;
-    auto err = ExportManager::export_png(g, "/tmp/bp_test.png");
+    auto err = ExportManager::export_png(g, temp_path("bp_test.png"));
     CHECK_FALSE(err.empty());
 }
 
@@ -169,7 +185,7 @@ static GridData make_test_grid_data() {
 TEST_CASE("ExportManager::export_html: bad path returns error") {
     GridData gd = make_test_grid_data();
     Scenario s;
-    auto err = ExportManager::export_html(gd, s, "/nonexistent/dir/report.html");
+    auto err = ExportManager::export_html(gd, s, "/nonexistent_dir_xyz/report.html");
     CHECK_FALSE(err.empty());
 }
 
@@ -181,8 +197,7 @@ TEST_CASE("ExportManager::export_html: produces valid HTML") {
     s.frequencies.f2_hz = 131250.0;
     s.frequencies.recompute();
 
-    std::string path = std::string(std::getenv("TMPDIR") ? std::getenv("TMPDIR") : "/tmp")
-                     + "/bp_test_report.html";
+    auto path = temp_path("bp_test_report.html");
     auto err = ExportManager::export_html(gd, s, path);
     REQUIRE(err.empty());
 
@@ -205,8 +220,7 @@ TEST_CASE("ExportManager::export_html: contains frequency info") {
     s.frequencies.f2_hz = 131250.0;
     s.frequencies.recompute();
 
-    std::string path = std::string(std::getenv("TMPDIR") ? std::getenv("TMPDIR") : "/tmp")
-                     + "/bp_test_freq.html";
+    auto path = temp_path("bp_test_freq.html");
     auto err = ExportManager::export_html(gd, s, path);
     REQUIRE(err.empty());
 
@@ -226,8 +240,7 @@ TEST_CASE("ExportManager::export_html: non-standard frequency triggers warning")
     s.frequencies.f2_hz = 137000.0;
     s.frequencies.recompute();
 
-    std::string path = std::string(std::getenv("TMPDIR") ? std::getenv("TMPDIR") : "/tmp")
-                     + "/bp_test_nonstd.html";
+    auto path = temp_path("bp_test_nonstd.html");
     auto err = ExportManager::export_html(gd, s, path);
     REQUIRE(err.empty());
 
