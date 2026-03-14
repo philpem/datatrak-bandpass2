@@ -34,9 +34,15 @@ struct GridData {
     uint64_t request_id = 0;
 };
 
+struct GridBuildResult {
+    std::vector<GridPoint> points;
+    int width  = 0;   // columns (longitude steps)
+    int height = 0;   // rows    (latitude steps)
+};
+
 // Build the grid point array from a GridDef.
 // Passes cancel through so the caller can abort a large grid build.
-std::vector<GridPoint> buildGrid(const GridDef& def,
-                                  const std::atomic<bool>& cancel);
+GridBuildResult buildGrid(const GridDef& def,
+                          const std::atomic<bool>& cancel);
 
 } // namespace bp

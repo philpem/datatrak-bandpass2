@@ -112,8 +112,8 @@ ComputeResult ComputeManager::RunPipeline(const Scenario& scenario,
 
     // Stage 0 – grid build
     PostProgress("Building grid", 0);
-    auto grid_pts = buildGrid(scenario.grid, cancel);
-    if (cancel.load() || grid_pts.empty()) return result;
+    auto grid = buildGrid(scenario.grid, cancel);
+    if (cancel.load() || grid.points.empty()) return result;
     PostProgress("Building grid", 5);
 
     auto data = std::make_shared<GridData>();
@@ -127,8 +127,10 @@ ComputeResult ComputeManager::RunPipeline(const Scenario& scenario,
     for (const char* name : LAYERS) {
         GridArray arr;
         arr.layer_name    = name;
-        arr.points        = grid_pts;
-        arr.values.assign(grid_pts.size(), 0.0);
+        arr.points        = grid.points;
+        arr.values.assign(grid.points.size(), 0.0);
+        arr.width         = grid.width;
+        arr.height        = grid.height;
         arr.lat_min       = scenario.grid.lat_min;
         arr.lat_max       = scenario.grid.lat_max;
         arr.lon_min       = scenario.grid.lon_min;

@@ -389,8 +389,8 @@ TEST_CASE("computeASF: absolute accuracy is finite and bounded for 4-TX network"
     // the VL fix actually converges rather than returning 9999 m everywhere).
     Scenario s = make_4tx_scenario();
     std::atomic<bool> cancel{false};
-    auto pts = buildGrid(s.grid, cancel);
-    REQUIRE(!pts.empty());
+    auto grid = buildGrid(s.grid, cancel);
+    REQUIRE(!grid.points.empty());
 
     GridData data;
     for (const char* name : {"groundwave","skywave","atm_noise","snr","sgr","gdr",
@@ -398,8 +398,9 @@ TEST_CASE("computeASF: absolute accuracy is finite and bounded for 4-TX network"
                               "absolute_accuracy","absolute_accuracy_corrected","confidence"}) {
         GridArray arr;
         arr.layer_name = name;
-        arr.points = pts;
-        arr.values.assign(pts.size(), 0.0);
+        arr.points = grid.points;
+        arr.values.assign(grid.points.size(), 0.0);
+        arr.width = grid.width; arr.height = grid.height;
         arr.lat_min = s.grid.lat_min; arr.lat_max = s.grid.lat_max;
         arr.lon_min = s.grid.lon_min; arr.lon_max = s.grid.lon_max;
         arr.resolution_km = s.grid.resolution_km;
@@ -425,8 +426,8 @@ TEST_CASE("computeASF: absolute accuracy is finite and bounded for 4-TX network"
 TEST_CASE("computeASF: confidence factor is in [0,1]") {
     Scenario s = make_4tx_scenario();
     std::atomic<bool> cancel{false};
-    auto pts = buildGrid(s.grid, cancel);
-    REQUIRE(!pts.empty());
+    auto grid = buildGrid(s.grid, cancel);
+    REQUIRE(!grid.points.empty());
 
     GridData data;
     for (const char* name : {"groundwave","skywave","atm_noise","snr","sgr","gdr",
@@ -434,8 +435,9 @@ TEST_CASE("computeASF: confidence factor is in [0,1]") {
                               "absolute_accuracy","absolute_accuracy_corrected","confidence"}) {
         GridArray arr;
         arr.layer_name = name;
-        arr.points = pts;
-        arr.values.assign(pts.size(), 0.0);
+        arr.points = grid.points;
+        arr.values.assign(grid.points.size(), 0.0);
+        arr.width = grid.width; arr.height = grid.height;
         arr.lat_min = s.grid.lat_min; arr.lat_max = s.grid.lat_max;
         arr.lon_min = s.grid.lon_min; arr.lon_max = s.grid.lon_max;
         arr.resolution_km = s.grid.resolution_km;
@@ -492,8 +494,8 @@ TEST_CASE("computeAtPoint: pseudorange uses Airy ellipsoid, differs from WGS84")
 TEST_CASE("computeASF: asf_gradient layer is non-zero inside network") {
     Scenario s = make_4tx_scenario();
     std::atomic<bool> cancel{false};
-    auto pts = buildGrid(s.grid, cancel);
-    REQUIRE(!pts.empty());
+    auto grid = buildGrid(s.grid, cancel);
+    REQUIRE(!grid.points.empty());
 
     GridData data;
     for (const char* name : {"groundwave","skywave","atm_noise","snr","sgr","gdr",
@@ -501,8 +503,9 @@ TEST_CASE("computeASF: asf_gradient layer is non-zero inside network") {
                               "absolute_accuracy","absolute_accuracy_corrected","confidence"}) {
         GridArray arr;
         arr.layer_name = name;
-        arr.points = pts;
-        arr.values.assign(pts.size(), 0.0);
+        arr.points = grid.points;
+        arr.values.assign(grid.points.size(), 0.0);
+        arr.width = grid.width; arr.height = grid.height;
         arr.lat_min = s.grid.lat_min; arr.lat_max = s.grid.lat_max;
         arr.lon_min = s.grid.lon_min; arr.lon_max = s.grid.lon_max;
         arr.resolution_km = s.grid.resolution_km;
