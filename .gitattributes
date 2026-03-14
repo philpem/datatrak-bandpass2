@@ -1,0 +1,5 @@
+# Expand git metadata into cmake/version.txt when running git archive
+# (or when GitHub generates a zip/tarball download).
+# The unexpanded literal "$Format:..." is the signal to cmake/version.cmake
+# that it should fall back to live git queries instead.
+cmake/version.txt export-subst
