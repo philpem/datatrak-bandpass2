@@ -45,7 +45,7 @@ created     = "2004-01-01"
 display_crs = "osgb_ng"
 [grid]
 lat_min       = 49.5
-lat_max       = 57.5
+lat_max       = 59.5
 lon_min       = -7.0
 lon_max       = 2.5
 resolution_km = 2.0
@@ -303,7 +303,7 @@ station_delay_us = 0.22
 # OSGB: 378398E, 772013N
 # Power: Datatrak nominal f1=40W, f2=20W (§4.6, p38); avg=30.0W
 # Delay: not measured; using average 0.22 μs
-# Note: Northernmost station; grid.lat_max set to 57.5 to provide margin.
+# Note: Northernmost UK Datatrak station.
 [[transmitters]]
 name             = "Stonehaven"
 lat              = 56.839071
