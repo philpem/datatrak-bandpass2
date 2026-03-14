@@ -112,6 +112,12 @@ void NetworkConfigPanel::OnOtherChanged(wxCommandEvent& /*evt*/) {
     debounce_.StartOnce(500);
 }
 
+void NetworkConfigPanel::FlushPending() {
+    if (!debounce_.IsRunning()) return;
+    debounce_.Stop();
+    SaveToScenario();
+}
+
 void NetworkConfigPanel::OnDebounceTimer(wxTimerEvent& /*evt*/) {
     if (!scenario_ || !on_changed) return;
     SaveToScenario();

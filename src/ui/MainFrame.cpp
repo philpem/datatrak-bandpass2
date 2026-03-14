@@ -480,6 +480,7 @@ void MainFrame::OnToolPlaceRx(wxCommandEvent& evt) {
 void MainFrame::OnToolCompute(wxCommandEvent& evt) {
     compute_enabled_ = evt.IsChecked();
     if (compute_enabled_) {
+        net_config_->FlushPending();
         TriggerRecompute();
     } else {
         // Clear all map layers when computation is disabled

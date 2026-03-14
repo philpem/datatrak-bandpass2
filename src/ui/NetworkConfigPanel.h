@@ -16,6 +16,11 @@ public:
     void SetScenario(Scenario* scenario);
     void SaveToScenario();
 
+    // Flush any pending debounce: saves to scenario_ immediately and stops the
+    // timer so it doesn't fire a second time.  Call before using scenario_
+    // in contexts (e.g. manual compute trigger) that bypass the debounce path.
+    void FlushPending();
+
     // Called after 500 ms debounce when any frequency/config field changes
     std::function<void(const Scenario&)> on_changed;
 
