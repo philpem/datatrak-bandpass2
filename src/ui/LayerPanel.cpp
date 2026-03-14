@@ -11,17 +11,14 @@ static const struct { const char* key; const char* label; } LAYER_DEFS[] = {
     { "groundwave",              "Groundwave field strength"               },
     { "snr",                     "SNR per transmitter"                     },
     { "gdr",                     "GDR"                                     },
-    { "whdop",                   "WHDOP (linear)"                          },
-    { "whdop_log",               "WHDOP (log scale)"                       },
-    { "repeatable",              "Repeatable accuracy (linear)"            },
-    { "repeatable_log",          "Repeatable accuracy (log scale)"         },
+    { "whdop_log",               "WHDOP"                                   },
+    { "repeatable_log",          "Repeatable accuracy"                     },
     { "asf",                     "ASF"                                     },
     { "absolute_accuracy",       "Absolute accuracy (linear)"              },
     { "absolute_accuracy_log",   "Absolute accuracy (log scale)"           },
     { "asf_gradient",            "ASF gradient / monitor siting (linear)"  },
     { "asf_gradient_log",        "ASF gradient / monitor siting (log)"     },
-    { "confidence",              "Confidence factor (linear)"              },
-    { "confidence_log",          "Confidence factor (log scale)"           },
+    { "confidence",              "Confidence factor"                       },
 };
 
 LayerPanel::LayerPanel(wxWindow* parent)
