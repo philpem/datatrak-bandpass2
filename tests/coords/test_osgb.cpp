@@ -3,10 +3,33 @@
 #include "coords/Osgb.h"
 #include "coords/NationalGrid.h"
 #include <cmath>
+#include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <string>
 #include <vector>
+
+// Cross-platform temp directory helper
+static std::string temp_dir() {
+#ifdef _WIN32
+    const char* tmp = std::getenv("TEMP");
+    if (!tmp) tmp = std::getenv("TMP");
+    if (!tmp) tmp = "C:\\Temp";
+    return tmp;
+#else
+    return "/tmp";
+#endif
+}
+
+static std::string temp_path(const std::string& filename) {
+    return temp_dir() +
+#ifdef _WIN32
+        "\\"
+#else
+        "/"
+#endif
+        + filename;
+}
 
 using namespace bp;
 using namespace Catch::Matchers;
@@ -37,7 +60,7 @@ TEST_CASE("OSGB36 LatLon to National Grid easting/northing", "[national_grid]") 
     REQUIRE(en.northing < 200000.0);
 }
 
-TEST_CASE("National Grid round-trip: latlon → EN → latlon", "[national_grid]") {
+TEST_CASE("National Grid round-trip: latlon -> EN -> latlon", "[national_grid]") {
     LatLon original = { 52.3247, -0.1848 };  // Huntingdon area (OSGB36 approx)
     EastNorth en  = national_grid::latlon_to_en(original);
     LatLon   back = national_grid::en_to_latlon(en);
@@ -130,12 +153,12 @@ TEST_CASE("OSTN15: not loaded by default", "[ostn15]") {
 }
 
 TEST_CASE("OSTN15: load_ostn15 returns false for missing file", "[ostn15]") {
-    bool ok = osgb::load_ostn15("/tmp/bandpass2_ostn15_nonexistent_xyz.dat");
+    bool ok = osgb::load_ostn15(temp_path("bandpass2_ostn15_nonexistent_xyz.dat"));
     REQUIRE_FALSE(ok);
 }
 
 TEST_CASE("OSTN15: load_ostn15 loads synthetic grid", "[ostn15]") {
-    std::string path = "/tmp/bandpass2_ostn15_test_synth.dat";
+    std::string path = temp_path("bandpass2_ostn15_test_synth.dat");
     write_synthetic_ostn15(path, 100.0f, 200.0f);
     bool ok = osgb::load_ostn15(path);
     REQUIRE(ok);
@@ -144,22 +167,22 @@ TEST_CASE("OSTN15: load_ostn15 loads synthetic grid", "[ostn15]") {
 
 TEST_CASE("OSTN15: wgs84_to_osgb36_ostn15 applies shift from synthetic grid", "[ostn15]") {
     // Load a uniform-shift grid: SE=100 m, SN=200 m everywhere.
-    std::string path = "/tmp/bandpass2_ostn15_test_shift.dat";
+    std::string path = temp_path("bandpass2_ostn15_test_shift.dat");
     write_synthetic_ostn15(path, 100.0f, 200.0f);
     REQUIRE(osgb::load_ostn15(path));
 
-    // Use a point well inside the tiny 3×3 grid (covers E 0-2000, N 0-2000).
-    // national_grid::latlon_to_en applied to lat≈0, lon≈0 gives E≈TQ area...
+    // Use a point well inside the tiny 3x3 grid (covers E 0-2000, N 0-2000).
+    // national_grid::latlon_to_en applied to lat~0, lon~0 gives E~TQ area...
     // Instead, test at a point whose provisional E/N falls inside the grid.
     // The provisional E/N = latlon_to_en(wgs84_pt).
-    // Pick a WGS84 point that we know maps to E≈1000, N≈1000 provisionally.
+    // Pick a WGS84 point that we know maps to E~1000, N~1000 provisionally.
     // en_to_latlon({1000, 1000}) gives approx lat 49.008, lon -1.9948 (OSGB)
     LatLon approx_wgs84 = national_grid::en_to_latlon({1000.0, 1000.0});
 
     LatLon result = osgb::wgs84_to_osgb36_ostn15(approx_wgs84);
 
-    // With SE=100, SN=200 applied to provisional E/N ≈ (1000, 1000),
-    // final E ≈ 1100, final N ≈ 1200.
+    // With SE=100, SN=200 applied to provisional E/N ~ (1000, 1000),
+    // final E ~ 1100, final N ~ 1200.
     // Converting back: result should differ from Helmert result.
     LatLon helmert = osgb::wgs84_to_osgb36(approx_wgs84);
 
@@ -167,21 +190,21 @@ TEST_CASE("OSTN15: wgs84_to_osgb36_ostn15 applies shift from synthetic grid", "[
     double dlat = result.lat - helmert.lat;
     double dlon = result.lon - helmert.lon;
     double diff_deg = std::sqrt(dlat*dlat + dlon*dlon);
-    // 100-200 m shift at ~50°N → roughly 0.001-0.002° difference
+    // 100-200 m shift at ~50N -> roughly 0.001-0.002 deg difference
     REQUIRE(diff_deg > 0.0005);
 }
 
 TEST_CASE("OSTN15: osgb36_to_wgs84_ostn15 round-trip with synthetic grid", "[ostn15]") {
     // SE=100, SN=200 grid must already be loaded from previous test, or reload.
-    std::string path = "/tmp/bandpass2_ostn15_test_rt.dat";
+    std::string path = temp_path("bandpass2_ostn15_test_rt.dat");
     write_synthetic_ostn15(path, 100.0f, 200.0f);
     REQUIRE(osgb::load_ostn15(path));
 
     // Start from a known OSGB36 lat/lon inside the synthetic grid coverage.
-    // en_to_latlon({1100, 1200}) → OSGB36 lat/lon
+    // en_to_latlon({1100, 1200}) -> OSGB36 lat/lon
     LatLon osgb36 = national_grid::en_to_latlon({1100.0, 1200.0});
 
-    // Forward OSGB36→WGS84 should subtract the shifts.
+    // Forward OSGB36->WGS84 should subtract the shifts.
     // Provisional ETRS89 E = 1100 - 100 = 1000, N = 1200 - 200 = 1000.
     LatLon wgs84 = osgb::osgb36_to_wgs84_ostn15(osgb36);
 
@@ -195,7 +218,7 @@ TEST_CASE("OSTN15: osgb36_to_wgs84_ostn15 round-trip with synthetic grid", "[ost
 
 TEST_CASE("OSTN15: falls back to Helmert for points outside grid coverage", "[ostn15]") {
     // Load the tiny 3x3 synthetic grid (covers E 0-2000, N 0-2000 only).
-    std::string path = "/tmp/bandpass2_ostn15_test_fallback.dat";
+    std::string path = temp_path("bandpass2_ostn15_test_fallback.dat");
     write_synthetic_ostn15(path, 50.0f, 50.0f);
     REQUIRE(osgb::load_ostn15(path));
 
