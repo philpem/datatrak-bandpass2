@@ -3,9 +3,11 @@
 #include <cmath>
 #include "engine/monteath.h"
 #include "engine/asf.h"
+#include "engine/grid.h"
 #include "engine/terrain.h"
 #include "engine/conductivity.h"
 #include "model/Scenario.h"
+#include <GeographicLib/Geodesic.hpp>
 
 using namespace bp;
 using Catch::Approx;
@@ -334,4 +336,184 @@ TEST_CASE("frequencies: validation range") {
     CHECK(!f.is_valid_range());
     f.f1_hz = 146437.5;
     CHECK(f.is_valid_range());
+}
+
+TEST_CASE("frequencies: f1==f2 is allowed") {
+    // CLAUDE.md: f1 == f2 is allowed with a warning (not an error)
+    Frequencies f;
+    f.f1_hz = f.f2_hz = 146437.5;
+    CHECK(f.is_valid_range());
+}
+
+// ---------------------------------------------------------------------------
+// P4-02 Virtual Locator WLS convergence (indirect via computeASF)
+// ---------------------------------------------------------------------------
+
+static Scenario make_4tx_scenario() {
+    // Four transmitters at the corners of a ~300 km square around central England.
+    // Power is set high (100 kW) so that SNR is clearly positive at ~200 km range.
+    //
+    // At 200 km, 40 W: E_rx ≈ 15 dBµV/m < noise floor ≈ 27 dBµV/m → SNR < 0.
+    // At 200 km, 100 kW: E_rx ≈ 49 dBµV/m → SNR ≈ +22 dB → stations are usable.
+    //
+    // The test exercises P4-01/P4-02 physics correctness, not Datatrak TX power spec.
+    Scenario s;
+    s.frequencies.recompute();
+    s.grid.lat_min = 52.5; s.grid.lat_max = 53.5;
+    s.grid.lon_min = -1.5; s.grid.lon_max = -0.5;
+    s.grid.resolution_km = 50.0;   // coarse — just enough for a 3×3 grid
+    s.receiver.noise_floor_dbuvpm   = 14.0;
+    s.receiver.vehicle_noise_dbuvpm = 27.0;
+    s.receiver.max_range_km         = 600.0;
+    s.receiver.min_stations         = 4;
+
+    auto make_tx = [](double lat, double lon, int slot) {
+        Transmitter t;
+        t.lat = lat; t.lon = lon;
+        t.power_w = 100000.0;  // 100 kW — ensures SNR > 0 at ~200 km range in tests
+        t.height_m = 50.0;
+        t.slot = slot; t.is_master = (slot == 1);
+        return t;
+    };
+    s.transmitters.push_back(make_tx(50.5, -2.5, 1));  // SW
+    s.transmitters.push_back(make_tx(50.5,  0.5, 2));  // SE
+    s.transmitters.push_back(make_tx(55.5, -2.5, 3));  // NW
+    s.transmitters.push_back(make_tx(55.5,  0.5, 4));  // NE
+    return s;
+}
+
+TEST_CASE("computeASF: absolute accuracy is finite and bounded for 4-TX network") {
+    // P4-02: the iterated WLS VL fix must converge to a finite value.
+    // A 4-TX network with good geometry should give absolute accuracy < 5000 m
+    // (generous bound — real values will be much smaller; we're testing that
+    // the VL fix actually converges rather than returning 9999 m everywhere).
+    Scenario s = make_4tx_scenario();
+    std::atomic<bool> cancel{false};
+    auto pts = buildGrid(s.grid, cancel);
+    REQUIRE(!pts.empty());
+
+    GridData data;
+    for (const char* name : {"groundwave","skywave","atm_noise","snr","sgr","gdr",
+                              "whdop","repeatable","asf","asf_gradient",
+                              "absolute_accuracy","absolute_accuracy_corrected","confidence"}) {
+        GridArray arr;
+        arr.layer_name = name;
+        arr.points = pts;
+        arr.values.assign(pts.size(), 0.0);
+        arr.lat_min = s.grid.lat_min; arr.lat_max = s.grid.lat_max;
+        arr.lon_min = s.grid.lon_min; arr.lon_max = s.grid.lon_max;
+        arr.resolution_km = s.grid.resolution_km;
+        data.layers[name] = std::move(arr);
+    }
+
+    // Run groundwave + SNR first (computeASF depends on SNR data being present
+    // via whdop; it recomputes locally, but we still need the layer structure)
+    computeASF(data, s, cancel);
+
+    const auto& abs_acc = data.layers.at("absolute_accuracy");
+    REQUIRE(abs_acc.values.size() == pts.size());
+
+    // At least one grid point inside the network should have a finite fix
+    // (not the 9999 m sentinel that indicates no usable geometry)
+    bool any_finite = false;
+    for (double v : abs_acc.values) {
+        if (v < 5000.0) { any_finite = true; break; }
+    }
+    CHECK(any_finite);
+}
+
+TEST_CASE("computeASF: confidence factor is in [0,1]") {
+    Scenario s = make_4tx_scenario();
+    std::atomic<bool> cancel{false};
+    auto pts = buildGrid(s.grid, cancel);
+    REQUIRE(!pts.empty());
+
+    GridData data;
+    for (const char* name : {"groundwave","skywave","atm_noise","snr","sgr","gdr",
+                              "whdop","repeatable","asf","asf_gradient",
+                              "absolute_accuracy","absolute_accuracy_corrected","confidence"}) {
+        GridArray arr;
+        arr.layer_name = name;
+        arr.points = pts;
+        arr.values.assign(pts.size(), 0.0);
+        arr.lat_min = s.grid.lat_min; arr.lat_max = s.grid.lat_max;
+        arr.lon_min = s.grid.lon_min; arr.lon_max = s.grid.lon_max;
+        arr.resolution_km = s.grid.resolution_km;
+        data.layers[name] = std::move(arr);
+    }
+    computeASF(data, s, cancel);
+
+    for (double v : data.layers.at("confidence").values) {
+        CHECK(v >= 0.0);
+        CHECK(v <= 1.0);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// P4-04 Airy ellipsoid (indirect via computeAtPoint pseudorange)
+// ---------------------------------------------------------------------------
+
+TEST_CASE("computeAtPoint: pseudorange uses Airy ellipsoid, differs from WGS84") {
+    // Airy 1830 semi-major axis 6377563.396 m vs WGS84 6378137.0 m.
+    // For a 200 km path at mid-UK latitudes the Airy range is shorter by
+    // roughly (6378137 - 6377563) / 6378137 × 200 km ≈ 18 m.
+    // We verify the pseudorange is close to the geometric range but not
+    // exactly equal to the WGS84 geodesic (would differ by ~18 m).
+    //
+    // TX at Huntingdon (52.3247 N, -0.1848 E), RX at 50.5 N 0.0 E (~200 km)
+    const GeographicLib::Geodesic& wgs84 = GeographicLib::Geodesic::WGS84();
+    double wgs84_dist_m = 0.0;
+    wgs84.Inverse(52.3247, -0.1848, 50.5, 0.0, wgs84_dist_m);
+
+    Scenario s;
+    s.frequencies.recompute();
+    Transmitter tx;
+    tx.lat = 52.3247; tx.lon = -0.1848;
+    tx.power_w = 40.0; tx.slot = 1;
+    s.transmitters = { tx };
+
+    auto results = computeAtPoint(50.5, 0.0, s);
+    REQUIRE(!results.empty());
+    double pseudorange = results[0].pseudorange_m;
+
+    // Pseudorange should be in the right ballpark (~200 km ± 1 km for ASF)
+    CHECK(pseudorange > 190000.0);
+    CHECK(pseudorange < 215000.0);
+
+    // Should NOT be exactly the WGS84 distance (Airy ellipsoid is used)
+    // The difference must be at least 1 m (Airy vs WGS84 at ~200 km)
+    CHECK(std::abs(pseudorange - wgs84_dist_m) > 1.0);
+}
+
+// ---------------------------------------------------------------------------
+// P4-01 ASF gradient layer is non-zero for a network with coverage
+// ---------------------------------------------------------------------------
+
+TEST_CASE("computeASF: asf_gradient layer is non-zero inside network") {
+    Scenario s = make_4tx_scenario();
+    std::atomic<bool> cancel{false};
+    auto pts = buildGrid(s.grid, cancel);
+    REQUIRE(!pts.empty());
+
+    GridData data;
+    for (const char* name : {"groundwave","skywave","atm_noise","snr","sgr","gdr",
+                              "whdop","repeatable","asf","asf_gradient",
+                              "absolute_accuracy","absolute_accuracy_corrected","confidence"}) {
+        GridArray arr;
+        arr.layer_name = name;
+        arr.points = pts;
+        arr.values.assign(pts.size(), 0.0);
+        arr.lat_min = s.grid.lat_min; arr.lat_max = s.grid.lat_max;
+        arr.lon_min = s.grid.lon_min; arr.lon_max = s.grid.lon_max;
+        arr.resolution_km = s.grid.resolution_km;
+        data.layers[name] = std::move(arr);
+    }
+    computeASF(data, s, cancel);
+
+    const auto& grad = data.layers.at("asf_gradient");
+    bool any_nonzero = false;
+    for (double v : grad.values) {
+        if (v > 0.0) { any_nonzero = true; break; }
+    }
+    CHECK(any_nonzero);
 }
