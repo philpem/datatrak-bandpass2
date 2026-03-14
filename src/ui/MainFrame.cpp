@@ -618,11 +618,34 @@ void MainFrame::OnViewParamEditor(wxCommandEvent& /*evt*/) {
 void MainFrame::OnHelpAbout(wxCommandEvent& /*evt*/) {
     wxAboutDialogInfo info;
     info.SetName("BANDPASS II");
+    info.SetVersion("0.5.0");
+    info.SetCopyright("(C) 2024-2025 The BANDPASS II Authors");
     info.SetDescription(
-        "Datatrak LF radio navigation planning tool.\n"
-        "Models coverage and positioning accuracy using\n"
-        "Williams (2004) propagation physics.");
-    info.SetLicence("GPLv3");
+        "Coverage and positioning accuracy planner for\n"
+        "Datatrak-type LF radio navigation networks.\n"
+        "\n"
+        "Physics model based on:\n"
+        "  Williams (2004), \"Prediction of the Coverage and\n"
+        "  Performance of the Datatrak Low-Frequency Tracking\n"
+        "  System\", University of Wales Bangor PhD thesis.\n"
+        "\n"
+        "Propagation stages: groundwave (ITU P.368 + Monteath),\n"
+        "skywave (ITU P.684), noise (ITU P.372), SNR/GDR, WHDOP,\n"
+        "repeatable accuracy, ASF, and absolute accuracy.");
+    info.SetLicence(
+        "BANDPASS II is free software: you can redistribute it\n"
+        "and/or modify it under the terms of the GNU General\n"
+        "Public License as published by the Free Software\n"
+        "Foundation, either version 3 of the License, or\n"
+        "(at your option) any later version.\n"
+        "\n"
+        "This program is distributed in the hope that it will\n"
+        "be useful, but WITHOUT ANY WARRANTY; without even the\n"
+        "implied warranty of MERCHANTABILITY or FITNESS FOR A\n"
+        "PARTICULAR PURPOSE. See the GNU General Public License\n"
+        "for more details.");
+    info.AddDeveloper("The BANDPASS II Authors");
+    info.AddDocWriter("The BANDPASS II Authors");
     wxAboutBox(info, this);
 }
 
