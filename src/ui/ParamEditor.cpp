@@ -1,4 +1,6 @@
 #include "ParamEditor.h"
+#include "UiConstants.h"
+#include <string>
 #include <wx/sizer.h>
 #include <wx/stattext.h>
 #include <GeographicLib/Geodesic.hpp>
@@ -56,7 +58,7 @@ void ParamEditor::BuildTransmitterPage(wxWindow* page) {
     gs->Add(new wxStaticText(page, wxID_ANY, "Slot"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
     tx_slot_ = new wxSpinCtrl(page, wxID_ANY, "1", wxDefaultPosition, wxDefaultSize,
                                wxSP_ARROW_KEYS, 1, 24, 1);
-    tx_slot_->SetToolTip("Slot number (1\xe2\x80\x93" "24). Each slot is one transmission per cycle. "
+    tx_slot_->SetToolTip("Slot number (1-24). Each slot is one transmission per cycle. "
                          "To model a physical site that transmits on multiple slots, "
                          "add a separate transmitter entry at the same location for each slot.");
     gs->Add(tx_slot_, 1, wxEXPAND | wxBOTTOM, 4);
@@ -76,23 +78,25 @@ void ParamEditor::BuildTransmitterPage(wxWindow* page) {
     gs->Add(tx_mslot_choice_, 1, wxEXPAND | wxBOTTOM, 4);
 
     // SPO row: text field + estimate button
-    gs->Add(new wxStaticText(page, wxID_ANY, "SPO (\xce\xbcs)"),
+    gs->Add(new wxStaticText(page, wxID_ANY, wxString::FromUTF8(
+                std::string("SPO (") + bp::ui::MICROSEC + ")")),
             0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
     {
         auto* row = new wxBoxSizer(wxHORIZONTAL);
         tx_spo_ = new wxTextCtrl(page, wxID_ANY);
-        tx_spo_->SetToolTip(
-            "System Phase Offset (\xce\xbcs): fine phase alignment applied at the "
+        tx_spo_->SetToolTip(wxString::FromUTF8(
+            (std::string("System Phase Offset (") + bp::ui::MICROSEC +
+            "): fine phase alignment applied at the "
             "transmitter to correct the slot timing relative to the master.\n\n"
             "During commissioning this is measured and trimmed. For initial planning "
-            "click \xe2\x80\x9c" "Estimate\xe2\x80\x9d to compute the SPO that makes the received "
+            "click \"Estimate\" to compute the SPO that makes the received "
             "phase from this slave an integer number of lanes at the master site "
-            "(free-space, ignoring ASF).");
+            "(free-space, ignoring ASF).").c_str()));
         btn_spo_calc_ = new wxButton(page, wxID_ANY, "Estimate",
                                      wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
         btn_spo_calc_->SetToolTip(
             "Estimate SPO from geometry: computes the value that would make the "
-            "phase received from this slave at the master transmitter\xe2\x80\x99s position "
+            "phase received from this slave at the master transmitter's position "
             "a round number of lanes (free-space propagation, current station delay "
             "included).\n\nThis is an initial planning estimate; the actual SPO is "
             "calibrated on-site during commissioning.");
@@ -101,7 +105,7 @@ void ParamEditor::BuildTransmitterPage(wxWindow* page) {
         gs->Add(row, 1, wxEXPAND | wxBOTTOM, 4);
     }
 
-    tx_delay_ = MakeField(page, "Station delay (\xce\xbcs)", gs);
+    tx_delay_ = MakeField(page, (std::string("Station delay (") + bp::ui::MICROSEC + ")").c_str(), gs);
     tx_delay_->SetToolTip("Propagation delay of the reference signal from the master "
                           "transmitter to this station (synchronisation cable/radio link).");
 
@@ -160,10 +164,10 @@ void ParamEditor::BuildReceiverPage(wxWindow* page) {
     gs->Add(rx_mode_, 1, wxEXPAND | wxBOTTOM, 4);
     rx_mode_->Bind(wxEVT_CHOICE, &ParamEditor::OnRxMode, this);
 
-    rx_noise_   = MakeField(page, "Noise floor (dB\xc2\xb5V/m)",   gs);
+    rx_noise_   = MakeField(page, (std::string("Noise floor (") + bp::ui::DBUVM + ")").c_str(), gs);
     rx_noise_->SetToolTip("Minimum detectable signal; sets the receive sensitivity "
                           "floor (ITU-R P.372 atmospheric noise at this site).");
-    rx_vnoise_  = MakeField(page, "Vehicle noise (dB\xc2\xb5V/m)", gs);
+    rx_vnoise_  = MakeField(page, (std::string("Vehicle noise (") + bp::ui::DBUVM + ")").c_str(), gs);
     rx_vnoise_->SetToolTip("In-vehicle conducted/radiated noise floor. Added (power "
                            "sum) to atmospheric noise to give total receiver noise.");
     rx_range_   = MakeField(page, "Max range (km)",         gs);
@@ -313,7 +317,7 @@ void ParamEditor::RebuildMasterSlotChoices(int current_id) {
     for (int i = 0; i < (int)tx_list_.size(); ++i) {
         if (i == current_id) continue;  // don't offer self as master
         const auto& t = tx_list_[i];
-        wxString label = wxString::Format("Slot %d \xe2\x80\x94 %s",
+        wxString label = wxString::Format("Slot %d - %s",
                                           t.slot, wxString::FromUTF8(t.name));
         tx_mslot_choice_->Append(label);
         master_slot_values_.push_back(t.slot);

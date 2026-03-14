@@ -1,4 +1,5 @@
 #include "ReceiverPanel.h"
+#include "UiConstants.h"
 #include <wx/sizer.h>
 #include <wx/stattext.h>
 
@@ -16,9 +17,9 @@ ReceiverPanel::ReceiverPanel(wxWindow* parent)
                            wxLC_REPORT | wxLC_SINGLE_SEL);
     list_->AppendColumn("Slot",   wxLIST_FORMAT_RIGHT,  40);
     list_->AppendColumn("F1+",    wxLIST_FORMAT_RIGHT,  60);
-    list_->AppendColumn(wxString::FromUTF8("F1\xe2\x88\x92"), wxLIST_FORMAT_RIGHT,  60);
+    list_->AppendColumn("F1-",    wxLIST_FORMAT_RIGHT,  60);
     list_->AppendColumn("F2+",    wxLIST_FORMAT_RIGHT,  60);
-    list_->AppendColumn(wxString::FromUTF8("F2\xe2\x88\x92"), wxLIST_FORMAT_RIGHT,  60);
+    list_->AppendColumn("F2-",    wxLIST_FORMAT_RIGHT,  60);
     list_->AppendColumn("SNR dB", wxLIST_FORMAT_RIGHT,  65);
     list_->AppendColumn("GDR dB", wxLIST_FORMAT_RIGHT,  65);
     sizer->Add(list_, 1, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, 6);
@@ -28,8 +29,8 @@ ReceiverPanel::ReceiverPanel(wxWindow* parent)
     bottom_row->Add(new wxStaticText(this, wxID_ANY, "Units:"),
                     0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
     units_choice_ = new wxChoice(this, wxID_ANY);
-    units_choice_->Append(wxString::FromUTF8("Millilanes (0\xe2\x80\x93" "999)"));
-    units_choice_->Append(wxString::FromUTF8("Degrees (0.0\xc2\xb0\xe2\x80\x93" "360.0\xc2\xb0)"));
+    units_choice_->Append("Millilanes (0-999)");
+    units_choice_->Append(wxString::FromUTF8(u8"Degrees (0.0\u00B0-360.0\u00B0)"));
     units_choice_->SetSelection(0);
     units_choice_->Bind(wxEVT_CHOICE, &ReceiverPanel::OnUnitsChanged, this);
     bottom_row->Add(units_choice_, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10);
@@ -53,9 +54,11 @@ void ReceiverPanel::RefreshTable() {
     wxListItem col;
     col.SetMask(wxLIST_MASK_TEXT);
     for (int c = 1; c <= 4; ++c) {
-        static const char* ml_names[] = { "F1+", "F1\xe2\x88\x92", "F2+", "F2\xe2\x88\x92" };
-        static const char* deg_names[] = { "F1+ \xc2\xb0", "F1\xe2\x88\x92 \xc2\xb0",
-                                            "F2+ \xc2\xb0", "F2\xe2\x88\x92 \xc2\xb0" };
+        static const char* ml_names[] = { "F1+", "F1-", "F2+", "F2-" };
+        static const char* deg_names[] = {
+            u8"F1+ \u00B0", u8"F1- \u00B0",
+            u8"F2+ \u00B0", u8"F2- \u00B0"
+        };
         col.SetText(wxString::FromUTF8(degrees ? deg_names[c-1] : ml_names[c-1]));
         list_->SetColumn(c, col);
         list_->SetColumnWidth(c, degrees ? 70 : 60);
