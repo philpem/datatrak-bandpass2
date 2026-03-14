@@ -88,6 +88,9 @@ private:
     // Grid / datum status
     wxStaticText* ostn15_label_         = nullptr;
 
+    // Propagation model
+    wxChoice*     prop_model_      = nullptr;
+
     wxTimer      debounce_;
     Scenario*    scenario_  = nullptr;
 

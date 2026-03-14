@@ -95,6 +95,12 @@ struct Scenario {
     std::string   terrain_file;
 
 
+    // Groundwave propagation model selection.
+    // Homogeneous: single midpoint conductivity, fast (ITU P.368 only).
+    // Millington:  mixed-path forward/backward averaging, accurate for
+    //              land/sea transitions but ~20x slower per grid point.
+    enum class PropagationModel { Homogeneous, Millington };
+    PropagationModel propagation_model = PropagationModel::Millington;
 };
 
 } // namespace bp
