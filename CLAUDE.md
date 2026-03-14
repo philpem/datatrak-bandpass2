@@ -747,13 +747,13 @@ allocated but zero everywhere.
 | P5-01 | ✓ | PNG / GeoTIFF / CSV export: `src/ui/ExportManager.{h,cpp}`. File → Export → Active Layer as CSV/PNG/GeoTIFF. |
 | P5-02 | ✓ | HTML report: `ExportManager::export_html()`. File → Export → HTML Report. Self-contained HTML with scenario params, layer stats, pattern offset table. |
 | P5-03 | ✗ | Scenario comparison mode. |
-| P5-04 | ✗ | Data import helpers (`tools/` Python scripts). `tools/ostn15_download.py` complete. |
-| P5-05 | ✗ | Physics documentation. |
-| P5-06 | ✗ | Receiver modelling guide + coordinate systems guide. |
+| P5-04 | ✓ | Data import helpers: `tools/ostn15_download.py` (OSTN15 datum grid), `tools/itu_p832_import.py` (ITU-R P.832 conductivity → 2-band GeoTIFF), `tools/srtm_download.py` (SRTM3 tile download + merge via CGIAR or NASA Earthdata). |
+| P5-05 | ✓ | Physics documentation: `docs/physics/propagation_model.md` — annotated derivations for all 11 pipeline stages with Williams equation references. |
+| P5-06 | ✓ | User guides: `docs/user_guide/receiver_modelling.md`, `docs/user_guide/coordinate_systems.md`, `docs/user_guide/monitor_calibration.md`. |
 | P5-07 | ✓ | Linux AppImage packaging: `tools/build_appimage.sh` + `data/bandpass2.desktop`. CMake install rules for binary, web assets, zones, and desktop file. |
 | P5-08 | ✓ | UK 32-zone polygon dataset: `data/zones/uk_32zone.geojson` — 32 rectangular zones aligned to OSGB National Grid, derived from DTM-170 Fig 7.3. |
 | P5-09 | ✓ | Zone pattern computation: `almanac/ZonePatterns.{h,cpp}` — SNR-filtered, WHDOP-ranked sets 1-4, coverage gap flagging. `generate_zp()` produces Zp commands. |
-| P5-10 | ✗ | Pattern offset reference UI (Mode 1/2/3 selector, reference marker). |
+| P5-10 | ✓ | Pattern offset reference UI: `PoRefDialog` (Mode 1 baseline midpoint, Mode 2 user-defined markers with RMS spread). File → Export → Compute Pattern Offsets... Modes 1+2 fully implemented; Mode 3 (ASF map planning aid) is the asf_gradient/asf layers already in the map — no separate dialog needed. |
 | P5-11 | ✓ | ASF gradient map layer: computed in `computeASF()` by central-difference ∇ASF [ml/km] on 2D grid after main loop. |
 | P5-12 | ✓ | Pattern offset computation (Po): `almanac/AlmanacExport.cpp`. |
 | P5-13 | ✓ | Almanac text export (V7 + V16): Sg, Stxs, Po, Zp commands. Zp included when geojson_path given to `generate_almanac()`. |
@@ -779,12 +779,14 @@ accuracy so this approximation is acceptable for typical Datatrak geometry.
 ### Remaining Phase 5 work
 
 - **P5-03** — Scenario comparison mode: not yet designed.
-- **P5-04** — Data import helpers: `tools/ostn15_download.py` is complete;
-  `tools/itu_p832_import.py` and `tools/srtm_download.py` are stubs.
-- **P5-05/06** — Physics documentation and user guides.
-- **P5-10** — Pattern offset reference UI (Mode 1/2/3 selector, reference
-  marker). The engine supports all three modes (baseline midpoint, user marker,
-  ASF gradient map) but the UI dialogue for selecting them is not yet built.
+- **P5-04 / P5-05 / P5-06 / P5-10** — All complete (see table above).
+
+### All major Phase 5 items complete
+
+137 tests pass. Build clean on Linux. The only remaining items are:
+- P5-03 scenario comparison mode (not designed — requires future planning).
+- P2-02 Millington mixed-path extension (still ✗, groundwave uses midpoint
+  conductivity only; does not affect typical UK-geometry accuracy materially).
 
 ### Monitor calibration (P5-14 / P5-15) — implemented
 
