@@ -141,7 +141,9 @@ ComputeResult ComputeManager::RunPipeline(const Scenario& scenario,
 
     // Stage 1 – Groundwave (ITU P.368)
     PostProgress("Groundwave (P.368)", 5);
-    computeGroundwave(*data, scenario, cancel);
+    computeGroundwave(*data, scenario, cancel, [this](int pct) {
+        PostProgress("Groundwave (P.368)", 5 + pct * 15 / 100);
+    });
     if (cancel.load()) return result;
     PostProgress("Groundwave (P.368)", 20);
 
@@ -171,7 +173,9 @@ ComputeResult ComputeManager::RunPipeline(const Scenario& scenario,
 
     // Stages 10–11 – ASF, absolute accuracy, confidence
     PostProgress("ASF / accuracy", 75);
-    computeASF(*data, scenario, cancel);
+    computeASF(*data, scenario, cancel, [this](int pct) {
+        PostProgress("ASF / accuracy", 75 + pct * 20 / 100);
+    });
     if (cancel.load()) return result;
     PostProgress("ASF / accuracy", 95);
 

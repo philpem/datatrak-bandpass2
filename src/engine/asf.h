@@ -6,6 +6,7 @@
 #include "../model/Scenario.h"
 #include "../model/SlotPhaseResult.h"
 #include <atomic>
+#include <functional>
 #include <vector>
 
 namespace bp {
@@ -30,8 +31,12 @@ namespace bp {
 // ---------------------------------------------------------------------------
 
 // Compute ASF and absolute accuracy GridArrays.
+//
+// progress_fn, if provided, is called with a value 0-100 as work progresses.
+// It is throttled to at most one call per percent to avoid event flooding.
 void computeASF(GridData& data, const Scenario& scenario,
-                const std::atomic<bool>& cancel);
+                const std::atomic<bool>& cancel,
+                const std::function<void(int)>& progress_fn = {});
 
 // Compute per-slot phase at a single point (virtual receiver).
 // Williams Eq. 11.1 — used for the ReceiverPanel and simulator export.
