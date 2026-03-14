@@ -105,7 +105,8 @@ double GdalConductivityMap::Impl::read_bilinear(int band_idx, double px, double 
         yi = std::max(0, std::min(raster_y - 1, yi));
         float val = 0.0f;
         GDALRasterBand* rb = ds->GetRasterBand(band_idx);
-        rb->RasterIO(GF_Read, xi, yi, 1, 1, &val, 1, 1, GDT_Float32, 0, 0);
+        if (rb->RasterIO(GF_Read, xi, yi, 1, 1, &val, 1, 1, GDT_Float32, 0, 0) != CE_None)
+            return (band_idx == 1) ? 0.005 : 15.0;  // read error → land default
         // Replace nodata with land default
         int ok = 0;
         double nd = rb->GetNoDataValue(&ok);

@@ -106,7 +106,8 @@ static double bilinear_read(GDALDataset* ds, const double* inv,
         xi = std::max(0, std::min(rx-1, xi));
         yi = std::max(0, std::min(ry-1, yi));
         float v = 0.f;
-        rb->RasterIO(GF_Read, xi, yi, 1, 1, &v, 1, 1, GDT_Float32, 0, 0);
+        if (rb->RasterIO(GF_Read, xi, yi, 1, 1, &v, 1, 1, GDT_Float32, 0, 0) != CE_None)
+            return 0.0;  // read error → treat as sea level
         if (ok && std::abs((double)v - nodata) < 0.5) return 0.0;
         return (double)v;
     };
