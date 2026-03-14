@@ -149,6 +149,45 @@ The **Coverage** layer (binary 0/1) shows the area satisfying all criteria.
 
 ---
 
+## Interpreting the WHDOP map
+
+### Why WHDOP ≈ 2.0 across most of the coverage area
+
+A value near **2.0 is the theoretical ideal** for a well-designed four-transmitter
+network, not a sign that anything is wrong.
+
+The WHDOP formula weights each station's directional contribution by its linear
+SNR.  When all four transmitters provide similar SNR at a given point (which is
+typical across the interior of the UK Datatrak coverage area), the weights are
+roughly equal.  With four stations distributed around the compass at equal
+weights, the weight matrix `AWAᵀ ≈ ½I`, giving
+`WHDOP = √(trace(2I)) = √4 = 2.0`.
+
+WHDOP would rise above 2.0 if:
+- One or more stations falls below the SNR threshold at fringe coverage,
+  reducing the number of usable stations or unbalancing the geometry.
+- The azimuth spread of usable stations is poor (e.g., all stations lie in a
+  narrow arc rather than surrounding the receiver).
+
+### Why WHDOP spikes at the foot of transmitters
+
+WHDOP can reach very high values (hundreds or more) at grid points that are
+extremely close to a transmitter.  This is **physically correct** and does not
+indicate a bug.
+
+When the receiver is immediately adjacent to TX1, the groundwave SNR from TX1
+is 50–80 dB higher than from any other transmitter.  The SNR-based weight for
+TX1 is therefore six orders of magnitude larger than the other stations' weights.
+The weight matrix collapses to a single-direction rank-1 matrix, its determinant
+approaches zero, and WHDOP diverges.
+
+In a real Datatrak system, no receiver is ever sited at the mast of a
+transmitter.  Treat the spike as a mathematical artefact of the near-zero range
+case; it does not affect the accuracy prediction anywhere a vehicle or vessel
+might actually be located.
+
+---
+
 ## Typical expected accuracy
 
 At UK Datatrak standard frequencies and geometry:
@@ -158,4 +197,5 @@ At UK Datatrak standard frequencies and geometry:
 | Repeatable (1σ) | 10–40 m in good coverage |
 | Absolute (uncorrected) | 50–500 m depending on conductivity path |
 | Absolute (corrected, monitor calibrated) | 20–100 m |
-| WHDOP (good geometry) | 1.5–4.0 |
+| WHDOP (uniform 4-TX geometry, equal SNR) | ≈ 2.0 |
+| WHDOP (fringe coverage, few usable stations) | 4–10+ |

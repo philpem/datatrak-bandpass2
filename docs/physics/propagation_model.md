@@ -148,9 +148,21 @@ The **Weighted HDOP (WHDOP)** then quantifies geometric dilution:
 
 ```
 A = directional cosines matrix (from bearings to each station)
-W = diag(SNR_i / max_SNR)          [Eq. 9.13–9.14]
-WHDOP = sqrt(trace((Aᵀ W A)⁻¹))   [Eq. 9.16, simplified 2D]
+W = diag(SNR_i / sum(SNR))         [Eq. 9.13–9.14, normalised]
+WHDOP = sqrt(trace((A W Aᵀ)⁻¹))   [Eq. 9.16, simplified 2D]
 ```
+
+**Expected values:** For a four-transmitter network where all stations present
+similar SNR, the normalised weights are approximately equal and the four
+azimuths span the compass.  In this case `AWAᵀ ≈ ½I`, so
+`WHDOP = √(trace(2I)) = 2.0`.  This is the theoretical ideal; WHDOP rises
+above ~2 only where geometry or SNR balance degrades (fringe coverage, shadowing).
+
+**Transmitter-foot singularity:** At a grid point coincident with a transmitter,
+the nearby transmitter's SNR dominates by many orders of magnitude, collapsing
+`AWAᵀ` to a near-rank-1 matrix whose determinant approaches zero and whose
+inverse diverges.  The resulting very large WHDOP is mathematically correct;
+no real receiver is located at a transmitter mast.
 
 ---
 
