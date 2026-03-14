@@ -31,7 +31,6 @@ private:
     wxStaticText* ml_label_ = nullptr;
     wxChoice*    mode_      = nullptr;
     wxTextCtrl*  res_field_ = nullptr;
-    wxChoice*    rx_model_  = nullptr;
     wxChoice*    datum_     = nullptr;
 
     wxTimer      debounce_;

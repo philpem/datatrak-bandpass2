@@ -45,15 +45,6 @@ NetworkConfigPanel::NetworkConfigPanel(wxWindow* parent)
     res_field_->Bind(wxEVT_TEXT, &NetworkConfigPanel::OnOtherChanged, this);
     gs->Add(res_field_, 1, wxEXPAND | wxBOTTOM, 2);
 
-    // Receiver model
-    gs->Add(new wxStaticText(this, wxID_ANY, "Receiver"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
-    wxArrayString rxm;
-    rxm.Add("Simple"); rxm.Add("Advanced");
-    rx_model_ = new wxChoice(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, rxm);
-    rx_model_->SetSelection(0);
-    rx_model_->Bind(wxEVT_CHOICE, &NetworkConfigPanel::OnOtherChanged, this);
-    gs->Add(rx_model_, 1, wxEXPAND | wxBOTTOM, 2);
-
     // Datum
     gs->Add(new wxStaticText(this, wxID_ANY, "Datum"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
     wxArrayString datums;
@@ -78,7 +69,6 @@ void NetworkConfigPanel::SetScenario(Scenario* scenario) {
     f2_field_->ChangeValue(wxString::Format("%.4f", scenario_->frequencies.f2_hz / 1000.0));
     res_field_->ChangeValue(wxString::Format("%.1f", scenario_->grid.resolution_km));
     mode_->SetSelection(scenario_->mode == Scenario::OperationMode::Interlaced ? 1 : 0);
-    rx_model_->SetSelection(scenario_->receiver.mode == ReceiverModel::Mode::Advanced ? 1 : 0);
     datum_->SetSelection(scenario_->datum_transform == Scenario::DatumTransform::OSTN15 ? 1 : 0);
     UpdateMlDisplay();
 }
@@ -93,8 +83,6 @@ void NetworkConfigPanel::SaveToScenario() {
     scenario_->grid.resolution_km = wxAtof(res_field_->GetValue());
     scenario_->mode = (mode_->GetSelection() == 1) ? Scenario::OperationMode::Interlaced
                                                     : Scenario::OperationMode::EightSlot;
-    scenario_->receiver.mode = (rx_model_->GetSelection() == 1) ? ReceiverModel::Mode::Advanced
-                                                                  : ReceiverModel::Mode::Simple;
     scenario_->datum_transform = (datum_->GetSelection() == 1) ? Scenario::DatumTransform::OSTN15
                                                                 : Scenario::DatumTransform::Helmert;
 }

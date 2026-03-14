@@ -88,7 +88,11 @@ MainFrame::MainFrame()
     results_panel_ = new ResultsPanel(this);
 
     net_config_->SetScenario(&scenario_);
-    net_config_->on_changed = [this](const Scenario&){ MarkDirty(); TriggerRecompute(); };
+    net_config_->on_changed = [this](const Scenario&){
+        param_editor_->SetFrequency(scenario_.frequencies.f1_hz);
+        MarkDirty();
+        TriggerRecompute();
+    };
     results_panel_->SetScenario(&scenario_);
 
     param_editor_->on_transmitter_changed = [this](int id, const Transmitter& tx) {
@@ -168,6 +172,7 @@ MainFrame::MainFrame()
     Bind(EVT_COMPUTE_PROGRESS, &MainFrame::OnComputeProgress, this);
 
     // Populate parameter editor with defaults
+    param_editor_->SetFrequency(scenario_.frequencies.f1_hz);
     param_editor_->SetTransmitterList(scenario_.transmitters);
     param_editor_->LoadReceiver(scenario_.receiver);
 
@@ -525,6 +530,7 @@ void MainFrame::OnFileNew(wxCommandEvent& /*evt*/) {
     selected_tx_id_ = -1;
     placement_mode_ = false;
     net_config_->SetScenario(&scenario_);
+    param_editor_->SetFrequency(scenario_.frequencies.f1_hz);
     param_editor_->SetTransmitterList(scenario_.transmitters);
     param_editor_->LoadReceiver(scenario_.receiver);
     UpdateStatusBarMl();
@@ -548,6 +554,7 @@ void MainFrame::OnFileOpen(wxCommandEvent& /*evt*/) {
         return;
     }
     net_config_->SetScenario(&scenario_);
+    param_editor_->SetFrequency(scenario_.frequencies.f1_hz);
     param_editor_->SetTransmitterList(scenario_.transmitters);
     param_editor_->LoadReceiver(scenario_.receiver);
     UpdateStatusBarMl();

@@ -1,6 +1,8 @@
 #include "ParamEditor.h"
 #include <wx/sizer.h>
 #include <wx/stattext.h>
+#include <GeographicLib/Geodesic.hpp>
+#include <cmath>
 
 namespace bp {
 
@@ -44,7 +46,12 @@ void ParamEditor::BuildTransmitterPage(wxWindow* page) {
     tx_lat_    = MakeField(page, "Lat (WGS84)",     gs);
     tx_lon_    = MakeField(page, "Lon (WGS84)",     gs);
     tx_power_  = MakeField(page, "Power (W)",       gs);
-    tx_height_ = MakeField(page, "Height (m)",      gs);
+    tx_height_ = MakeField(page, "Height AGL (m)",  gs);
+    tx_height_->SetToolTip("Antenna height above ground level (AGL), in metres. "
+                           "This is the physical height of the radiating element above "
+                           "the local terrain surface, not above sea level. "
+                           "Used as the effective vertical-monopole height in the "
+                           "propagation model.");
 
     gs->Add(new wxStaticText(page, wxID_ANY, "Slot"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
     tx_slot_ = new wxSpinCtrl(page, wxID_ANY, "1", wxDefaultPosition, wxDefaultSize,
@@ -68,9 +75,32 @@ void ParamEditor::BuildTransmitterPage(wxWindow* page) {
     master_slot_values_.push_back(0);
     gs->Add(tx_mslot_choice_, 1, wxEXPAND | wxBOTTOM, 4);
 
-    tx_spo_   = MakeField(page, "SPO (\xce\xbcs)",         gs);
-    tx_spo_->SetToolTip("System Phase Offset: fine phase alignment applied at the "
-                        "transmitter to correct the slot timing relative to the master.");
+    // SPO row: text field + estimate button
+    gs->Add(new wxStaticText(page, wxID_ANY, "SPO (\xce\xbcs)"),
+            0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
+    {
+        auto* row = new wxBoxSizer(wxHORIZONTAL);
+        tx_spo_ = new wxTextCtrl(page, wxID_ANY);
+        tx_spo_->SetToolTip(
+            "System Phase Offset (\xce\xbcs): fine phase alignment applied at the "
+            "transmitter to correct the slot timing relative to the master.\n\n"
+            "During commissioning this is measured and trimmed. For initial planning "
+            "click \xe2\x80\x9cEstimate\xe2\x80\x9d to compute the SPO that makes the received "
+            "phase from this slave an integer number of lanes at the master site "
+            "(free-space, ignoring ASF).");
+        btn_spo_calc_ = new wxButton(page, wxID_ANY, "Estimate",
+                                     wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
+        btn_spo_calc_->SetToolTip(
+            "Estimate SPO from geometry: computes the value that would make the "
+            "phase received from this slave at the master transmitter\xe2\x80\x99s position "
+            "a round number of lanes (free-space propagation, current station delay "
+            "included).\n\nThis is an initial planning estimate; the actual SPO is "
+            "calibrated on-site during commissioning.");
+        row->Add(tx_spo_,       1, wxEXPAND | wxRIGHT, 4);
+        row->Add(btn_spo_calc_, 0, wxALIGN_CENTER_VERTICAL);
+        gs->Add(row, 1, wxEXPAND | wxBOTTOM, 4);
+    }
+
     tx_delay_ = MakeField(page, "Station delay (\xce\xbcs)", gs);
     tx_delay_->SetToolTip("Propagation delay of the reference signal from the master "
                           "transmitter to this station (synchronisation cable/radio link).");
@@ -92,7 +122,7 @@ void ParamEditor::BuildTransmitterPage(wxWindow* page) {
             on_transmitter_deleted(current_tx_id_);
     });
 
-    // Bind change events
+    // Bind change events (tx_spo_ is created outside MakeField so listed explicitly)
     for (auto* tc : {tx_name_, tx_lat_, tx_lon_, tx_power_, tx_height_, tx_spo_, tx_delay_}) {
         tc->Bind(wxEVT_TEXT, &ParamEditor::OnTxField, this);
     }
@@ -100,8 +130,12 @@ void ParamEditor::BuildTransmitterPage(wxWindow* page) {
         wxCommandEvent e; OnTxField(e); });
     tx_master_->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent&){
         UpdateMasterSlotState();
+        UpdateSpoCalcState();
         wxCommandEvent e; OnTxField(e); });
-    tx_mslot_choice_->Bind(wxEVT_CHOICE, &ParamEditor::OnTxField, this);
+    tx_mslot_choice_->Bind(wxEVT_CHOICE, [this](wxCommandEvent&){
+        UpdateSpoCalcState();
+        wxCommandEvent e; OnTxField(e); });
+    btn_spo_calc_->Bind(wxEVT_BUTTON, &ParamEditor::OnCalcSPO, this);
     tx_locked_->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent&) {
         if (updating_ || current_tx_id_ < 0 || !on_tx_lock_changed) return;
         on_tx_lock_changed(current_tx_id_, tx_locked_->GetValue());
@@ -185,6 +219,7 @@ void ParamEditor::LoadTransmitter(int id, const Transmitter& tx) {
     }
     tx_mslot_choice_->SetSelection(sel);
     UpdateMasterSlotState();
+    UpdateSpoCalcState();
 }
 
 void ParamEditor::LoadReceiver(const ReceiverModel& rx) {
@@ -288,6 +323,60 @@ void ParamEditor::RebuildMasterSlotChoices(int current_id) {
 void ParamEditor::UpdateMasterSlotState() {
     // When this transmitter IS the master it has no upstream slot to slave to.
     tx_mslot_choice_->Enable(!tx_master_->GetValue());
+}
+
+void ParamEditor::UpdateSpoCalcState() {
+    // Enable "Estimate" only when a master has been selected and this is not
+    // the master itself.
+    bool is_master = tx_master_->GetValue();
+    int sel = tx_mslot_choice_->GetSelection();
+    bool has_master = !is_master && sel > 0 && sel < (int)master_slot_values_.size();
+    btn_spo_calc_->Enable(has_master);
+}
+
+void ParamEditor::OnCalcSPO(wxCommandEvent& /*evt*/) {
+    // Find the master transmitter in tx_list_ by the chosen slot number.
+    int sel = tx_mslot_choice_->GetSelection();
+    if (sel <= 0 || sel >= (int)master_slot_values_.size()) return;
+    int master_slot = master_slot_values_[sel];
+
+    const Transmitter* master_tx = nullptr;
+    for (const auto& t : tx_list_) {
+        if (t.slot == master_slot) { master_tx = &t; break; }
+    }
+    if (!master_tx) return;
+
+    // Current slave position (may not yet be committed to tx_list_)
+    double slave_lat = wxAtof(tx_lat_->GetValue());
+    double slave_lon = wxAtof(tx_lon_->GetValue());
+
+    // WGS84 geodesic distance (slave → master).
+    // Using WGS84 here (not Airy) since this is a planning estimate.
+    const GeographicLib::Geodesic& geod = GeographicLib::Geodesic::WGS84();
+    double dist_m = 0.0;
+    geod.Inverse(slave_lat, slave_lon, master_tx->lat, master_tx->lon, dist_m);
+    dist_m = std::abs(dist_m);
+
+    constexpr double c = 299'792'458.0;
+    double station_delay_s = wxAtof(tx_delay_->GetValue()) * 1e-6;
+
+    // Total delay from slave transmitting → received at master site (free-space)
+    double total_delay_s = dist_m / c + station_delay_s;
+
+    // Phase at master (lanes): fmod gives fractional part in [0, 1)
+    double phase_lanes = std::fmod(total_delay_s * f1_hz_, 1.0);
+
+    // Choose smallest-magnitude correction: map to [-0.5, 0.5)
+    if (phase_lanes > 0.5) phase_lanes -= 1.0;
+
+    // SPO to cancel the fractional phase
+    double spo_us = -phase_lanes / f1_hz_ * 1e6;
+
+    updating_ = true;
+    tx_spo_->ChangeValue(wxString::Format("%.3f", spo_us));
+    updating_ = false;
+    // Fire the changed callback so the scenario is updated
+    wxCommandEvent e; OnTxField(e);
 }
 
 void ParamEditor::UpdateRxFieldStates() {
