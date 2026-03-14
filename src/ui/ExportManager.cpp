@@ -4,6 +4,7 @@
 #include <iomanip>
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 // PNG export is only available when compiled with wxWidgets.
 // The presence of <wx/wx.h> or <wx/image.h> signals this.
@@ -175,7 +176,7 @@ std::string ExportManager::export_geotiff(const GridArray& layer,
     }
 
     GDALRasterBand* band = ds->GetRasterBand(1);
-    band->SetNoDataValue(-9999.0);
+    band->SetNoDataValue(std::numeric_limits<double>::quiet_NaN());
 
     // Write rows top-to-bottom (lat_max → lat_min)
     std::vector<float> row_buf(static_cast<size_t>(w));
@@ -307,7 +308,7 @@ std::string ExportManager::export_html(const GridData& data,
             double vmin =  1e30, vmax = -1e30, vsum = 0.0;
             int    count = 0;
             for (double v : arr.values) {
-                if (v >= 9000.0) continue;  // sentinel
+                if (std::isnan(v)) continue;  // no-data
                 if (v < vmin) vmin = v;
                 if (v > vmax) vmax = v;
                 vsum += v;

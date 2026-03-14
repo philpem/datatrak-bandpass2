@@ -2,11 +2,17 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <utility>
 #include <cstdint>
 #include <atomic>
 #include "../model/Scenario.h"
 
 namespace bp {
+
+// Colour-ramp scale mode for layer rendering.
+// Log: percentile-clipped 2–98th range mapped through log₁₀; improves
+// visual detail on layers with large dynamic range (WHDOP, accuracy, ASF gradient).
+enum class ScaleMode { Linear, Log };
 
 struct GridPoint {
     double lat      = 0.0;
@@ -22,6 +28,8 @@ struct GridImageData {
     int         height = 0;
     double      lat_min = 0, lat_max = 0;
     double      lon_min = 0, lon_max = 0;
+    // Actual (non-log) data range used for the colour ramp — use for legend labels.
+    double      display_vmin = 0, display_vmax = 0;
 };
 
 struct GridArray {
@@ -34,12 +42,19 @@ struct GridArray {
     double                 lon_min = 0, lon_max = 0;
     double                 resolution_km = 0;
 
-    // Produce a GeoJSON FeatureCollection colour-ramp for Leaflet (legacy / small grids)
-    std::string to_geojson() const;
+    // Produce a GeoJSON FeatureCollection colour-ramp for Leaflet (legacy / small grids).
+    // NaN values in the data are treated as "no data" (omitted from output).
+    std::string to_geojson(ScaleMode scale = ScaleMode::Linear) const;
 
     // Produce raw RGBA pixel data (base64-encoded, row 0 = north) for canvas image overlay.
+    // NaN values are rendered fully transparent.
     // Returns an empty base64_rgba string if the grid has no structured dimensions.
-    GridImageData to_image_data() const;
+    GridImageData to_image_data(ScaleMode scale = ScaleMode::Linear) const;
+
+    // Compute the display range [vmin, vmax] used for the colour ramp.
+    // NaN values are excluded from the computation.
+    // Linear: simple min/max.  Log: 2nd–98th percentile of positive values.
+    std::pair<double, double> display_range(ScaleMode scale) const;
 };
 
 struct GridData {

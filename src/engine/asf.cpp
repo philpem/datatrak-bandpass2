@@ -14,6 +14,7 @@
 #include <numeric>
 #include <map>
 #include <string>
+#include <limits>
 
 namespace bp {
 
@@ -90,7 +91,7 @@ double virtual_locator_error_m(
     const std::vector<StationGeometry>& geom,
     const std::vector<int>& selected)
 {
-    if (selected.empty()) return 9999.0;
+    if (selected.empty()) return std::numeric_limits<double>::quiet_NaN();
     int N = (int)selected.size();
 
     // "Measured" pseudoranges: free-space + ASF (metres, Airy ellipsoid)
@@ -106,7 +107,7 @@ double virtual_locator_error_m(
     double snr_sum = 0.0;
     for (int k = 0; k < N; ++k)
         snr_sum += std::pow(10.0, geom[selected[k]].snr_db / 10.0);
-    if (snr_sum <= 0.0) return 9999.0;
+    if (snr_sum <= 0.0) return std::numeric_limits<double>::quiet_NaN();
 
     // Iterative WLS fix starting from true position
     double lat_est = lat_p;
@@ -144,7 +145,7 @@ double virtual_locator_error_m(
 
         // Solve 2×2 system by direct inversion
         double det = HTW_H[0][0] * HTW_H[1][1] - HTW_H[0][1] * HTW_H[1][0];
-        if (std::abs(det) < 1e-30) return 9999.0;
+        if (std::abs(det) < 1e-30) return std::numeric_limits<double>::quiet_NaN();
         double inv_det = 1.0 / det;
         double dE = ( HTW_H[1][1] * HTW_d[0] - HTW_H[0][1] * HTW_d[1]) * inv_det;
         double dN = (-HTW_H[1][0] * HTW_d[0] + HTW_H[0][0] * HTW_d[1]) * inv_det;
@@ -283,7 +284,8 @@ void computeASF(GridData& data, const Scenario& scenario,
                                                scenario.receiver.min_stations,
                                                scenario.receiver.max_range_km,
                                                selected);
-            double err = (whdop_local >= 9000.0) ? 9999.0
+            double err = std::isnan(whdop_local)
+                       ? std::numeric_limits<double>::quiet_NaN()
                        : virtual_locator_error_m(pts[i].lat, pts[i].lon,
                                                  asf_m_vals, stations, selected);
             if (it_abs != data.layers.end())
@@ -321,8 +323,8 @@ void computeASF(GridData& data, const Scenario& scenario,
             // Positive delta means corrections improved the fix.
             if (it_delt != data.layers.end() && it_abs != data.layers.end()) {
                 double uncorr = it_abs->second.values[i];
-                it_delt->second.values[i] = (uncorr >= 9000.0 || corr_err >= 9000.0)
-                                           ? 0.0
+                it_delt->second.values[i] = (std::isnan(uncorr) || std::isnan(corr_err))
+                                           ? std::numeric_limits<double>::quiet_NaN()
                                            : uncorr - corr_err;
             }
         }
@@ -414,7 +416,7 @@ void computeASF(GridData& data, const Scenario& scenario,
     // confidence(err) = 1 / (1 + (err/50m)^2)
     //   → 1.0 at 0 m absolute error
     //   → 0.5 at 50 m error
-    //   → 0.0 where no fix is possible (err >= 9000)
+    //   → NaN where no fix is possible (absolute_accuracy is NaN)
     // ---------------------------------------------------------------------------
     auto it_conf    = data.layers.find("confidence");
     auto it_abs_acc = data.layers.find("absolute_accuracy");
@@ -422,8 +424,9 @@ void computeASF(GridData& data, const Scenario& scenario,
         const auto& abs_vals  = it_abs_acc->second.values;
         auto&       conf_vals = it_conf->second.values;
         for (size_t i = 0; i < abs_vals.size(); ++i) {
-            double err  = abs_vals[i];
-            conf_vals[i] = (err >= 9000.0) ? 0.0
+            double err = abs_vals[i];
+            conf_vals[i] = std::isnan(err)
+                         ? std::numeric_limits<double>::quiet_NaN()
                          : 1.0 / (1.0 + (err / 50.0) * (err / 50.0));
         }
     }

@@ -6,6 +6,7 @@
 #include <cmath>
 #include <algorithm>
 #include <numeric>
+#include <limits>
 
 namespace bp {
 
@@ -59,7 +60,7 @@ double compute_whdop(const std::vector<StationGeometry>& all_stations,
         candidates.push_back(i);
     }
 
-    if ((int)candidates.size() < min_stations) return 9999.0;
+    if ((int)candidates.size() < min_stations) return std::numeric_limits<double>::quiet_NaN();
 
     // Sort by SNR descending; pick top-8 (Appendix K rule: at most 8 slots)
     std::sort(candidates.begin(), candidates.end(), [&](int a, int b){
@@ -72,7 +73,7 @@ double compute_whdop(const std::vector<StationGeometry>& all_stations,
     for (int idx : candidates) {
         snr_sum += std::pow(10.0, all_stations[idx].snr_db / 10.0);
     }
-    if (snr_sum <= 0.0) return 9999.0;
+    if (snr_sum <= 0.0) return std::numeric_limits<double>::quiet_NaN();
 
     // AWAWT = A × W × A^T (2×2 symmetric)
     double awat00 = 0.0, awat01 = 0.0, awat11 = 0.0;
@@ -89,7 +90,7 @@ double compute_whdop(const std::vector<StationGeometry>& all_stations,
     }
 
     double i00, i01, i11;
-    if (!invert2x2(awat00, awat01, awat11, i00, i01, i11)) return 9999.0;
+    if (!invert2x2(awat00, awat01, awat11, i00, i01, i11)) return std::numeric_limits<double>::quiet_NaN();
 
     double whdop = std::sqrt(i00 + i11);  // sqrt(trace of inverse)
     selected_out = candidates;
@@ -195,8 +196,8 @@ void computeWHDOP(GridData& data, const Scenario& scenario,
 
         // Repeatable accuracy: sigma_r = mean(sigma_phi) * WHDOP  [ml]
         if (it_rep != data.layers.end()) {
-            if (selected.empty() || whdop >= 9000.0) {
-                it_rep->second.values[i] = 9999.0;
+            if (selected.empty() || std::isnan(whdop)) {
+                it_rep->second.values[i] = std::numeric_limits<double>::quiet_NaN();
             } else {
                 double sigma_sum = 0.0;
                 for (int idx : selected) sigma_sum += stations[idx].sigma_phi_ml;

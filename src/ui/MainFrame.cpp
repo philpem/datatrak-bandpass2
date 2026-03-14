@@ -128,12 +128,10 @@ MainFrame::MainFrame()
     };
 
     layer_panel_->on_select = [this](const std::string& layer) {
-        // Clear all overlay layers and the legend first
-        for (const char* n : {"groundwave","skywave","atm_noise","snr","sgr","gdr",
-                               "whdop","repeatable","asf","asf_gradient",
-                               "absolute_accuracy","absolute_accuracy_corrected",
-                               "absolute_accuracy_delta","confidence"}) {
-            map_panel_->ClearLayer(n);
+        // Clear whichever layer is currently displayed (including _log variants)
+        if (!current_map_layer_.empty()) {
+            map_panel_->ClearLayer(current_map_layer_);
+            current_map_layer_.clear();
         }
         map_panel_->ClearLegend();
         if (!layer.empty()) PushLayerToMap(layer);
@@ -338,20 +336,52 @@ void MainFrame::ApplyComputeResult(const ComputeResult& result) {
 
     std::string selected = layer_panel_->GetSelectedLayer();
     if (selected.empty()) return;   // "None" selected — nothing to push
+    // Clear the current overlay before replacing it with updated data
+    if (!current_map_layer_.empty()) {
+        map_panel_->ClearLayer(current_map_layer_);
+        current_map_layer_.clear();
+    }
     PushLayerToMap(selected);
 }
 
-static const char* LayerUnits(const std::string& layer) {
-    if (layer == "groundwave" || layer == "skywave" || layer == "atm_noise")
-        return bp::ui::DBUVM;
-    if (layer == "snr" || layer == "gdr" || layer == "sgr")
-        return "dB";
-    if (layer == "repeatable" || layer == "absolute_accuracy" ||
-        layer == "absolute_accuracy_corrected")
-        return "m";
-    if (layer == "asf")            return "ml";
-    if (layer == "asf_gradient")   return "ml/km";
-    return "";   // whdop, confidence — dimensionless
+// Strip a "_log" suffix to get the underlying GridArray key.
+// Layer keys ending in "_log" share data with the bare key but force log scale.
+static std::string BaseLayerName(const std::string& name) {
+    constexpr std::string_view LOG_SUFFIX = "_log";
+    if (name.size() > LOG_SUFFIX.size() &&
+        name.compare(name.size() - LOG_SUFFIX.size(), LOG_SUFFIX.size(), LOG_SUFFIX) == 0)
+        return name.substr(0, name.size() - LOG_SUFFIX.size());
+    return name;
+}
+
+// Use log-scale colour ramp when the key ends in "_log".
+// NaN no-data cells are always transparent regardless of scale mode.
+static bool UseLogScale(const std::string& name) {
+    return BaseLayerName(name) != name;  // true iff name ends in "_log"
+}
+
+static std::string LayerUnits(const std::string& name, bool log_scale) {
+    const std::string base = BaseLayerName(name);
+    std::string units;
+    if (base == "groundwave" || base == "skywave" || base == "atm_noise")
+        units = bp::ui::DBUVM;
+    else if (base == "snr" || base == "gdr" || base == "sgr")
+        units = "dB";
+    else if (base == "repeatable" || base == "absolute_accuracy" ||
+             base == "absolute_accuracy_corrected")
+        units = "m";
+    else if (base == "asf")
+        units = "ml";
+    else if (base == "asf_gradient")
+        units = "ml/km";
+    else if (base == "whdop" || base == "confidence")
+        units = "dimensionless";
+
+    if (log_scale && !units.empty())
+        units += ", log scale";
+    else if (log_scale)
+        units = "log scale";
+    return units;
 }
 
 void MainFrame::PushLayerToMap(const std::string& name) {
@@ -359,23 +389,30 @@ void MainFrame::PushLayerToMap(const std::string& name) {
     // Take a local copy of the shared_ptr so the GridData stays alive even
     // if a new compute result replaces last_grid_data_ during event processing.
     auto pinned = last_grid_data_;
-    auto it = pinned->layers.find(name);
+    // "_log" variants share data with the bare-name layer.
+    const std::string base = BaseLayerName(name);
+    auto it = pinned->layers.find(base);
     if (it == pinned->layers.end()) return;
     const auto& arr = it->second;
     if (arr.values.empty()) return;
-    double vmin = *std::min_element(arr.values.begin(), arr.values.end());
-    double vmax = *std::max_element(arr.values.begin(), arr.values.end());
-    // Do not bail out when all values are equal — to_image_data/to_geojson handle
-    // this gracefully (rendering a uniform colour).  Bailing out here silently hides
-    // layers like "whdop" or "confidence" that are uniformly 9999/0 when there is no
-    // station coverage, giving the user no visual feedback.
+
+    const bool log_scale = UseLogScale(name);
+    const bp::ScaleMode scale = log_scale ? bp::ScaleMode::Log : bp::ScaleMode::Linear;
+
     SetStatusText("Updating map...", SB_STATUS);
+    double vmin, vmax;
     if (arr.width > 0 && arr.height > 0) {
-        map_panel_->UpdateLayerImage(name, arr.to_image_data());
+        auto img = arr.to_image_data(scale);
+        vmin = img.display_vmin;
+        vmax = img.display_vmax;
+        map_panel_->UpdateLayerImage(name, img);
     } else {
-        map_panel_->UpdateLayer(name, arr.to_geojson());
+        auto [rv, rm] = arr.display_range(scale);
+        vmin = rv;  vmax = rm;
+        map_panel_->UpdateLayer(name, arr.to_geojson(scale));
     }
-    map_panel_->UpdateLegend(name, vmin, vmax, LayerUnits(name));
+    map_panel_->UpdateLegend(name, vmin, vmax, LayerUnits(name, log_scale));
+    current_map_layer_ = name;
     SetStatusText("Ready", SB_STATUS);
 }
 

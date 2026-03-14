@@ -4,8 +4,60 @@
 #include <algorithm>
 #include <iomanip>
 #include <cstdint>
+#include <utility>
 
 namespace bp {
+
+// ── Scale-mode helpers ────────────────────────────────────────────────────────
+
+// Compute display [vmin, vmax] for the colour ramp.
+// NaN values are excluded from the computation in both modes.
+// Linear: simple min/max of finite values.
+// Log: 2nd–98th percentile of positive finite values.
+static std::pair<double, double> compute_display_range(
+        const std::vector<double>& values, ScaleMode scale) {
+    if (values.empty()) return {0.0, 1.0};
+
+    if (scale == ScaleMode::Linear) {
+        double vmin = std::numeric_limits<double>::max();
+        double vmax = std::numeric_limits<double>::lowest();
+        for (double v : values) {
+            if (std::isnan(v)) continue;
+            vmin = std::min(vmin, v);
+            vmax = std::max(vmax, v);
+        }
+        if (vmin > vmax) { vmin = 0.0; vmax = 1.0; }
+        if (vmax == vmin) vmax = vmin + 1.0;
+        return {vmin, vmax};
+    }
+
+    // Log scale: collect positive, finite, non-NaN values then percentile clip.
+    std::vector<double> pos;
+    pos.reserve(values.size());
+    for (double v : values)
+        if (std::isfinite(v) && v > 0.0)
+            pos.push_back(v);
+    if (pos.empty()) return {1e-3, 1.0};
+
+    std::sort(pos.begin(), pos.end());
+    size_t n   = pos.size();
+    size_t lo  = n * 2  / 100;
+    size_t hi  = n * 98 / 100;
+    if (hi >= n) hi = n - 1;
+    double vmin = pos[lo];
+    double vmax = pos[hi];
+    if (vmax <= vmin) vmax = vmin * 10.0;
+    return {vmin, vmax};
+}
+
+// Normalise v to [0,1] in log space given the display [vmin, vmax].
+// Values outside the range are clamped; non-positive values map to 0.
+static double log_normalise(double v, double log_vmin, double log_vmax) {
+    if (v <= 0.0) return 0.0;
+    double lv = std::log(v);
+    double t  = (lv - log_vmin) / (log_vmax - log_vmin);
+    return std::max(0.0, std::min(1.0, t));
+}
 
 GridBuildResult buildGrid(const GridDef& def,
                           const std::atomic<bool>& cancel) {
@@ -72,14 +124,18 @@ static std::string valueToColour(double v, double vmin, double vmax) {
     return buf;
 }
 
-std::string GridArray::to_geojson() const {
+std::pair<double, double> GridArray::display_range(ScaleMode scale) const {
+    return compute_display_range(values, scale);
+}
+
+std::string GridArray::to_geojson(ScaleMode scale) const {
     if (points.empty() || values.empty()) {
         return R"({"type":"FeatureCollection","features":[]})";
     }
 
-    double vmin = *std::min_element(values.begin(), values.end());
-    double vmax = *std::max_element(values.begin(), values.end());
-    if (vmax == vmin) vmax = vmin + 1.0;
+    auto [vmin, vmax] = compute_display_range(values, scale);
+    double log_vmin = (scale == ScaleMode::Log) ? std::log(std::max(vmin, 1e-30)) : 0.0;
+    double log_vmax = (scale == ScaleMode::Log) ? std::log(std::max(vmax, 1e-30)) : 0.0;
 
     // Grid dimensions — use stored width/height if available, otherwise infer
     int cols = width;
@@ -124,11 +180,14 @@ std::string GridArray::to_geojson() const {
         for (int c = 0; c < cols; c += stride) {
             size_t i = (size_t)r * cols + c;
             if (i >= points.size() || i >= values.size()) continue;
+            double v = values[i];
+            if (std::isnan(v)) continue;  // skip transparent no-data cells
             if (!first) out << ',';
             first = false;
             const auto& p = points[i];
-            double v = values[i];
-            std::string col = valueToColour(v, vmin, vmax);
+            std::string col = (scale == ScaleMode::Log)
+                ? valueToColour(log_normalise(v, log_vmin, log_vmax), 0.0, 1.0)
+                : valueToColour(v, vmin, vmax);
 
             out << R"({"type":"Feature","geometry":{"type":"Polygon","coordinates":[[)"
                 << '[' << (p.lon - dlon) << ',' << (p.lat - dlat) << ']' << ','
@@ -183,7 +242,7 @@ static void colourRampRGBA(double t, uint8_t* out) {
     out[3] = 255;  // fully opaque; opacity handled by Leaflet imageOverlay
 }
 
-GridImageData GridArray::to_image_data() const {
+GridImageData GridArray::to_image_data(ScaleMode scale) const {
     GridImageData result;
     result.width  = width;
     result.height = height;
@@ -203,9 +262,12 @@ GridImageData GridArray::to_image_data() const {
     if (points.empty() || values.empty() || width <= 0 || height <= 0)
         return result;
 
-    double vmin = *std::min_element(values.begin(), values.end());
-    double vmax = *std::max_element(values.begin(), values.end());
-    if (vmax == vmin) vmax = vmin + 1.0;
+    auto [vmin, vmax] = compute_display_range(values, scale);
+    result.display_vmin = vmin;
+    result.display_vmax = vmax;
+
+    double log_vmin = (scale == ScaleMode::Log) ? std::log(std::max(vmin, 1e-30)) : 0.0;
+    double log_vmax = (scale == ScaleMode::Log) ? std::log(std::max(vmax, 1e-30)) : 0.0;
 
     // Leaflet imageOverlay renders pixels in Web Mercator (EPSG:3857), not
     // equirectangular.  If we just flip the rows the data appears ~10–20 km
@@ -243,11 +305,16 @@ GridImageData GridArray::to_image_data() const {
         grid_row      = std::max(0, std::min(height - 1, grid_row));
 
         for (int c = 0; c < width; ++c) {
-            size_t vi = (size_t)grid_row * width + c;
-            double t  = (vi < values.size())
-                        ? (values[vi] - vmin) / (vmax - vmin)
-                        : 0.0;
-            colourRampRGBA(t, &pixels[((size_t)r * width + c) * 4]);
+            size_t vi  = (size_t)grid_row * width + c;
+            uint8_t* px = &pixels[((size_t)r * width + c) * 4];
+            if (vi >= values.size() || std::isnan(values[vi])) {
+                px[0] = px[1] = px[2] = px[3] = 0;  // fully transparent
+                continue;
+            }
+            double t = (scale == ScaleMode::Log)
+                ? log_normalise(values[vi], log_vmin, log_vmax)
+                : (values[vi] - vmin) / (vmax - vmin);
+            colourRampRGBA(t, px);
         }
     }
 
