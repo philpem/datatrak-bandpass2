@@ -220,10 +220,10 @@ GridImageData GridArray::to_image_data() const {
     // The longitude direction is unaffected: Mercator X is linear in
     // longitude, which matches our uniform-longitude column spacing.
     constexpr double DEG_TO_RAD = M_PI / 180.0;
-    auto mercator_y = [](double lat_deg) {
+    auto mercator_y = [DEG_TO_RAD](double lat_deg) {
         return std::log(std::tan(M_PI / 4.0 + lat_deg * DEG_TO_RAD / 2.0));
     };
-    auto inv_mercator_y = [](double y) {
+    auto inv_mercator_y = [DEG_TO_RAD](double y) {
         return (2.0 * std::atan(std::exp(y)) - M_PI / 2.0) / DEG_TO_RAD;
     };
 
