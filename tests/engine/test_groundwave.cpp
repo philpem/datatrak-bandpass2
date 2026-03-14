@@ -41,10 +41,12 @@ struct StepConductivityMap : public ConductivityMap {
 
 TEST_CASE("groundwave: free-space limit at very high conductivity") {
     // Over very high conductivity, attenuation factor -> 0.
-    // Free-space field: E0 = 300*sqrt(P_W)/d = 300*sqrt(40)/1 = 1897 uV/m = 65.56 dBuV/m
+    // ITU-R P.368 reference: E0 = 300 mV/m at d=1 km for P=1 kW.
+    // For P=40 W = 0.04 kW at d=1 km:
+    //   E0 = 300e3 * sqrt(0.04) / 1 = 300e3 * 0.2 = 60000 uV/m = 95.56 dBuV/m
     GroundConstants gc_pec { 1e6, 15.0 };
     double E = groundwave_field_dbuvm(146437.5, 1.0, gc_pec, 40.0);
-    CHECK(E == Approx(65.56).margin(0.1));
+    CHECK(E == Approx(95.56).margin(0.1));
 }
 
 TEST_CASE("groundwave: field decreases with distance") {

@@ -18,7 +18,13 @@ namespace bp {
 // Attenuation formula fitted to P.368 data for 30-300 kHz:
 //   A_db = 0.0438 * d_km^0.832 * (f/100kHz)^0.5 * (0.005/sigma)^0.3
 //
-// Free-space reference: E0 = 300*sqrt(P_W) / d_km  uV/m
+// Free-space reference (ITU-R P.368, short monopole over perfect ground):
+//   E0 = 300 mV/m at d=1 km for P=1 kW  →  E0 [µV/m] = 300e3 * sqrt(P_kW) / d_km
+//
+// NOTE on terrain: this function uses only the path mid-point conductivity.
+// The Millington mixed-path method (P2-02) is not yet implemented; terrain
+// height profile is not used here.  Monteath terrain phase delay is applied
+// separately in asf.cpp::monteath_asf_ml().
 // ---------------------------------------------------------------------------
 double groundwave_field_dbuvm(double freq_hz,
                                double dist_km,
@@ -27,8 +33,11 @@ double groundwave_field_dbuvm(double freq_hz,
 {
     if (dist_km <= 0.0 || power_w <= 0.0) return -200.0;
 
-    // Free-space field for short monopole over perfect ground
-    double E0_uvm   = 300.0 * std::sqrt(power_w) / dist_km;
+    // Free-space field for short monopole over perfect ground.
+    // ITU-R P.368 defines E0 = 300 mV/m at d=1 km for P=1 kW (total radiated).
+    // Scaling: E0 [µV/m] = 300e3 * sqrt(P_kW) / d_km  =  9487.1 * sqrt(P_W) / d_km
+    double P_kW     = power_w / 1000.0;
+    double E0_uvm   = 300.0e3 * std::sqrt(P_kW) / dist_km;
     double E0_dbuvm = 20.0 * std::log10(std::max(E0_uvm, 1e-20));
 
     // Empirical surface-wave attenuation
