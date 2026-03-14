@@ -17,13 +17,15 @@ NetworkConfigPanel::NetworkConfigPanel(wxWindow* parent)
     // F1
     gs->Add(new wxStaticText(this, wxID_ANY, "F1 (kHz)"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
     f1_field_ = new wxTextCtrl(this, wxID_ANY, "146.4375");
-    f1_field_->Bind(wxEVT_TEXT, &NetworkConfigPanel::OnFreqChanged, this);
+    f1_field_->Bind(wxEVT_TEXT,       &NetworkConfigPanel::OnFreqChanged,    this);
+    f1_field_->Bind(wxEVT_KILL_FOCUS, &NetworkConfigPanel::OnFieldKillFocus, this);
     gs->Add(f1_field_, 1, wxEXPAND | wxBOTTOM, 2);
 
     // F2
     gs->Add(new wxStaticText(this, wxID_ANY, "F2 (kHz)"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
     f2_field_ = new wxTextCtrl(this, wxID_ANY, "131.2500");
-    f2_field_->Bind(wxEVT_TEXT, &NetworkConfigPanel::OnFreqChanged, this);
+    f2_field_->Bind(wxEVT_TEXT,       &NetworkConfigPanel::OnFreqChanged,    this);
+    f2_field_->Bind(wxEVT_KILL_FOCUS, &NetworkConfigPanel::OnFieldKillFocus, this);
     gs->Add(f2_field_, 1, wxEXPAND | wxBOTTOM, 2);
 
     // Millilane display
@@ -43,7 +45,8 @@ NetworkConfigPanel::NetworkConfigPanel(wxWindow* parent)
     // Grid resolution
     gs->Add(new wxStaticText(this, wxID_ANY, "Grid res (km)"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
     res_field_ = new wxTextCtrl(this, wxID_ANY, "10.0");
-    res_field_->Bind(wxEVT_TEXT, &NetworkConfigPanel::OnResChanged, this);
+    res_field_->Bind(wxEVT_TEXT,       &NetworkConfigPanel::OnResChanged,     this);
+    res_field_->Bind(wxEVT_KILL_FOCUS, &NetworkConfigPanel::OnFieldKillFocus, this);
     gs->Add(res_field_, 1, wxEXPAND | wxBOTTOM, 2);
 
     // Grid point count display (below resolution field)
@@ -116,6 +119,15 @@ void NetworkConfigPanel::FlushPending() {
     if (!debounce_.IsRunning()) return;
     debounce_.Stop();
     SaveToScenario();
+}
+
+void NetworkConfigPanel::OnFieldKillFocus(wxFocusEvent& evt) {
+    evt.Skip();  // always propagate focus events
+    if (!debounce_.IsRunning()) return;  // debounce already fired; nothing pending
+    debounce_.Stop();
+    if (!scenario_ || !on_changed) return;
+    SaveToScenario();
+    on_changed(*scenario_);
 }
 
 void NetworkConfigPanel::OnDebounceTimer(wxTimerEvent& /*evt*/) {

@@ -29,6 +29,7 @@ private:
     void OnResChanged(wxCommandEvent& evt);
     void OnOtherChanged(wxCommandEvent& evt);
     void OnDebounceTimer(wxTimerEvent& evt);
+    void OnFieldKillFocus(wxFocusEvent& evt);
     void ValidateFreqFields();
     void ValidateResField();
     void UpdateMlDisplay();
