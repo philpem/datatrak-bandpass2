@@ -24,7 +24,7 @@ set(BP_SOURCES
     almanac/AlmanacExport.cpp
 )
 
-add_executable(bandpass2 ${BP_SOURCES})
+add_executable(bandpass2 WIN32 ${BP_SOURCES})
 
 target_include_directories(bandpass2 PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
@@ -47,6 +47,10 @@ endif()
 if(GDAL_FOUND)
     target_link_libraries(bandpass2 PRIVATE GDAL::GDAL)
     target_compile_definitions(bandpass2 PRIVATE BP_HAVE_GDAL USE_GDAL)
+endif()
+
+if(WIN32)
+    target_link_libraries(bandpass2 PRIVATE ws2_32)
 endif()
 
 # Copy web assets to build directory so the app can find them at runtime

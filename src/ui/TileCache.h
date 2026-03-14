@@ -6,6 +6,18 @@
 #include <cstdint>
 #include <filesystem>
 
+// Platform-portable socket descriptor type.
+// On Windows SOCKET is UINT_PTR (64-bit); on POSIX it is int.
+#ifdef _WIN32
+#  ifndef WIN32_LEAN_AND_MEAN
+#    define WIN32_LEAN_AND_MEAN
+#  endif
+#  include <winsock2.h>
+using bp_socket_t = SOCKET;
+#else
+using bp_socket_t = int;
+#endif
+
 struct sqlite3;
 
 namespace bp {
@@ -26,8 +38,8 @@ public:
 
 private:
     void OpenOrCreateDb(const std::filesystem::path& path);
-    void ServerLoop(int server_fd);
-    void HandleRequest(int client_fd);
+    void ServerLoop(bp_socket_t server_fd);
+    void HandleRequest(bp_socket_t client_fd);
     bool ParseTilePath(const std::string& path, int& z, int& x, int& y);
     std::vector<uint8_t> ServeTile(int z, int x, int y);
     std::vector<uint8_t> QueryCache(int z, int x, int y);

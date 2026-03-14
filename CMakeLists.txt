@@ -39,6 +39,12 @@ else()
     set(BP_HAVE_GDAL FALSE)
 endif()
 
+# MSVC does not expose M_PI from <cmath> by default; it requires _USE_MATH_DEFINES.
+# Set it globally so every source file in the project gets it without per-file changes.
+if(MSVC)
+    add_compile_definitions(_USE_MATH_DEFINES)
+endif()
+
 add_subdirectory(src)
 add_subdirectory(tests)
 
