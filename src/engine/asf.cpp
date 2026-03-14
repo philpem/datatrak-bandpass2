@@ -310,6 +310,7 @@ void computeASF(GridData& data, const Scenario& scenario,
 
             if (ncols > 1 && nrows > 1 && (size_t)(ncols * nrows) == n) {
                 for (int row = 0; row < nrows; ++row) {
+                    if (cancel.load()) return;
                     for (int col = 0; col < ncols; ++col) {
                         size_t idx = (size_t)(row * ncols + col);
 
