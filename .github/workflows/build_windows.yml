@@ -5,6 +5,14 @@ on:
     branches: [ "**" ]
   pull_request:
     branches: [ master ]
+  schedule:
+    - cron: '0 6 * * 1'  # Weekly Monday 6am UTC — keeps master cache warm
+  workflow_dispatch:
+    inputs:
+      purge_cache:
+        description: 'Skip cache restore and rebuild from scratch'
+        type: boolean
+        default: false
 
 jobs:
   build:
@@ -13,6 +21,7 @@ jobs:
       VCPKG_DEFAULT_TRIPLET: x64-windows-release
       VCPKG_OVERLAY_TRIPLETS: ${{ github.workspace }}/cmake/ci-triplets
       VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/vcpkg_binary_cache,readwrite"
+      CACHE_VERSION: v1  # Bump to invalidate all caches repo-wide
     steps:
       - uses: actions/checkout@v6.0.2
 
@@ -20,12 +29,15 @@ jobs:
         run: New-Item -ItemType Directory -Force "${{ github.workspace }}/vcpkg_binary_cache"
 
       - name: Restore vcpkg binary cache
-        uses: actions/cache@v4
+        if: ${{ github.event.inputs.purge_cache != 'true' }}
+        uses: actions/cache/restore@v4
         with:
           path: |
             ${{ github.workspace }}/vcpkg_binary_cache
             build/vcpkg_installed
-          key: vcpkg-win-release-${{ hashFiles('vcpkg.json') }}
+          key: vcpkg-win-release-${{ env.CACHE_VERSION }}-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            vcpkg-win-release-${{ env.CACHE_VERSION }}-
 
       - name: Setup vcpkg
         uses: lukka/run-vcpkg@v11.5
@@ -38,17 +50,35 @@ jobs:
         with:
           arch: x64
 
-      - name: Configure
+      - name: Configure and build
+        id: build
         run: |
           cmake -B build -G Ninja `
             -DCMAKE_BUILD_TYPE=Release `
             -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
-
-      - name: Build
-        run: cmake --build build --parallel
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "::warning::Configure failed — purging vcpkg cache and retrying from scratch"
+            Remove-Item -Recurse -Force "${{ github.workspace }}/vcpkg_binary_cache/*" -ErrorAction SilentlyContinue
+            Remove-Item -Recurse -Force "build" -ErrorAction SilentlyContinue
+            cmake -B build -G Ninja `
+              -DCMAKE_BUILD_TYPE=Release `
+              -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
+            if ($LASTEXITCODE -ne 0) { exit 1 }
+          }
+          cmake --build build --parallel
+          if ($LASTEXITCODE -ne 0) { exit 1 }
 
       - name: Test
         run: ctest --test-dir build --output-on-failure
+
+      - name: Save vcpkg binary cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ${{ github.workspace }}/vcpkg_binary_cache
+            build/vcpkg_installed
+          key: vcpkg-win-release-${{ env.CACHE_VERSION }}-${{ hashFiles('vcpkg.json') }}
 
       - name: Package
         run: |
