@@ -207,11 +207,41 @@ GridImageData GridArray::to_image_data() const {
     double vmax = *std::max_element(values.begin(), values.end());
     if (vmax == vmin) vmax = vmin + 1.0;
 
-    // RGBA pixel buffer: row 0 = northernmost row (lat_max).
-    // The grid is stored south→north (row 0 = lat_min), so flip vertically.
+    // Leaflet imageOverlay renders pixels in Web Mercator (EPSG:3857), not
+    // equirectangular.  If we just flip the rows the data appears ~10–20 km
+    // north of the actual transmitter at UK latitudes because the Mercator
+    // Y-scale is larger in the north.
+    //
+    // Fix: for each output image row r (row 0 = north), compute the
+    // geographic latitude that Leaflet will display at that row via the
+    // inverse-Mercator of a linear interpolation in Mercator-Y space.
+    // Then sample the nearest grid row for that latitude.
+    //
+    // The longitude direction is unaffected: Mercator X is linear in
+    // longitude, which matches our uniform-longitude column spacing.
+    constexpr double DEG_TO_RAD = M_PI / 180.0;
+    auto mercator_y = [](double lat_deg) {
+        return std::log(std::tan(M_PI / 4.0 + lat_deg * DEG_TO_RAD / 2.0));
+    };
+    auto inv_mercator_y = [](double y) {
+        return (2.0 * std::atan(std::exp(y)) - M_PI / 2.0) / DEG_TO_RAD;
+    };
+
+    double y_north = mercator_y(result.lat_max);
+    double y_south = mercator_y(result.lat_min);
+    double y_range = y_north - y_south;  // > 0
+
+    double dlat = resolution_km / 110.574;  // grid row spacing in degrees
+
     std::vector<uint8_t> pixels((size_t)height * width * 4);
     for (int r = 0; r < height; ++r) {
-        int grid_row = height - 1 - r;  // flip south→north to north→south
+        // Mercator Y at centre of image row r (row 0 = northernmost)
+        double y_r    = y_north - (r + 0.5) / height * y_range;
+        double lat_r  = inv_mercator_y(y_r);
+        // Map to nearest grid row (grid stored south→north, row 0 = lat_min)
+        int grid_row  = static_cast<int>(std::round((lat_r - lat_min) / dlat));
+        grid_row      = std::max(0, std::min(height - 1, grid_row));
+
         for (int c = 0; c < width; ++c) {
             size_t vi = (size_t)grid_row * width + c;
             double t  = (vi < values.size())
