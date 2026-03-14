@@ -23,6 +23,7 @@ set(BP_SOURCES
     ui/ReceiverPanel.cpp
     ui/ResultsPanel.cpp
     ui/ExportManager.cpp
+    ui/PoRefDialog.cpp
     almanac/AlmanacExport.cpp
     almanac/ZonePatterns.cpp
     almanac/MonitorCalib.cpp

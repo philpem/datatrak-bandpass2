@@ -100,10 +100,12 @@ bp_add_test(test_almanac_export
     almanac/test_almanac_export.cpp
     ${CMAKE_SOURCE_DIR}/src/almanac/AlmanacExport.cpp
     ${CMAKE_SOURCE_DIR}/src/almanac/ZonePatterns.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/monteath.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/groundwave.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/conductivity.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/terrain.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/noise.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/skywave.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/snr.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/whdop.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/grid.cpp
@@ -125,10 +127,12 @@ bp_add_test(test_zone_patterns
     almanac/test_zone_patterns.cpp
     ${CMAKE_SOURCE_DIR}/src/almanac/ZonePatterns.cpp
     ${CMAKE_SOURCE_DIR}/src/almanac/AlmanacExport.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/monteath.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/groundwave.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/conductivity.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/terrain.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/noise.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/skywave.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/snr.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/whdop.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/grid.cpp

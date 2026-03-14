@@ -705,7 +705,7 @@ build → test → archive artifact.
 | P2-02 | ✗ | Millington mixed-path extension over land/sea boundaries — **not implemented**. Groundwave currently uses midpoint conductivity only. |
 | P2-03 | ✓ | Conductivity raster: `BuiltInConductivityMap` (land/sea heuristic, British Isles region) + `GdalConductivityMap` (GeoTIFF, `#ifdef USE_GDAL`). Factory: `make_conductivity_map()`. |
 | P2-04 | ✓ | Terrain raster: `FlatTerrainMap` + `GdalTerrainMap` (GeoTIFF single-file and SRTM HGT directory). `TerrainMap::profile()` samples great-circle path via GeographicLib. Factory: `make_terrain_map()`. |
-| P2-05 | ✗ | **Monteath terrain method** — **not implemented**. `terrain.cpp` provides the height profile; the surface-impedance integration over that profile has not been written. This is a prerequisite for proper P4-01. |
+| P2-05 | ✓ | Monteath terrain method: `engine/monteath.cpp::monteath_asf_ml()` — surface-impedance path integration along great-circle profile; conductivity looked up at segment midpoints; terrain slope correction included. Used by P4-01 ASF computation and P5-10 po reference. |
 | P2-06 | ✓ | ITU P.684 skywave: median night-time, sea gain, geomagnetic latitude correction. Uses configured frequencies. |
 | P2-07 | ✓ | ITU P.372 atmospheric noise: Fam table interpolation at configured frequencies, annual median. |
 | P2-08 | ✓ | All computed layers rendered as GeoJSON colour ramps to Leaflet. Layer toggle panel with wxChoice + opacity slider. |

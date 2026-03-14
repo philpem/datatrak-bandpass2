@@ -6,6 +6,7 @@
 #include "../engine/asf.h"
 #include "../almanac/AlmanacExport.h"
 #include "../almanac/MonitorCalib.h"
+#include "PoRefDialog.h"
 #include <wx/msgdlg.h>
 #include <wx/filedlg.h>
 #include <wx/aboutdlg.h>
@@ -41,6 +42,7 @@ enum {
     ID_EXPORT_LAYERS_GEOTIFF,
     ID_EXPORT_LAYERS_HTML,
     ID_IMPORT_MONITOR_LOG,
+    ID_COMPUTE_PO,
     SB_WGS84   = 0,
     SB_OSGB    = 1,
     SB_ML      = 2,
@@ -193,6 +195,8 @@ void MainFrame::BuildMenus() {
     exportMenu->Append(ID_EXPORT_LAYERS_PNG,    "Active Layer as PNG...");
     exportMenu->Append(ID_EXPORT_LAYERS_GEOTIFF, "Active Layer as GeoTIFF...");
     exportMenu->Append(ID_EXPORT_LAYERS_HTML,   "HTML Report...");
+    exportMenu->AppendSeparator();
+    exportMenu->Append(ID_COMPUTE_PO, "Compute Pattern Offsets...");
     file->AppendSubMenu(exportMenu, "E&xport");
     auto* importMenu = new wxMenu;
     importMenu->Append(ID_IMPORT_MONITOR_LOG, "Monitor Station Log...");
@@ -230,7 +234,8 @@ void MainFrame::BuildMenus() {
     Bind(wxEVT_MENU, [this](wxCommandEvent&){ OnExportLayers("png");    }, ID_EXPORT_LAYERS_PNG);
     Bind(wxEVT_MENU, [this](wxCommandEvent&){ OnExportLayers("geotiff"); }, ID_EXPORT_LAYERS_GEOTIFF);
     Bind(wxEVT_MENU, [this](wxCommandEvent&){ OnExportLayers("html");   }, ID_EXPORT_LAYERS_HTML);
-    Bind(wxEVT_MENU, &MainFrame::OnImportMonitorLog, this, ID_IMPORT_MONITOR_LOG);
+    Bind(wxEVT_MENU, &MainFrame::OnImportMonitorLog,     this, ID_IMPORT_MONITOR_LOG);
+    Bind(wxEVT_MENU, &MainFrame::OnComputePatternOffsets, this, ID_COMPUTE_PO);
     Bind(wxEVT_MENU, &MainFrame::OnViewNetworkConfig, this, ID_VIEW_NETCFG);
     Bind(wxEVT_MENU, &MainFrame::OnViewLayerPanel,    this, ID_VIEW_LAYERS);
     Bind(wxEVT_MENU, &MainFrame::OnViewParamEditor,   this, ID_VIEW_PARAMS);
@@ -829,6 +834,26 @@ void MainFrame::OnImportMonitorLog(wxCommandEvent& /*evt*/) {
         wxMessageBox(wxString::FromUTF8(e.what()), "Import Error",
                      wxICON_ERROR, this);
     }
+}
+
+void MainFrame::OnComputePatternOffsets(wxCommandEvent& /*evt*/) {
+    if (scenario_.transmitters.empty()) {
+        wxMessageBox("Add transmitters to the scenario first.",
+                     "Compute Pattern Offsets", wxICON_INFORMATION, this);
+        return;
+    }
+
+    PoRefDialog dlg(this, scenario_);
+    if (dlg.ShowModal() != wxID_OK) return;
+
+    scenario_.pattern_offsets = dlg.result_offsets;
+    MarkDirty();
+    TriggerRecompute();
+
+    SetStatusText(
+        wxString::Format("Pattern offsets computed: %zu pair(s).",
+                         scenario_.pattern_offsets.size()),
+        SB_STATUS);
 }
 
 } // namespace bp
