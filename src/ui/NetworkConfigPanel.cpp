@@ -7,8 +7,12 @@ namespace bp {
 
 NetworkConfigPanel::NetworkConfigPanel(wxWindow* parent)
     : wxScrolledWindow(parent)
-    , debounce_(this)
 {
+    // Bind directly on the timer (no owner).  With an owner set, wxTimer
+    // dispatches to the owner's event chain, where there is no handler; the
+    // Bind() on the timer itself would never fire.  Without an owner the
+    // timer processes events on its own chain, where the Bind() below is
+    // registered.
     debounce_.Bind(wxEVT_TIMER, &NetworkConfigPanel::OnDebounceTimer, this);
 
     auto* gs = new wxFlexGridSizer(2, 4, 6);
