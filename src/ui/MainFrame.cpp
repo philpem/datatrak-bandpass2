@@ -77,7 +77,7 @@ MainFrame::MainFrame()
     results_panel_ = new ResultsPanel(this);
 
     net_config_->SetScenario(&scenario_);
-    net_config_->on_changed = [this](const Scenario&){ TriggerRecompute(); };
+    net_config_->on_changed = [this](const Scenario&){ MarkDirty(); TriggerRecompute(); };
     results_panel_->SetScenario(&scenario_);
 
     param_editor_->on_transmitter_changed = [this](int id, const Transmitter& tx) {
@@ -432,6 +432,7 @@ void MainFrame::OnFileNew(wxCommandEvent& /*evt*/) {
     next_tx_id_    = 1;
     placement_mode_ = false;
     net_config_->SetScenario(&scenario_);
+    param_editor_->LoadReceiver(scenario_.receiver);
     UpdateStatusBarMl();
     UpdateTitle();
     TriggerRecompute();
@@ -453,6 +454,7 @@ void MainFrame::OnFileOpen(wxCommandEvent& /*evt*/) {
         return;
     }
     net_config_->SetScenario(&scenario_);
+    param_editor_->LoadReceiver(scenario_.receiver);
     UpdateStatusBarMl();
     UpdateTitle();
     TriggerRecompute();

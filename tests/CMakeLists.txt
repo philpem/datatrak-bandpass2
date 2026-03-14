@@ -78,6 +78,23 @@ bp_add_test(test_snr_whdop
     ${CMAKE_SOURCE_DIR}/src/coords/NationalGrid.cpp
 )
 
+# ASF / Monteath / Virtual Locator tests (P2-05, P4-01, P4-02, P4-04)
+bp_add_test(test_asf
+    engine/test_asf.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/asf.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/monteath.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/groundwave.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/conductivity.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/terrain.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/noise.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/skywave.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/snr.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/whdop.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/grid.cpp
+    ${CMAKE_SOURCE_DIR}/src/coords/Osgb.cpp
+    ${CMAKE_SOURCE_DIR}/src/coords/NationalGrid.cpp
+)
+
 # Almanac export tests
 bp_add_test(test_almanac_export
     almanac/test_almanac_export.cpp

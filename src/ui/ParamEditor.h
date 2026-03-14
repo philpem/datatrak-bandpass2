@@ -57,6 +57,7 @@ private:
 
     int  current_tx_id_  = -1;
     bool updating_       = false;
+    ReceiverModel current_rx_;   // preserves fields not exposed in the form (vp_ms, ellipsoid)
 };
 
 } // namespace bp

@@ -156,6 +156,7 @@ void ParamEditor::LoadTransmitter(int id, const Transmitter& tx) {
 }
 
 void ParamEditor::LoadReceiver(const ReceiverModel& rx) {
+    current_rx_ = rx;   // snapshot — preserves vp_ms, ellipsoid etc. across edits
     updating_ = true;
     rx_mode_->SetSelection(rx.mode == ReceiverModel::Mode::Advanced ? 1 : 0);
     rx_noise_->ChangeValue(wxString::Format("%.1f", rx.noise_floor_dbuvpm));
@@ -199,13 +200,16 @@ void ParamEditor::OnRxField(wxCommandEvent& /*evt*/) {
 
 void ParamEditor::OnRxMode(wxCommandEvent& /*evt*/) {
     if (updating_ || !on_receiver_changed) return;
-    ReceiverModel rx;
+    // Start from the stored snapshot so that fields not shown in the form
+    // (vp_ms, ellipsoid) are preserved rather than reset to defaults.
+    ReceiverModel rx = current_rx_;
     rx.mode = (rx_mode_->GetSelection() == 1) ? ReceiverModel::Mode::Advanced
                                                : ReceiverModel::Mode::Simple;
     rx.noise_floor_dbuvpm   = wxAtof(rx_noise_->GetValue());
     rx.vehicle_noise_dbuvpm = wxAtof(rx_vnoise_->GetValue());
     rx.max_range_km         = wxAtof(rx_range_->GetValue());
     rx.min_stations         = rx_minstns_->GetValue();
+    current_rx_ = rx;
     on_receiver_changed(rx);
 }
 

@@ -8,6 +8,8 @@ namespace bp {
 
 std::vector<GridPoint> buildGrid(const GridDef& def,
                                   const std::atomic<bool>& cancel) {
+    if (def.resolution_km <= 0.0) return {};   // guard: zero/negative → infinite loop
+
     // Approximate degrees per km at mid-latitude
     double mid_lat = (def.lat_min + def.lat_max) / 2.0;
     constexpr double DEG_PER_KM_LAT = 1.0 / 110.574;
@@ -20,6 +22,7 @@ std::vector<GridPoint> buildGrid(const GridDef& def,
     for (double lat = def.lat_min; lat <= def.lat_max + dlat * 0.5; lat += dlat) {
         if (cancel.load()) return {};
         for (double lon = def.lon_min; lon <= def.lon_max + dlon * 0.5; lon += dlon) {
+            if (cancel.load()) return {};   // check cancel per row, not just per latitude band
             GridPoint p;
             p.lat = lat;
             p.lon = lon;

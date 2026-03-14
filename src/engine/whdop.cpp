@@ -1,5 +1,6 @@
 #include "whdop.h"
 #include "groundwave.h"
+#include "conductivity.h"
 #include "noise.h"
 #include <GeographicLib/Geodesic.hpp>
 #include <cmath>
@@ -123,7 +124,8 @@ void computeWHDOP(GridData& data, const Scenario& scenario,
         bool   ok;
     };
 
-    GroundConstants gc_land { 0.005, 15.0 };
+    auto cond_map = make_conductivity_map(scenario);
+
     std::vector<TxCache> tx_cache;
     tx_cache.reserve(scenario.transmitters.size());
 
@@ -142,8 +144,11 @@ void computeWHDOP(GridData& data, const Scenario& scenario,
             double dist_m = 0.0;
             geod.Inverse(tx.lat, tx.lon, pts[i].lat, pts[i].lon, dist_m);
             double dist_km = std::max(dist_m / 1000.0, 0.1);
+            GroundConstants gc = cond_map->lookup(
+                0.5 * (tx.lat + pts[i].lat),
+                0.5 * (tx.lon + pts[i].lon));
             double e_gw = groundwave_field_dbuvm(
-                scenario.frequencies.f1_hz, dist_km, gc_land, tx.power_w);
+                scenario.frequencies.f1_hz, dist_km, gc, tx.power_w);
             c.gw[i]  = e_gw;
             c.snr[i] = compute_snr_db(e_gw, atm_noise_val, veh_noise);
         }

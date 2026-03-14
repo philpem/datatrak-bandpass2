@@ -67,6 +67,34 @@ TEST_CASE("Empty GridArray to_geojson is safe", "[grid]") {
     REQUIRE(geojson.find("\"features\":[]") != std::string::npos);
 }
 
+TEST_CASE("buildGrid: zero resolution returns empty", "[grid]") {
+    GridDef def;
+    def.resolution_km = 0.0;
+    std::atomic<bool> cancel{false};
+    auto pts = buildGrid(def, cancel);
+    CHECK(pts.empty());
+}
+
+TEST_CASE("buildGrid: negative resolution returns empty", "[grid]") {
+    GridDef def;
+    def.resolution_km = -5.0;
+    std::atomic<bool> cancel{false};
+    auto pts = buildGrid(def, cancel);
+    CHECK(pts.empty());
+}
+
+TEST_CASE("buildGrid: cancel flag aborts mid-grid", "[grid]") {
+    GridDef def;
+    def.lat_min = 49.5; def.lat_max = 59.5;
+    def.lon_min = -7.0; def.lon_max =  2.5;
+    def.resolution_km = 10.0;
+    std::atomic<bool> cancel{false};
+    // Pre-cancel: should return empty immediately
+    cancel.store(true);
+    auto pts = buildGrid(def, cancel);
+    CHECK(pts.empty());
+}
+
 TEST_CASE("Frequencies default values", "[scenario]") {
     Frequencies f;
     f.recompute();
