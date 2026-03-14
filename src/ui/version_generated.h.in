@@ -1,0 +1,8 @@
+#pragma once
+
+// Auto-generated at build time by cmake/version.cmake.
+// Do not edit — changes will be overwritten on the next build.
+
+namespace bp {
+    inline constexpr const char VERSION[] = "@VERSION_STRING@";
+}

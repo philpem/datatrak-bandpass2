@@ -1,6 +1,7 @@
 #include "MainFrame.h"
 #include "ExportManager.h"
 #include "UiConstants.h"
+#include "version_generated.h"
 #include "../coords/NationalGrid.h"
 #include "../coords/Osgb.h"
 #include "../model/toml_io.h"
@@ -618,7 +619,7 @@ void MainFrame::OnViewParamEditor(wxCommandEvent& /*evt*/) {
 void MainFrame::OnHelpAbout(wxCommandEvent& /*evt*/) {
     wxAboutDialogInfo info;
     info.SetName("BANDPASS II");
-    info.SetVersion("0.5.0");
+    info.SetVersion(bp::VERSION);
     info.SetCopyright("(C) 2024-2025 The BANDPASS II Authors");
     info.SetDescription(
         "Coverage and positioning accuracy planner for\n"

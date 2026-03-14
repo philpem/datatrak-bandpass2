@@ -29,10 +29,22 @@ set(BP_SOURCES
     almanac/MonitorCalib.cpp
 )
 
+# Version header — regenerated at every build from git metadata
+add_custom_target(bandpass2_version ALL
+    COMMAND ${CMAKE_COMMAND}
+        -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
+        -DBINARY_DIR=${CMAKE_BINARY_DIR}
+        -P ${CMAKE_SOURCE_DIR}/cmake/version.cmake
+    BYPRODUCTS ${CMAKE_BINARY_DIR}/src/ui/version_generated.h
+    COMMENT "Generating version header from git"
+)
+
 add_executable(bandpass2 WIN32 ${BP_SOURCES})
+add_dependencies(bandpass2 bandpass2_version)
 
 target_include_directories(bandpass2 PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_BINARY_DIR}/src/ui
 )
 
 target_link_libraries(bandpass2 PRIVATE
