@@ -99,6 +99,55 @@ bp_add_test(test_asf
 bp_add_test(test_almanac_export
     almanac/test_almanac_export.cpp
     ${CMAKE_SOURCE_DIR}/src/almanac/AlmanacExport.cpp
+    ${CMAKE_SOURCE_DIR}/src/almanac/ZonePatterns.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/monteath.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/groundwave.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/conductivity.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/terrain.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/noise.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/skywave.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/snr.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/whdop.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/grid.cpp
     ${CMAKE_SOURCE_DIR}/src/coords/Osgb.cpp
     ${CMAKE_SOURCE_DIR}/src/coords/NationalGrid.cpp
+)
+
+# ExportManager tests (CSV only — PNG/GeoTIFF require wx/GDAL)
+bp_add_test(test_export_manager
+    engine/test_export_manager.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/ExportManager.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/grid.cpp
+    ${CMAKE_SOURCE_DIR}/src/coords/Osgb.cpp
+    ${CMAKE_SOURCE_DIR}/src/coords/NationalGrid.cpp
+)
+# ExportManager.cpp includes <wx/image.h> when __WXGTK__ is defined (set
+# globally by include(${wxWidgets_USE_FILE}) in deps_linux.cmake).  Link
+# wxWidgets so the PNG export symbols resolve even in the test binary.
+if(wxWidgets_FOUND)
+    target_link_libraries(test_export_manager PRIVATE ${wxWidgets_LIBRARIES})
+endif()
+
+# Zone patterns tests
+bp_add_test(test_zone_patterns
+    almanac/test_zone_patterns.cpp
+    ${CMAKE_SOURCE_DIR}/src/almanac/ZonePatterns.cpp
+    ${CMAKE_SOURCE_DIR}/src/almanac/AlmanacExport.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/monteath.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/groundwave.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/conductivity.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/terrain.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/noise.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/skywave.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/snr.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/whdop.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/grid.cpp
+    ${CMAKE_SOURCE_DIR}/src/coords/Osgb.cpp
+    ${CMAKE_SOURCE_DIR}/src/coords/NationalGrid.cpp
+)
+
+# Monitor calibration tests (P5-14 / P5-15)
+bp_add_test(test_monitor_calib
+    almanac/test_monitor_calib.cpp
+    ${CMAKE_SOURCE_DIR}/src/almanac/MonitorCalib.cpp
 )

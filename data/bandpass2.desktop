@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=BANDPASS II
+Comment=Datatrak LF radio navigation network planning and analysis
+Exec=bandpass2
+Icon=bandpass2
+Categories=Science;Engineering;
+MimeType=application/x-bandpass2-scenario;
+Keywords=radio;navigation;LF;Datatrak;propagation;coverage;

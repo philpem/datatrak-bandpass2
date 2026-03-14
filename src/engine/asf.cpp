@@ -12,6 +12,8 @@
 #include <cmath>
 #include <algorithm>
 #include <numeric>
+#include <map>
+#include <string>
 
 namespace bp {
 
@@ -174,6 +176,8 @@ void computeASF(GridData& data, const Scenario& scenario,
 {
     auto it_asf  = data.layers.find("asf");
     auto it_abs  = data.layers.find("absolute_accuracy");
+    auto it_corr = data.layers.find("absolute_accuracy_corrected");
+    auto it_delt = data.layers.find("absolute_accuracy_delta");
     auto it_grad = data.layers.find("asf_gradient");
     auto it_gw   = data.layers.find("groundwave");
     if (it_gw == data.layers.end()) return;
@@ -185,6 +189,13 @@ void computeASF(GridData& data, const Scenario& scenario,
     // Build conductivity and terrain maps from scenario (P4-01 / conductivity fix)
     auto cond_map    = make_conductivity_map(scenario);
     auto terrain_map = make_terrain_map(scenario);
+
+    // Build pattern-offset lookup: "slave_slot,master_slot" → PatternOffset*
+    // Used to apply po corrections in the corrected-accuracy VL fix (P5-14).
+    // An entry is present only for slave stations (non-masters with master_slot > 0).
+    std::map<std::string, const PatternOffset*> po_lookup;
+    for (const auto& po : scenario.pattern_offsets)
+        po_lookup[po.pattern] = &po;
 
     const double c          = 299'792'458.0;
     const double lane_m_f1  = c / scenario.frequencies.f1_hz;
@@ -198,9 +209,11 @@ void computeASF(GridData& data, const Scenario& scenario,
         if (cancel.load()) return;
 
         std::vector<StationGeometry> stations;
-        std::vector<double>          asf_m_vals;  // ASF in metres per station
+        std::vector<double>          asf_m_vals;     // ASF in metres per station
+        std::vector<size_t>          tx_idx_map;     // station k → scenario.transmitters[idx]
 
-        for (const auto& tx : scenario.transmitters) {
+        for (size_t ti = 0; ti < scenario.transmitters.size(); ++ti) {
+            const auto& tx = scenario.transmitters[ti];
             if (tx.power_w <= 0.0) continue;
 
             // Azimuth and distance (Airy ellipsoid, matching firmware P4-04)
@@ -229,6 +242,7 @@ void computeASF(GridData& data, const Scenario& scenario,
             sg.sigma_phi_ml = phase_uncertainty_ml(snr, scenario.frequencies);
 
             stations.push_back(sg);
+            tx_idx_map.push_back(ti);
 
             // Monteath ASF for this path at F1 (P4-01).
             // The VL absolute accuracy computation uses F1 ASF only; F2 paths
@@ -262,19 +276,53 @@ void computeASF(GridData& data, const Scenario& scenario,
         asf_grid[i] = asf_mean_ml;
 
         // Absolute accuracy from iterated WLS VL (P4-02)
-        if (it_abs != data.layers.end()) {
-            std::vector<int> selected;
+        std::vector<int> selected;
+        {
             double whdop_local = compute_whdop(stations,
                                                scenario.receiver.min_stations,
                                                scenario.receiver.max_range_km,
                                                selected);
-            if (whdop_local >= 9000.0) {
-                it_abs->second.values[i] = 9999.0;
-            } else {
-                double err = virtual_locator_error_m(
-                    pts[i].lat, pts[i].lon,
-                    asf_m_vals, stations, selected);
+            double err = (whdop_local >= 9000.0) ? 9999.0
+                       : virtual_locator_error_m(pts[i].lat, pts[i].lon,
+                                                 asf_m_vals, stations, selected);
+            if (it_abs != data.layers.end())
                 it_abs->second.values[i] = err;
+        }
+
+        // Corrected absolute accuracy (P5-14): apply pattern offsets from
+        // scenario.pattern_offsets (or monitor calibration) to the pseudoranges.
+        // corrected_asf_m[k] = asf_m[k] - po_correction_for_station_k
+        // The po correction is the f1plus_ml value for pattern "{slave_slot},{master_slot}".
+        // Master stations have no correction (they define the reference).
+        if ((it_corr != data.layers.end() || it_delt != data.layers.end())
+            && !selected.empty())
+        {
+            std::vector<double> corrected_asf(asf_m_vals);
+            for (size_t k = 0; k < stations.size(); ++k) {
+                const auto& tx = scenario.transmitters[tx_idx_map[k]];
+                if (!tx.is_master && tx.master_slot > 0) {
+                    std::string pat = std::to_string(tx.slot) + ","
+                                    + std::to_string(tx.master_slot);
+                    auto pit = po_lookup.find(pat);
+                    if (pit != po_lookup.end()) {
+                        // Convert ml → metres; subtract from measured ASF
+                        double corr_m = pit->second->f1plus_ml * lane_m_f1 / 1000.0;
+                        corrected_asf[k] -= corr_m;
+                    }
+                }
+            }
+            double corr_err = virtual_locator_error_m(pts[i].lat, pts[i].lon,
+                                                       corrected_asf, stations, selected);
+            if (it_corr != data.layers.end())
+                it_corr->second.values[i] = corr_err;
+
+            // Delta = absolute_accuracy - absolute_accuracy_corrected
+            // Positive delta means corrections improved the fix.
+            if (it_delt != data.layers.end() && it_abs != data.layers.end()) {
+                double uncorr = it_abs->second.values[i];
+                it_delt->second.values[i] = (uncorr >= 9000.0 || corr_err >= 9000.0)
+                                           ? 0.0
+                                           : uncorr - corr_err;
             }
         }
     }

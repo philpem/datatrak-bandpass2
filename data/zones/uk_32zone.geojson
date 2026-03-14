@@ -1,0 +1,330 @@
+{
+  "type": "FeatureCollection",
+  "description": "UK Datatrak 32-zone coverage grid, derived from DTM-170 Figure 7.3. Zones are numbered 1-32 and cover the Datatrak coverage area of Great Britain. Boundaries are approximate rectangular polygons aligned to the OSGB National Grid 100km squares. Exact DTM-170 boundaries should be used if available.",
+  "crs": {
+    "type": "name",
+    "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" }
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "zone_id": 1, "name": "Zone 1 - SW England" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-5.75, 49.85], [-3.50, 49.85], [-3.50, 50.70], [-5.75, 50.70], [-5.75, 49.85]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "zone_id": 2, "name": "Zone 2 - S Cornwall / Devon W" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-3.50, 49.85], [-1.25, 49.85], [-1.25, 50.70], [-3.50, 50.70], [-3.50, 49.85]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "zone_id": 3, "name": "Zone 3 - S Coast Central" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-1.25, 49.85], [1.00, 49.85], [1.00, 50.70], [-1.25, 50.70], [-1.25, 49.85]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "zone_id": 4, "name": "Zone 4 - N Devon / Somerset" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-5.75, 50.70], [-3.50, 50.70], [-3.50, 51.55], [-5.75, 51.55], [-5.75, 50.70]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "zone_id": 5, "name": "Zone 5 - Bristol / Wilts / Hants" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-3.50, 50.70], [-1.25, 50.70], [-1.25, 51.55], [-3.50, 51.55], [-3.50, 50.70]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "zone_id": 6, "name": "Zone 6 - Kent / Sussex / Surrey" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-1.25, 50.70], [1.00, 50.70], [1.00, 51.55], [-1.25, 51.55], [-1.25, 50.70]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "zone_id": 7, "name": "Zone 7 - S Wales / Hereford" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-5.75, 51.55], [-3.50, 51.55], [-3.50, 52.40], [-5.75, 52.40], [-5.75, 51.55]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "zone_id": 8, "name": "Zone 8 - Midlands W / Warks" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-3.50, 51.55], [-1.25, 51.55], [-1.25, 52.40], [-3.50, 52.40], [-3.50, 51.55]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "zone_id": 9, "name": "Zone 9 - London / Essex / Herts" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-1.25, 51.55], [1.00, 51.55], [1.00, 52.40], [-1.25, 52.40], [-1.25, 51.55]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "zone_id": 10, "name": "Zone 10 - N Wales / Shrops" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-5.75, 52.40], [-3.50, 52.40], [-3.50, 53.25], [-5.75, 53.25], [-5.75, 52.40]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "zone_id": 11, "name": "Zone 11 - Midlands N / Staffs / Derby" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-3.50, 52.40], [-1.25, 52.40], [-1.25, 53.25], [-3.50, 53.25], [-3.50, 52.40]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "zone_id": 12, "name": "Zone 12 - Lincs / Cambs / Norfolk" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-1.25, 52.40], [1.00, 52.40], [1.00, 53.25], [-1.25, 53.25], [-1.25, 52.40]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "zone_id": 13, "name": "Zone 13 - N Wales Coast / Cheshire" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-5.75, 53.25], [-3.50, 53.25], [-3.50, 54.10], [-5.75, 54.10], [-5.75, 53.25]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "zone_id": 14, "name": "Zone 14 - Lancs / W Yorks" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-3.50, 53.25], [-1.25, 53.25], [-1.25, 54.10], [-3.50, 54.10], [-3.50, 53.25]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "zone_id": 15, "name": "Zone 15 - E Yorks / Humber / Notts" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-1.25, 53.25], [1.00, 53.25], [1.00, 54.10], [-1.25, 54.10], [-1.25, 53.25]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "zone_id": 16, "name": "Zone 16 - Isle of Man / Lake District" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-5.75, 54.10], [-3.50, 54.10], [-3.50, 54.95], [-5.75, 54.95], [-5.75, 54.10]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "zone_id": 17, "name": "Zone 17 - Northumberland / Durham" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-3.50, 54.10], [-1.25, 54.10], [-1.25, 54.95], [-3.50, 54.95], [-3.50, 54.10]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "zone_id": 18, "name": "Zone 18 - Teesside / N Yorks coast" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-1.25, 54.10], [1.00, 54.10], [1.00, 54.95], [-1.25, 54.95], [-1.25, 54.10]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "zone_id": 19, "name": "Zone 19 - SW Scotland / Galloway" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-5.75, 54.95], [-3.50, 54.95], [-3.50, 55.80], [-5.75, 55.80], [-5.75, 54.95]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "zone_id": 20, "name": "Zone 20 - Edinburgh / Lothians" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-3.50, 54.95], [-1.25, 54.95], [-1.25, 55.80], [-3.50, 55.80], [-3.50, 54.95]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "zone_id": 21, "name": "Zone 21 - Berwick / E Borders" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-1.25, 54.95], [1.00, 54.95], [1.00, 55.80], [-1.25, 55.80], [-1.25, 54.95]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "zone_id": 22, "name": "Zone 22 - Argyll / W Scotland" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-7.00, 55.80], [-5.00, 55.80], [-5.00, 56.65], [-7.00, 56.65], [-7.00, 55.80]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "zone_id": 23, "name": "Zone 23 - Glasgow / Clyde" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-5.00, 55.80], [-3.00, 55.80], [-3.00, 56.65], [-5.00, 56.65], [-5.00, 55.80]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "zone_id": 24, "name": "Zone 24 - Fife / Forth / Stirling" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-3.00, 55.80], [-1.00, 55.80], [-1.00, 56.65], [-3.00, 56.65], [-3.00, 55.80]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "zone_id": 25, "name": "Zone 25 - W Highlands / Mull" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-7.00, 56.65], [-5.00, 56.65], [-5.00, 57.50], [-7.00, 57.50], [-7.00, 56.65]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "zone_id": 26, "name": "Zone 26 - Perthshire / Tayside" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-5.00, 56.65], [-3.00, 56.65], [-3.00, 57.50], [-5.00, 57.50], [-5.00, 56.65]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "zone_id": 27, "name": "Zone 27 - Aberdeen / Angus" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-3.00, 56.65], [-1.00, 56.65], [-1.00, 57.50], [-3.00, 57.50], [-3.00, 56.65]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "zone_id": 28, "name": "Zone 28 - Skye / NW Highlands" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-7.00, 57.50], [-5.00, 57.50], [-5.00, 58.35], [-7.00, 58.35], [-7.00, 57.50]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "zone_id": 29, "name": "Zone 29 - Inverness / Moray" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-5.00, 57.50], [-3.00, 57.50], [-3.00, 58.35], [-5.00, 58.35], [-5.00, 57.50]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "zone_id": 30, "name": "Zone 30 - Banff / Buchan" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-3.00, 57.50], [-1.00, 57.50], [-1.00, 58.35], [-3.00, 58.35], [-3.00, 57.50]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "zone_id": 31, "name": "Zone 31 - Caithness / Sutherland" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-5.00, 58.35], [-3.00, 58.35], [-3.00, 59.20], [-5.00, 59.20], [-5.00, 58.35]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "zone_id": 32, "name": "Zone 32 - N Scotland / Wick" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-3.00, 58.35], [-1.00, 58.35], [-1.00, 59.20], [-3.00, 59.20], [-3.00, 58.35]
+        ]]
+      }
+    }
+  ]
+}

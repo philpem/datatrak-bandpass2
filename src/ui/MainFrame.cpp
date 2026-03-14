@@ -1,11 +1,15 @@
 #include "MainFrame.h"
+#include "ExportManager.h"
 #include "../coords/NationalGrid.h"
 #include "../coords/Osgb.h"
 #include "../model/toml_io.h"
 #include "../engine/asf.h"
 #include "../almanac/AlmanacExport.h"
+#include "../almanac/MonitorCalib.h"
+#include "PoRefDialog.h"
 #include <wx/msgdlg.h>
 #include <wx/filedlg.h>
+#include <wx/choicdlg.h>
 #include <wx/aboutdlg.h>
 #include <wx/toolbar.h>
 #include <wx/menu.h>
@@ -34,6 +38,12 @@ enum {
     ID_EDIT_DELETE_TX,
     ID_EXPORT_ALMANAC_V7,
     ID_EXPORT_ALMANAC_V16,
+    ID_EXPORT_LAYERS_CSV,
+    ID_EXPORT_LAYERS_PNG,
+    ID_EXPORT_LAYERS_GEOTIFF,
+    ID_EXPORT_LAYERS_HTML,
+    ID_IMPORT_MONITOR_LOG,
+    ID_COMPUTE_PO,
     SB_WGS84   = 0,
     SB_OSGB    = 1,
     SB_ML      = 2,
@@ -78,12 +88,18 @@ MainFrame::MainFrame()
     results_panel_ = new ResultsPanel(this);
 
     net_config_->SetScenario(&scenario_);
-    net_config_->on_changed = [this](const Scenario&){ MarkDirty(); TriggerRecompute(); };
+    net_config_->on_changed = [this](const Scenario&){
+        param_editor_->SetFrequency(scenario_.frequencies.f1_hz);
+        MarkDirty();
+        TriggerRecompute();
+    };
     results_panel_->SetScenario(&scenario_);
 
     param_editor_->on_transmitter_changed = [this](int id, const Transmitter& tx) {
         if (id >= 0 && id < (int)scenario_.transmitters.size()) {
             scenario_.transmitters[id] = tx;
+            // Refresh master-slot dropdown in case name or slot number changed
+            param_editor_->SetTransmitterList(scenario_.transmitters);
             MarkDirty();
             TriggerRecompute();
         }
@@ -155,6 +171,11 @@ MainFrame::MainFrame()
     Bind(EVT_COMPUTE_RESULT,   &MainFrame::OnComputeResult,   this);
     Bind(EVT_COMPUTE_PROGRESS, &MainFrame::OnComputeProgress, this);
 
+    // Populate parameter editor with defaults
+    param_editor_->SetFrequency(scenario_.frequencies.f1_hz);
+    param_editor_->SetTransmitterList(scenario_.transmitters);
+    param_editor_->LoadReceiver(scenario_.receiver);
+
     // Initial recompute
     scenario_.frequencies.recompute();
     UpdateStatusBarMl();
@@ -181,7 +202,17 @@ void MainFrame::BuildMenus() {
     auto* exportMenu = new wxMenu;
     exportMenu->Append(ID_EXPORT_ALMANAC_V7,  "Almanac Commands (V7)");
     exportMenu->Append(ID_EXPORT_ALMANAC_V16, "Almanac Commands (V16)");
+    exportMenu->AppendSeparator();
+    exportMenu->Append(ID_EXPORT_LAYERS_CSV,    "Active Layer as CSV...");
+    exportMenu->Append(ID_EXPORT_LAYERS_PNG,    "Active Layer as PNG...");
+    exportMenu->Append(ID_EXPORT_LAYERS_GEOTIFF, "Active Layer as GeoTIFF...");
+    exportMenu->Append(ID_EXPORT_LAYERS_HTML,   "HTML Report...");
+    exportMenu->AppendSeparator();
+    exportMenu->Append(ID_COMPUTE_PO, "Compute Pattern Offsets...");
     file->AppendSubMenu(exportMenu, "E&xport");
+    auto* importMenu = new wxMenu;
+    importMenu->Append(ID_IMPORT_MONITOR_LOG, "Monitor Station Log...");
+    file->AppendSubMenu(importMenu, "&Import");
     file->AppendSeparator();
     file->Append(wxID_EXIT,      "E&xit");
     mb->Append(file, "&File");
@@ -211,6 +242,12 @@ void MainFrame::BuildMenus() {
     Bind(wxEVT_MENU, [this](wxCommandEvent&){ OnExportAlmanac(almanac::FirmwareFormat::V7);  }, ID_EXPORT_ALMANAC_V7);
     Bind(wxEVT_MENU, [this](wxCommandEvent&){ OnExportAlmanac(almanac::FirmwareFormat::V16); }, ID_EXPORT_ALMANAC_V16);
     Bind(wxEVT_MENU, &MainFrame::OnEditDeleteTx,      this, ID_EDIT_DELETE_TX);
+    Bind(wxEVT_MENU, [this](wxCommandEvent&){ OnExportLayers("csv");    }, ID_EXPORT_LAYERS_CSV);
+    Bind(wxEVT_MENU, [this](wxCommandEvent&){ OnExportLayers("png");    }, ID_EXPORT_LAYERS_PNG);
+    Bind(wxEVT_MENU, [this](wxCommandEvent&){ OnExportLayers("geotiff"); }, ID_EXPORT_LAYERS_GEOTIFF);
+    Bind(wxEVT_MENU, [this](wxCommandEvent&){ OnExportLayers("html");   }, ID_EXPORT_LAYERS_HTML);
+    Bind(wxEVT_MENU, &MainFrame::OnImportMonitorLog,     this, ID_IMPORT_MONITOR_LOG);
+    Bind(wxEVT_MENU, &MainFrame::OnComputePatternOffsets, this, ID_COMPUTE_PO);
     Bind(wxEVT_MENU, &MainFrame::OnViewNetworkConfig, this, ID_VIEW_NETCFG);
     Bind(wxEVT_MENU, &MainFrame::OnViewLayerPanel,    this, ID_VIEW_LAYERS);
     Bind(wxEVT_MENU, &MainFrame::OnViewParamEditor,   this, ID_VIEW_PARAMS);
@@ -350,6 +387,7 @@ void MainFrame::OnMapClick(double lat, double lon) {
 
     map_panel_->AddTransmitterMarker(id, lat, lon, tx.name, tx.locked);
     selected_tx_id_ = id;
+    param_editor_->SetTransmitterList(scenario_.transmitters);
     param_editor_->LoadTransmitter(id, tx);
     ++next_tx_id_;
     MarkDirty();
@@ -452,6 +490,7 @@ void MainFrame::DeleteTransmitter(int id) {
     // Clear selection
     selected_tx_id_ = -1;
     param_editor_->ClearSelection();
+    param_editor_->SetTransmitterList(scenario_.transmitters);
     map_panel_->SelectTransmitterMarker(-1);
 
     MarkDirty();
@@ -491,6 +530,8 @@ void MainFrame::OnFileNew(wxCommandEvent& /*evt*/) {
     selected_tx_id_ = -1;
     placement_mode_ = false;
     net_config_->SetScenario(&scenario_);
+    param_editor_->SetFrequency(scenario_.frequencies.f1_hz);
+    param_editor_->SetTransmitterList(scenario_.transmitters);
     param_editor_->LoadReceiver(scenario_.receiver);
     UpdateStatusBarMl();
     UpdateTitle();
@@ -513,6 +554,8 @@ void MainFrame::OnFileOpen(wxCommandEvent& /*evt*/) {
         return;
     }
     net_config_->SetScenario(&scenario_);
+    param_editor_->SetFrequency(scenario_.frequencies.f1_hz);
+    param_editor_->SetTransmitterList(scenario_.transmitters);
     param_editor_->LoadReceiver(scenario_.receiver);
     UpdateStatusBarMl();
     UpdateTitle();
@@ -670,6 +713,165 @@ void MainFrame::OnExportAlmanac(almanac::FirmwareFormat fmt) {
     } else {
         wxMessageBox("Could not write file.", "Export Error", wxICON_ERROR, this);
     }
+}
+
+void MainFrame::OnExportLayers(const std::string& format) {
+    if (!last_grid_data_ || last_grid_data_->layers.empty()) {
+        wxMessageBox("No computed layers available. Run a computation first.",
+                     "Export Layers", wxICON_INFORMATION, this);
+        return;
+    }
+
+    // Pick the active layer (first visible layer in the grid data).
+    // If the layer panel has a selection, use that; otherwise use the first layer.
+    std::string layer_name;
+    if (layer_panel_) {
+        layer_name = layer_panel_->GetSelectedLayer();
+    }
+    if (layer_name.empty() || last_grid_data_->layers.find(layer_name) == last_grid_data_->layers.end()) {
+        layer_name = last_grid_data_->layers.begin()->first;
+    }
+    const GridArray& layer = last_grid_data_->layers.at(layer_name);
+
+    // Build file dialog filters based on format
+    wxString title, wildcard, defaultName;
+    if (format == "csv") {
+        title       = "Export Layer as CSV";
+        wildcard    = "CSV files (*.csv)|*.csv|All files (*.*)|*.*";
+        defaultName = wxString(layer_name) + ".csv";
+    } else if (format == "png") {
+        title       = "Export Layer as PNG";
+        wildcard    = "PNG images (*.png)|*.png|All files (*.*)|*.*";
+        defaultName = wxString(layer_name) + ".png";
+    } else if (format == "html") {
+        title       = "Export HTML Report";
+        wildcard    = "HTML files (*.html)|*.html|All files (*.*)|*.*";
+        defaultName = wxString(scenario_.name) + "_report.html";
+    } else {
+        title       = "Export Layer as GeoTIFF";
+        wildcard    = "GeoTIFF files (*.tif)|*.tif|All files (*.*)|*.*";
+        defaultName = wxString(layer_name) + ".tif";
+    }
+
+    wxFileDialog dlg(this, title, "", defaultName, wildcard,
+                     wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+    if (dlg.ShowModal() != wxID_OK) return;
+
+    std::string path = dlg.GetPath().ToStdString();
+    std::string err;
+
+    if (format == "csv") {
+        err = ExportManager::export_csv(layer, path);
+    } else if (format == "png") {
+        err = ExportManager::export_png(layer, path);
+    } else if (format == "html") {
+        err = ExportManager::export_html(*last_grid_data_, scenario_, path);
+    } else {
+        err = ExportManager::export_geotiff(layer, path);
+    }
+
+    if (err.empty()) {
+        SetStatusText(wxString::Format("Exported %s → %s", layer_name, path), SB_STATUS);
+    } else {
+        wxMessageBox(wxString::FromUTF8(err), "Export Error", wxICON_ERROR, this);
+    }
+}
+
+void MainFrame::OnImportMonitorLog(wxCommandEvent& /*evt*/) {
+    wxFileDialog dlg(this, "Import Monitor Station Log", "", "",
+                     "Monitor logs (*.csv;*.txt)|*.csv;*.txt|All files (*.*)|*.*",
+                     wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+    if (dlg.ShowModal() != wxID_OK) return;
+
+    std::string path = dlg.GetPath().ToStdString();
+
+    // Ask which monitor station to attach the log to (or create new)
+    std::vector<wxString> choices;
+    for (const auto& ms : scenario_.monitor_stations)
+        choices.push_back(wxString::FromUTF8(ms.name));
+    choices.push_back("< Create new monitor station >");
+
+    wxSingleChoiceDialog choice_dlg(this, "Attach log to monitor station:",
+                                    "Monitor Station", (int)choices.size(),
+                                    choices.data());
+    if (choice_dlg.ShowModal() != wxID_OK) return;
+    int sel = choice_dlg.GetSelection();
+
+    try {
+        MonitorStation imported = almanac::import_monitor_log(path);
+        if (sel < (int)scenario_.monitor_stations.size()) {
+            // Merge into existing monitor station
+            auto& ms = scenario_.monitor_stations[sel];
+            for (auto& c : imported.corrections) {
+                // Replace existing correction for same pattern, or append
+                bool found = false;
+                for (auto& existing : ms.corrections) {
+                    if (existing.pattern == c.pattern) {
+                        existing = c;
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) ms.corrections.push_back(c);
+            }
+        } else {
+            // Create new monitor station at (0, 0) — user can edit coordinates
+            scenario_.monitor_stations.push_back(imported);
+        }
+
+        // Apply corrections to pattern_offsets and trigger recompute
+        scenario_.pattern_offsets = almanac::apply_monitor_corrections(scenario_);
+        MarkDirty();
+        TriggerRecompute();
+
+        // Run consistency check and show diagnostic
+        if (scenario_.monitor_stations.size() >= 2) {
+            auto report = almanac::check_consistency(scenario_);
+            std::string msg = report.summary;
+            for (const auto& item : report.items)
+                msg += "\n\n" + item.detail;
+            if (!report.inconsistencies.empty()) {
+                msg += "\n\nInconsistencies:";
+                for (const auto& iss : report.inconsistencies)
+                    msg += "\n  Pattern " + iss.pattern + ": "
+                         + iss.monitor1 + " vs " + iss.monitor2
+                         + " (" + std::to_string(iss.max_delta_ml) + " ml)";
+                wxMessageBox(wxString::FromUTF8(msg), "Monitor Consistency",
+                             wxICON_WARNING, this);
+            } else {
+                SetStatusText(wxString::FromUTF8("Monitor import OK: " + report.summary),
+                              SB_STATUS);
+            }
+        } else {
+            SetStatusText(
+                wxString::Format("Imported %d correction(s) from monitor log",
+                                 (int)imported.corrections.size()),
+                SB_STATUS);
+        }
+    } catch (const std::exception& e) {
+        wxMessageBox(wxString::FromUTF8(e.what()), "Import Error",
+                     wxICON_ERROR, this);
+    }
+}
+
+void MainFrame::OnComputePatternOffsets(wxCommandEvent& /*evt*/) {
+    if (scenario_.transmitters.empty()) {
+        wxMessageBox("Add transmitters to the scenario first.",
+                     "Compute Pattern Offsets", wxICON_INFORMATION, this);
+        return;
+    }
+
+    PoRefDialog dlg(this, scenario_);
+    if (dlg.ShowModal() != wxID_OK) return;
+
+    scenario_.pattern_offsets = dlg.result_offsets;
+    MarkDirty();
+    TriggerRecompute();
+
+    SetStatusText(
+        wxString::Format("Pattern offsets computed: %zu pair(s).",
+                         scenario_.pattern_offsets.size()),
+        SB_STATUS);
 }
 
 } // namespace bp

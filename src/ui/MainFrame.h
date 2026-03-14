@@ -53,6 +53,9 @@ private:
     void OnReceiverMoved(double lat, double lon);
     void OnExportSimulator();
     void OnExportAlmanac(almanac::FirmwareFormat fmt);
+    void OnExportLayers(const std::string& format);
+    void OnImportMonitorLog(wxCommandEvent& evt);
+    void OnComputePatternOffsets(wxCommandEvent& evt);
     void TriggerRecompute();
     void MarkDirty();
     bool ConfirmDiscardChanges();

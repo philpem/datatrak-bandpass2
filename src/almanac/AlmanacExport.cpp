@@ -1,10 +1,16 @@
 #include "AlmanacExport.h"
+#include "ZonePatterns.h"
 #include "../coords/Osgb.h"
 #include "../coords/NationalGrid.h"
+#include "../engine/monteath.h"
+#include "../engine/conductivity.h"
+#include "../engine/terrain.h"
 #include <sstream>
 #include <iomanip>
 #include <cmath>
 #include <algorithm>
+#include <map>
+#include <stdexcept>
 
 namespace bp {
 namespace almanac {
@@ -129,9 +135,10 @@ std::string generate_po(const Scenario& scenario,
 }
 
 // ---------------------------------------------------------------------------
-std::string generate_almanac(const Scenario& scenario,
-                              const GridData&  grid_data,
-                              FirmwareFormat   fmt)
+std::string generate_almanac(const Scenario&    scenario,
+                              const GridData&    grid_data,
+                              FirmwareFormat     fmt,
+                              const std::string& geojson_path)
 {
     std::string out;
     out += make_header(scenario, fmt);
@@ -140,8 +147,105 @@ std::string generate_almanac(const Scenario& scenario,
     out += "\n";
     out += generate_stxs(scenario);
     out += "\n";
+    if (!geojson_path.empty()) {
+        auto zones = compute_zone_patterns(scenario, grid_data, geojson_path);
+        if (!zones.empty()) {
+            out += generate_zp(zones);
+            out += "\n";
+        }
+    }
     out += generate_po(scenario, grid_data, fmt);
     return out;
+}
+
+// ---------------------------------------------------------------------------
+// Pattern offset computation from a reference point (P5-10)
+// ---------------------------------------------------------------------------
+std::vector<PatternOffset> compute_po_at_point(
+    const Scenario& scenario,
+    double          ref_lat,
+    double          ref_lon,
+    int             nsamples)
+{
+    auto cond_map    = make_conductivity_map(scenario);
+    auto terrain_map = make_terrain_map(scenario);
+
+    // Build master-slot → transmitter lookup
+    std::map<int, const Transmitter*> master_by_slot;
+    for (const auto& tx : scenario.transmitters)
+        master_by_slot[tx.slot] = &tx;
+
+    std::vector<PatternOffset> result;
+    for (const auto& tx : scenario.transmitters) {
+        if (tx.is_master) continue;           // masters don't have a po entry
+        if (tx.master_slot <= 0) continue;    // no master assigned
+
+        // Compute Monteath ASF from this slave station to the reference point
+        double asf_f1 = monteath_asf_ml(
+            scenario.frequencies.f1_hz,
+            tx.lat, tx.lon, ref_lat, ref_lon,
+            *terrain_map, *cond_map, nsamples);
+        double asf_f2 = monteath_asf_ml(
+            scenario.frequencies.f2_hz,
+            tx.lat, tx.lon, ref_lat, ref_lon,
+            *terrain_map, *cond_map, nsamples);
+
+        // F+ and F- carry the same carrier over the same path → same ASF
+        PatternOffset po;
+        po.pattern     = std::to_string(tx.slot) + ","
+                       + std::to_string(tx.master_slot);
+        po.f1plus_ml   = static_cast<int32_t>(std::llround(asf_f1));
+        po.f1minus_ml  = po.f1plus_ml;
+        po.f2plus_ml   = static_cast<int32_t>(std::llround(asf_f2));
+        po.f2minus_ml  = po.f2plus_ml;
+        result.push_back(po);
+    }
+    return result;
+}
+
+std::vector<PatternOffset> compute_po_mode1(const Scenario& scenario,
+                                             int nsamples)
+{
+    // Build slot → transmitter lookup
+    std::map<int, const Transmitter*> by_slot;
+    for (const auto& tx : scenario.transmitters)
+        by_slot[tx.slot] = &tx;
+
+    auto cond_map    = make_conductivity_map(scenario);
+    auto terrain_map = make_terrain_map(scenario);
+
+    std::vector<PatternOffset> result;
+    for (const auto& tx : scenario.transmitters) {
+        if (tx.is_master) continue;
+        if (tx.master_slot <= 0) continue;
+
+        const auto* master = by_slot.count(tx.master_slot)
+                           ? by_slot.at(tx.master_slot) : nullptr;
+        if (!master) continue;
+
+        // Baseline midpoint between slave and master
+        double ref_lat = 0.5 * (tx.lat + master->lat);
+        double ref_lon = 0.5 * (tx.lon + master->lon);
+
+        double asf_f1 = monteath_asf_ml(
+            scenario.frequencies.f1_hz,
+            tx.lat, tx.lon, ref_lat, ref_lon,
+            *terrain_map, *cond_map, nsamples);
+        double asf_f2 = monteath_asf_ml(
+            scenario.frequencies.f2_hz,
+            tx.lat, tx.lon, ref_lat, ref_lon,
+            *terrain_map, *cond_map, nsamples);
+
+        PatternOffset po;
+        po.pattern     = std::to_string(tx.slot) + ","
+                       + std::to_string(tx.master_slot);
+        po.f1plus_ml   = static_cast<int32_t>(std::llround(asf_f1));
+        po.f1minus_ml  = po.f1plus_ml;
+        po.f2plus_ml   = static_cast<int32_t>(std::llround(asf_f2));
+        po.f2minus_ml  = po.f2plus_ml;
+        result.push_back(po);
+    }
+    return result;
 }
 
 } // namespace almanac
