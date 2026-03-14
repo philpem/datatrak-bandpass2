@@ -162,7 +162,7 @@ TEST_CASE("computeAtPoint: f2minus phase is complement of f2plus") {
     CHECK(r.f2minus_phase == Approx(expected_minus).margin(1e-9));
 }
 
-TEST_CASE("computeAtPoint: fractional phases are in [0,1)") {
+TEST_CASE("computeAtPoint: fractional phases are in range 0 to 1") {
     Scenario s;
     s.frequencies.recompute();
     Transmitter tx;
