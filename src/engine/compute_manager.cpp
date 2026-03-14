@@ -122,7 +122,7 @@ ComputeResult ComputeManager::RunPipeline(const Scenario& scenario,
     static const char* LAYERS[] = {
         "groundwave", "skywave", "atm_noise", "snr", "sgr", "gdr",
         "whdop", "repeatable", "asf", "asf_gradient", "absolute_accuracy",
-        "absolute_accuracy_corrected", "confidence"
+        "absolute_accuracy_corrected", "absolute_accuracy_delta", "confidence"
     };
     for (const char* name : LAYERS) {
         GridArray arr;

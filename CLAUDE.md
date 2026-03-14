@@ -734,139 +734,79 @@ allocated but zero everywhere.
 
 | Task | Status | Description |
 |---|---|---|
-| P4-01 | ⚠ approx | Monteath SF phase delay (ASF): currently `asf_single_ml()` — a first-order surface impedance approximation. Must be replaced with proper Monteath terrain profile integration (needs P2-05 first). SPO and station delay from scenario not yet applied. |
-| P4-02 | ⚠ approx | Virtual Locator least-squares (Eq. 9.9–9.12): currently `virtual_locator_error_m()` — a geometric estimate (RMS ASF × WHDOP). Must be replaced with an iterated weighted LS position fix, convergence < 1 m, per grid point. Needs P4-04 (Airy ellipsoid) first. |
-| P4-03 | ✓ | Absolute accuracy + confidence factor map layers computed and rendered. Will automatically improve when P4-01/P4-02 are replaced. |
-| P4-04 | ✗ | Airy ellipsoid + OSGB in Virtual Locator: Andoyer-Lambert range computation with Airy 1830 ellipsoid, matching Mk4 firmware behaviour. Currently WGS84 GeographicLib is used everywhere. |
-| P4-05 | ✗ | OSTN15 full datum transform: stub in `coords/Osgb.cpp` falls back to Helmert. Needs GDAL grid load + bicubic interpolation. |
+| P4-01 | ✓ | Monteath SF phase delay (ASF): `engine/monteath.cpp::monteath_asf_ml()` — surface-impedance path integration with terrain profile, conductivity raster lookup, slope correction. SPO and station delay applied in `computeAtPoint()`. |
+| P4-02 | ✓ | Virtual Locator least-squares (Eq. 9.9–9.12): `asf.cpp::virtual_locator_error_m()` — iterated 2D WLS fix (max 8 iter, convergence < 0.1 m). Returns Airy distance from VL fix to true grid point. |
+| P4-03 | ✓ | Absolute accuracy + confidence factor map layers computed and rendered. `absolute_accuracy_corrected` and `absolute_accuracy_delta` also computed when pattern_offsets are present (P5-14). |
+| P4-04 | ✓ | Airy ellipsoid + OSGB in Virtual Locator: GeographicLib `Geodesic(6377563.396, 1/299.3249646)` used in all distance computations inside `computeASF()` and `computeAtPoint()`, matching Mk4 firmware. |
+| P4-05 | ✓ | OSTN15 full datum transform: `coords/Osgb.cpp` — bilinear interpolation from binary shift grid produced by `tools/ostn15_download.py`. Falls back to Helmert when grid absent or out of coverage. |
 
 ### Phase 5 — Outputs, almanac, monitor calibration, polish (partial)
 
 | Task | Status | Description |
 |---|---|---|
-| P5-01 | ✗ | PNG / SVG / GeoTIFF / CSV export. |
-| P5-02 | ✗ | HTML report. |
+| P5-01 | ✓ | PNG / GeoTIFF / CSV export: `src/ui/ExportManager.{h,cpp}`. File → Export → Active Layer as CSV/PNG/GeoTIFF. |
+| P5-02 | ✓ | HTML report: `ExportManager::export_html()`. File → Export → HTML Report. Self-contained HTML with scenario params, layer stats, pattern offset table. |
 | P5-03 | ✗ | Scenario comparison mode. |
-| P5-04 | ✗ | Data import helpers (`tools/` Python scripts). |
+| P5-04 | ✗ | Data import helpers (`tools/` Python scripts). `tools/ostn15_download.py` complete. |
 | P5-05 | ✗ | Physics documentation. |
 | P5-06 | ✗ | Receiver modelling guide + coordinate systems guide. |
-| P5-07 | ✗ | Linux AppImage packaging. |
-| P5-08 | ✗ | UK 32-zone polygon dataset (`data/zones/uk_32zone.geojson`). |
-| P5-09 | ✗ | Zone pattern computation (Zp). |
+| P5-07 | ✓ | Linux AppImage packaging: `tools/build_appimage.sh` + `data/bandpass2.desktop`. CMake install rules for binary, web assets, zones, and desktop file. |
+| P5-08 | ✓ | UK 32-zone polygon dataset: `data/zones/uk_32zone.geojson` — 32 rectangular zones aligned to OSGB National Grid, derived from DTM-170 Fig 7.3. |
+| P5-09 | ✓ | Zone pattern computation: `almanac/ZonePatterns.{h,cpp}` — SNR-filtered, WHDOP-ranked sets 1-4, coverage gap flagging. `generate_zp()` produces Zp commands. |
 | P5-10 | ✗ | Pattern offset reference UI (Mode 1/2/3 selector, reference marker). |
-| P5-11 | ✗ | ASF gradient map layer — layer is allocated in the pipeline but always zero. |
+| P5-11 | ✓ | ASF gradient map layer: computed in `computeASF()` by central-difference ∇ASF [ml/km] on 2D grid after main loop. |
 | P5-12 | ✓ | Pattern offset computation (Po): `almanac/AlmanacExport.cpp`. |
-| P5-13 | ✓ | Almanac text export (V7 + V16): Sg, Stxs, Po commands. Zp stub (needs P5-08/09). |
-| P5-14 | ✗ | Monitor station calibration import. |
-| P5-15 | ✗ | Model vs measurement diagnostic. |
+| P5-13 | ✓ | Almanac text export (V7 + V16): Sg, Stxs, Po, Zp commands. Zp included when geojson_path given to `generate_almanac()`. |
+| P5-14 | ✓ | Monitor station calibration import: `almanac/MonitorCalib.{h,cpp}` — `import_monitor_log()`, `apply_monitor_corrections()`. File → Import → Monitor Station Log. `absolute_accuracy_corrected` and `absolute_accuracy_delta` layers computed with corrected po values. |
+| P5-15 | ✓ | Model vs measurement diagnostic: `almanac/MonitorCalib.cpp::check_consistency()` — multi-monitor cross-check, uniform offset / localised anomaly / suspect monitor pattern analysis. |
 
 ---
 
-## Current implementation state (Phase 4 handover)
+## Current implementation state (Phase 5 handover)
 
-This section documents the approximations and gaps in the current code that
-Phase 4 must address. All 58 tests pass. Build is clean on Linux.
+Phases 1–4 and partial Phase 5 are complete. 137 tests pass. Build is clean on Linux.
 
-### Engine approximations to replace
+### Remaining approximation
 
 **`groundwave.cpp::groundwave_field_dbuvm()`** — empirical polynomial fit:
 ```
 A_db = 0.0438 × d_km^0.832 × (f/100kHz)^0.5 × (0.005/σ)^0.3
 ```
-Adequate for Phase 3 testing. The full Sommerfeld/Wait/GRWAVE residue series
-would give better accuracy at short and very long ranges, but is not required
-for Phase 4 (ASF dominates absolute accuracy, not the groundwave model shape).
+Adequate for Phases 3–5. The full Sommerfeld/Wait/GRWAVE residue series would
+give better accuracy at short and very long ranges, but ASF dominates absolute
+accuracy so this approximation is acceptable for typical Datatrak geometry.
 
-**`asf.cpp::asf_single_ml()`** — first-order surface impedance approximation:
-```cpp
-double omega = 2π × freq_hz;
-double x     = σ / (ω ε₀);
-double η²    = 1 / sqrt(εᵣ² + x²);     // |η|² first order
-double τ_asf = (d_km × 1000 / c) × 0.5 × η²;
-return τ_asf × freq_hz × 1000.0;        // millilanes
-```
-Uses a fixed `εᵣ = 15` (typical land). Does not use the terrain profile or the
-conductivity raster. P4-01 must replace this with Monteath terrain profile
-integration, once P2-05 (Monteath) is implemented.
+### Remaining Phase 5 work
 
-**`asf.cpp::virtual_locator_error_m()`** — geometric estimate only:
-```cpp
-sigma_asf = RMS of ASF values across selected stations (in metres)
-return sigma_asf × WHDOP;
-```
-This is not an iterated position fix. It gives a rough order-of-magnitude
-absolute accuracy figure. P4-02 must replace this with Williams Eq. 9.9–9.12:
-an iterated weighted least-squares fix that converges to < 1 m.
+- **P5-03** — Scenario comparison mode: not yet designed.
+- **P5-04** — Data import helpers: `tools/ostn15_download.py` is complete;
+  `tools/itu_p832_import.py` and `tools/srtm_download.py` are stubs.
+- **P5-05/06** — Physics documentation and user guides.
+- **P5-10** — Pattern offset reference UI (Mode 1/2/3 selector, reference
+  marker). The engine supports all three modes (baseline midpoint, user marker,
+  ASF gradient map) but the UI dialogue for selecting them is not yet built.
 
-### Hardcoded conductivity in asf.cpp
+### Monitor calibration (P5-14 / P5-15) — implemented
 
-Both `computeASF()` and `computeAtPoint()` use:
-```cpp
-GroundConstants gc { 0.005, 15.0 };  // hardcoded land constants
-```
-These must be replaced with `make_conductivity_map(scenario)->lookup(lat, lon)`
-once the Monteath terrain method is integrated (since the conductivity raster
-is already available from P2-03 and is used correctly in `groundwave.cpp`).
+`almanac/MonitorCalib.{h,cpp}` provides:
+- `import_monitor_log(path)` — parses CSV log files (# header comments for
+  station name, lat, lon; 6-column data rows: slot1,slot2,f1p,f1m,f2p,f2m).
+- `apply_monitor_corrections(scenario)` — returns updated `pattern_offsets`
+  with mean correction deltas merged in (po_new = po_current + mean_delta).
+- `check_consistency(scenario, threshold_ml=20)` — multi-monitor cross-check
+  returning `ConsistencyIssue` list and `DiagnosticItem` list (UniformOffset /
+  LocalisedAnomaly / SuspectMonitor flags).
 
-### f1−/f2− phases in computeAtPoint()
+File → Import → Monitor Station Log triggers this flow.
 
-The per-slot phase output in `computeAtPoint()` produces identical values for
-f1+ and f1−, and for f2+ and f2−. The F+ and F− navslots in a Datatrak
-transmission have opposite polarity — the correct phase offset for F− is
-`(1.0 - phase_fplus)` mod 1. This must be fixed before the simulator export
-produces physically correct values.
+### Corrected accuracy layers — implemented
 
-### Uncomputed layers
-
-Two layers are allocated in `RunPipeline()` but remain zero everywhere:
-
-- **`asf_gradient`** — spatial gradient magnitude of the ASF grid [ml/km].
-  Implement in `computeASF()` after the ASF values are computed: for each grid
-  point, compute the gradient magnitude from the four neighbours. This feeds
-  the monitor siting planning layer (P5-11).
-
-- **`absolute_accuracy_corrected`** — absolute accuracy with monitor station
-  corrections applied. Depends on P5-14 (monitor calibration import).
-
-### OSTN15 datum transform
-
-`coords/Osgb.cpp::wgs84_to_osgb36_ostn15()` is a stub that calls
-`wgs84_to_osgb36()` (Helmert). Full OSTN15 (P4-05) requires downloading the OS
-shift grid file via `tools/ostn15_download.py` and loading it with GDAL for
-bicubic interpolation.
-
-### Airy ellipsoid in Virtual Locator
-
-The Mk4 Locator firmware computes ranges using the Airy 1830 ellipsoid with the
-Andoyer-Lambert formula. `asf.cpp` currently uses `GeographicLib::Geodesic::WGS84()`
-for all distance computations. P4-04 must add an Airy ellipsoid path (Airy
-semi-major a = 6377563.396 m, f = 1/299.3249646) and use it inside
-`virtual_locator_error_m()` and `computeAtPoint()`.
-
-GeographicLib supports arbitrary ellipsoids:
-```cpp
-// Airy 1830
-const GeographicLib::Geodesic airy(6377563.396, 1.0/299.3249646);
-```
-
-### Missing P2-02 Millington and P2-05 Monteath
-
-Implementing P4-01 properly requires P2-05 (Monteath terrain method) first.
-P2-05 in turn works best with P2-02 (Millington) for mixed land/sea paths.
-The recommended implementation order for Phase 4 is therefore:
-
-1. **P2-05 Monteath** (terrain profile integration) — incremental, unit tests at each step
-2. **P4-01** (replace `asf_single_ml` with Monteath output)
-3. **P4-04** (Airy ellipsoid in VL and `computeAtPoint`)
-4. **P4-02** (replace `virtual_locator_error_m` with iterated WLS using Airy)
-5. **P4-03** (absolute accuracy layers update automatically)
-6. **P4-05** (OSTN15 full transform — can be done in parallel with 1–5)
-7. Fix `asf_gradient` layer computation
-8. Fix f1−/f2− phase polarity in `computeAtPoint`
-9. Replace hardcoded conductivity in `asf.cpp` with raster lookup
-
-P2-02 (Millington) can be deferred to a later pass — the midpoint conductivity
-approximation is adequate for non-coastal paths.
+`computeASF()` now computes two additional layers when `scenario.pattern_offsets`
+is non-empty:
+- **`absolute_accuracy_corrected`** — VL fix with `corrected_asf = asf - po_correction`
+  for each slave station (pattern "slave_slot,master_slot").
+- **`absolute_accuracy_delta`** — `absolute_accuracy - absolute_accuracy_corrected`
+  (positive = corrections improved the fix).
 
 ---
 

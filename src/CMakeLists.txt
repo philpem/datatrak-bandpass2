@@ -25,6 +25,7 @@ set(BP_SOURCES
     ui/ExportManager.cpp
     almanac/AlmanacExport.cpp
     almanac/ZonePatterns.cpp
+    almanac/MonitorCalib.cpp
 )
 
 add_executable(bandpass2 WIN32 ${BP_SOURCES})

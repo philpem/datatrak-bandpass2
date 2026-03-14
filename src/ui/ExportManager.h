@@ -1,6 +1,7 @@
 #pragma once
 #include <string>
 #include "../engine/grid.h"
+#include "../model/Scenario.h"
 
 namespace bp {
 
@@ -37,6 +38,13 @@ public:
     // error message (including "GDAL not available" when compiled without it).
     static std::string export_geotiff(const GridArray& layer,
                                        const std::string& path);
+
+    // Export a self-contained HTML report for all computed layers.
+    // Includes: scenario parameters, per-layer statistics and descriptions.
+    // No external dependencies (no CDN, no embedded images beyond ASCII art).
+    static std::string export_html(const GridData& data,
+                                   const Scenario& scenario,
+                                   const std::string& path);
 };
 
 } // namespace bp

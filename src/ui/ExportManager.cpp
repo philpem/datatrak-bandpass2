@@ -206,4 +206,159 @@ std::string ExportManager::export_geotiff(const GridArray& layer,
 #endif
 }
 
+// ---------------------------------------------------------------------------
+// HTML report — self-contained, no external dependencies
+// ---------------------------------------------------------------------------
+std::string ExportManager::export_html(const GridData& data,
+                                       const Scenario& scenario,
+                                       const std::string& path)
+{
+    std::ofstream f(path);
+    if (!f) return "Cannot open file for writing: " + path;
+
+    const double c = 299'792'458.0;
+    double f1_khz = scenario.frequencies.f1_hz / 1000.0;
+    double f2_khz = scenario.frequencies.f2_hz / 1000.0;
+    double lw1_m  = c / scenario.frequencies.f1_hz;
+    double lw2_m  = c / scenario.frequencies.f2_hz;
+
+    // Layer descriptions
+    static const std::pair<const char*, const char*> LAYER_DESC[] = {
+        {"groundwave",                "Groundwave field strength [dBµV/m] — ITU P.368 + Millington"},
+        {"skywave",                   "Median night-time skywave field strength [dBµV/m] — ITU P.684"},
+        {"atm_noise",                 "Atmospheric noise floor [dBµV/m] — ITU P.372"},
+        {"snr",                       "Signal-to-noise ratio per transmitter [dB]"},
+        {"sgr",                       "Skywave-to-groundwave ratio [dB]"},
+        {"gdr",                       "Groundwave-to-disturbance ratio [dB]"},
+        {"whdop",                     "Weighted HDOP — geometry quality (lower = better)"},
+        {"repeatable",                "Repeatable accuracy 1-sigma [m]  (σ_p = σ_d × WHDOP)"},
+        {"asf",                       "Additional Secondary Factor — mean ASF [millilanes]"},
+        {"asf_gradient",              "ASF spatial gradient magnitude [ml/km] — monitor siting aid"},
+        {"absolute_accuracy",         "Absolute position error [m] from uncorrected VL fix"},
+        {"absolute_accuracy_corrected","Absolute position error [m] with monitor po corrections applied"},
+        {"absolute_accuracy_delta",   "Accuracy improvement from corrections [m]  (positive = better)"},
+        {"confidence",                "Confidence factor [0–1]  (1.0 = best, 0 = no fix)"},
+        {"coverage",                  "Binary coverage: all criteria satisfied"},
+    };
+
+    auto layer_desc = [&](const std::string& name) -> std::string {
+        for (auto& p : LAYER_DESC)
+            if (p.first == name) return p.second;
+        return name;
+    };
+
+    std::ostringstream ss;
+
+    ss << "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n"
+       << "<meta charset=\"UTF-8\">\n"
+       << "<title>BANDPASS II Report — " << scenario.name << "</title>\n"
+       << "<style>\n"
+       << "body{font-family:sans-serif;margin:2em;color:#222;}\n"
+       << "h1{color:#1a5276;}h2{color:#2471a3;border-bottom:1px solid #aed6f1;}\n"
+       << "table{border-collapse:collapse;margin-bottom:1.5em;width:100%;}\n"
+       << "th,td{border:1px solid #aaa;padding:0.4em 0.8em;text-align:left;}\n"
+       << "th{background:#d6eaf8;}tr:nth-child(even){background:#f2f9ff;}\n"
+       << ".warn{color:#a94442;font-weight:bold;}\n"
+       << ".stat-table td:nth-child(n+2){text-align:right;font-family:monospace;}\n"
+       << "</style>\n</head>\n<body>\n";
+
+    ss << "<h1>BANDPASS II — Scenario Report</h1>\n";
+
+    // ---- Scenario parameters
+    ss << "<h2>Scenario Parameters</h2>\n"
+       << "<table><tr><th>Parameter</th><th>Value</th></tr>\n"
+       << "<tr><td>Scenario name</td><td>" << scenario.name << "</td></tr>\n"
+       << "<tr><td>F1 frequency</td><td>" << std::fixed << std::setprecision(4)
+       << f1_khz << " kHz  (lane width " << std::setprecision(2) << lw1_m << " m)</td></tr>\n"
+       << "<tr><td>F2 frequency</td><td>" << std::setprecision(4)
+       << f2_khz << " kHz  (lane width " << std::setprecision(2) << lw2_m << " m)</td></tr>\n";
+    if (!scenario.frequencies.is_standard()) {
+        ss << "<tr><td colspan=\"2\" class=\"warn\">"
+           << "Non-standard frequencies — po values are in configured millilanes."
+           << "</td></tr>\n";
+    }
+    ss << "<tr><td>Grid</td><td>"
+       << std::setprecision(2)
+       << scenario.grid.lat_min << "°N – " << scenario.grid.lat_max << "°N, "
+       << scenario.grid.lon_min << "°E – " << scenario.grid.lon_max << "°E, "
+       << scenario.grid.resolution_km << " km resolution"
+       << "</td></tr>\n"
+       << "<tr><td>Transmitters</td><td>" << scenario.transmitters.size() << "</td></tr>\n"
+       << "<tr><td>Monitor stations</td><td>" << scenario.monitor_stations.size() << "</td></tr>\n"
+       << "<tr><td>Pattern offsets</td><td>" << scenario.pattern_offsets.size() << "</td></tr>\n"
+       << "</table>\n";
+
+    // ---- Transmitter table
+    if (!scenario.transmitters.empty()) {
+        ss << "<h2>Transmitters</h2>\n"
+           << "<table><tr><th>Name</th><th>Slot</th><th>Lat</th><th>Lon</th>"
+           << "<th>Power (W)</th><th>Master?</th></tr>\n";
+        for (const auto& tx : scenario.transmitters) {
+            ss << "<tr><td>" << tx.name << "</td><td>" << tx.slot << "</td>"
+               << "<td>" << std::setprecision(5) << tx.lat << "</td>"
+               << "<td>" << tx.lon << "</td>"
+               << "<td>" << std::setprecision(1) << tx.power_w << "</td>"
+               << "<td>" << (tx.is_master ? "Yes" : "") << "</td></tr>\n";
+        }
+        ss << "</table>\n";
+    }
+
+    // ---- Layer statistics
+    if (!data.layers.empty()) {
+        ss << "<h2>Layer Statistics</h2>\n"
+           << "<table class=\"stat-table\">"
+           << "<tr><th>Layer</th><th>Min</th><th>Max</th><th>Mean</th>"
+           << "<th>Points</th><th>Description</th></tr>\n";
+
+        for (const auto& [name, arr] : data.layers) {
+            if (arr.values.empty()) continue;
+            double vmin =  1e30, vmax = -1e30, vsum = 0.0;
+            int    count = 0;
+            for (double v : arr.values) {
+                if (v >= 9000.0) continue;  // sentinel
+                if (v < vmin) vmin = v;
+                if (v > vmax) vmax = v;
+                vsum += v;
+                ++count;
+            }
+            ss << "<tr><td>" << name << "</td>";
+            if (count > 0) {
+                ss << std::fixed << std::setprecision(2)
+                   << "<td>" << vmin << "</td>"
+                   << "<td>" << vmax << "</td>"
+                   << "<td>" << vsum / count << "</td>";
+            } else {
+                ss << "<td>—</td><td>—</td><td>—</td>";
+            }
+            ss << "<td>" << count << " / " << arr.values.size() << "</td>"
+               << "<td>" << layer_desc(name) << "</td></tr>\n";
+        }
+        ss << "</table>\n";
+    } else {
+        ss << "<p><em>No computed layer data available.</em></p>\n";
+    }
+
+    // ---- Pattern offsets
+    if (!scenario.pattern_offsets.empty()) {
+        ss << "<h2>Pattern Offsets (po)</h2>\n"
+           << "<table><tr><th>Pattern</th><th>F1+ (ml)</th><th>F1− (ml)</th>"
+           << "<th>F2+ (ml)</th><th>F2− (ml)</th></tr>\n";
+        for (const auto& po : scenario.pattern_offsets) {
+            ss << "<tr><td>" << po.pattern << "</td>"
+               << "<td>" << po.f1plus_ml  << "</td>"
+               << "<td>" << po.f1minus_ml << "</td>"
+               << "<td>" << po.f2plus_ml  << "</td>"
+               << "<td>" << po.f2minus_ml << "</td></tr>\n";
+        }
+        ss << "</table>\n";
+    }
+
+    ss << "<p style=\"color:#888;font-size:0.85em;\">Generated by BANDPASS II.</p>\n"
+       << "</body>\n</html>\n";
+
+    f << ss.str();
+    if (!f) return "Write error: " + path;
+    return {};
+}
+
 } // namespace bp

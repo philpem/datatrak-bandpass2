@@ -135,3 +135,9 @@ bp_add_test(test_zone_patterns
     ${CMAKE_SOURCE_DIR}/src/coords/Osgb.cpp
     ${CMAKE_SOURCE_DIR}/src/coords/NationalGrid.cpp
 )
+
+# Monitor calibration tests (P5-14 / P5-15)
+bp_add_test(test_monitor_calib
+    almanac/test_monitor_calib.cpp
+    ${CMAKE_SOURCE_DIR}/src/almanac/MonitorCalib.cpp
+)

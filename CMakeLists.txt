@@ -52,3 +52,10 @@ add_subdirectory(tests)
 
 # Install web assets alongside the binary
 install(DIRECTORY src/web DESTINATION share/bandpass2)
+# Install zone data alongside the binary
+install(DIRECTORY data/zones DESTINATION share/bandpass2)
+# Install desktop file (Linux)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    install(FILES data/bandpass2.desktop
+            DESTINATION share/applications)
+endif()
