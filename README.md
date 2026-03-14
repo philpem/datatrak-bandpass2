@@ -1,7 +1,11 @@
 # BANDPASS II
 
 Coverage and positioning accuracy planner for Datatrak-type LF radio navigation
-networks, based on the propagation physics model from Williams (2004).
+networks, based on the propagation physics model from:
+
+> T. Williams, "Prediction of the Coverage and Performance of the Datatrak
+> Low-Frequency Tracking System," Ph.D. thesis, University of Wales Bangor,
+> Bangor, Wales, UK, 2004.
 
 ---
 
