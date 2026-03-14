@@ -66,7 +66,7 @@ private:
 
     static constexpr double F_MIN_KHZ    =   30.0;
     static constexpr double F_MAX_KHZ    =  300.0;
-    static constexpr double RES_MIN_KM   =    0.1;
+    static constexpr double RES_MIN_KM   =    0.001;  // sanity floor only; point count is the real limit
     static constexpr double RES_MAX_KM   = 1000.0;
     // UK full-coverage at 1 km spacing ≈ 766k points; use 800k as hard ceiling.
     static constexpr int    MAX_GRID_PTS = 800000;
