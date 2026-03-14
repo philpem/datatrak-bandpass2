@@ -318,7 +318,7 @@ void ParamEditor::RebuildMasterSlotChoices(int current_id) {
         if (i == current_id) continue;  // don't offer self as master
         const auto& t = tx_list_[i];
         wxString label = wxString::Format("Slot %d - %s",
-                                          t.slot, wxString::FromUTF8(t.name));
+                                          t.slot, wxString::FromUTF8(t.name).c_str());
         tx_mslot_choice_->Append(label);
         master_slot_values_.push_back(t.slot);
     }

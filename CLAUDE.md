@@ -899,6 +899,21 @@ the interface is a text/serial protocol.
   handling. `/tmp` does not exist on Windows — tests that write temp files
   will silently fail to open the file, producing empty output and cascading
   assertion failures.
+- **Never pass `wxString` or `std::string` directly to `wxString::Format` for
+  `%s`.** Both are non-POD objects; passing them as varargs is undefined
+  behaviour and causes a crash in `wxFormatString::AsWChar()` at runtime.
+  Always call `.c_str()` on the argument:
+  ```cpp
+  // Wrong — crashes at runtime:
+  wxString::Format("Hello %s", some_wx_string)
+  wxString::Format("Hello %s", some_std_string)
+  // Correct:
+  wxString::Format("Hello %s", some_wx_string.c_str())
+  wxString::Format("Hello %s", some_std_string.c_str())
+  ```
+  This bug is silent on some compilers and only manifests when the affected
+  code path is first exercised, making it hard to trace. Four instances were
+  found and fixed in `ParamEditor.cpp` and `MainFrame.cpp`.
 
 ---
 

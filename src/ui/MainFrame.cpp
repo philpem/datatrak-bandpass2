@@ -326,7 +326,7 @@ void MainFrame::OnComputeResult(wxCommandEvent& evt) {
 
 void MainFrame::OnComputeProgress(wxCommandEvent& evt) {
     SetStatusText(wxString::Format("Computing %s... %d%%",
-                                   evt.GetString(), evt.GetInt()), SB_STATUS);
+                                   evt.GetString().c_str(), evt.GetInt()), SB_STATUS);
 }
 
 void MainFrame::ApplyComputeResult(const ComputeResult& result) {
@@ -471,7 +471,7 @@ void MainFrame::DeleteTransmitter(int id) {
 
     std::string name = scenario_.transmitters[id].name;
     int ret = wxMessageBox(
-        wxString::Format("Delete transmitter \"%s\"?", name),
+        wxString::Format("Delete transmitter \"%s\"?", name.c_str()),
         "Delete Transmitter", wxYES_NO | wxNO_DEFAULT | wxICON_QUESTION, this);
     if (ret != wxYES) return;
 
@@ -772,7 +772,7 @@ void MainFrame::OnExportLayers(const std::string& format) {
     }
 
     if (err.empty()) {
-        SetStatusText(wxString::Format("Exported %s → %s", layer_name, path), SB_STATUS);
+        SetStatusText(wxString::Format("Exported %s → %s", layer_name.c_str(), path.c_str()), SB_STATUS);
     } else {
         wxMessageBox(wxString::FromUTF8(err), "Export Error", wxICON_ERROR, this);
     }
