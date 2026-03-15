@@ -8,10 +8,11 @@ namespace bp {
 
 // Try to load the OSTN15 binary grid from standard locations.
 // Search order:
-//   1. Executable directory (most common deployment)
+//   1. Executable directory
 //   2. data/ subdirectory next to executable
-//   3. <user data dir>/OSTN15.dat (user-installed)
-//   4. data/ subdirectory in parent of executable dir (development tree)
+//   3. <user data dir>/OSTN15.dat
+//   4. Walk up from executable directory looking for data/OSTN15.dat
+//      (handles build trees like build/src/bandpass2 → ../../data/)
 static void try_load_ostn15() {
     wxFileName exe(wxStandardPaths::Get().GetExecutablePath());
     exe.SetFullName("OSTN15.dat");
@@ -22,12 +23,20 @@ static void try_load_ostn15() {
 
     wxFileName user_data(wxStandardPaths::Get().GetUserDataDir(), "OSTN15.dat");
 
-    wxFileName dev_data(wxStandardPaths::Get().GetExecutablePath());
-    dev_data.RemoveLastDir();
-    dev_data.AppendDir("data");
-    dev_data.SetFullName("OSTN15.dat");
+    std::vector<wxFileName> candidates = {exe, exe_data, user_data};
 
-    for (const wxFileName& candidate : {exe, exe_data, user_data, dev_data}) {
+    // Walk up from executable directory (up to 4 levels) to find data/OSTN15.dat
+    // in the source tree.  Handles build/bandpass2, build/src/bandpass2, etc.
+    wxFileName walk(wxStandardPaths::Get().GetExecutablePath());
+    for (int i = 0; i < 4 && walk.GetDirCount() > 0; ++i) {
+        walk.RemoveLastDir();
+        wxFileName dev(walk);
+        dev.AppendDir("data");
+        dev.SetFullName("OSTN15.dat");
+        candidates.push_back(dev);
+    }
+
+    for (const wxFileName& candidate : candidates) {
         if (candidate.FileExists()) {
             if (osgb::load_ostn15(candidate.GetFullPath().ToStdString())) {
                 wxLogMessage("OSTN15 grid loaded from %s",
