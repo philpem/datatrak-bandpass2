@@ -483,5 +483,81 @@ TEST_CASE("groundwave_for_model: GRWAVE dispatches to millington_with+grwave") {
     CHECK(E_disp == Approx(E_direct).margin(0.001));
 }
 
+// ---- computeGroundwave: propagation model produces different grid output ----
+
+TEST_CASE("computeGroundwave: Millington vs GRWAVE produce different grid values") {
+    // Build a small scenario with one transmitter and a coarse grid
+    Scenario s;
+    s.frequencies.f1_hz = 146437.5;
+    s.frequencies.recompute();
+    s.grid.lat_min = 51.0;
+    s.grid.lat_max = 52.0;
+    s.grid.lon_min = -1.0;
+    s.grid.lon_max =  0.0;
+    s.grid.resolution_km = 50.0;  // very coarse — just a few points
+
+    TransmitterSite site;
+    site.name    = "Test";
+    site.lat     = 52.3;
+    site.lon     = -0.2;
+    site.power_w = 40.0;
+    SlotConfig sc;
+    sc.slot      = 1;
+    sc.is_master = true;
+    site.slots.push_back(sc);
+    s.transmitter_sites.push_back(site);
+
+    std::atomic<bool> cancel{false};
+
+    // --- Run with Millington ---
+    s.propagation_model = Scenario::PropagationModel::Millington;
+    auto grid_mil = buildGrid(s.grid, cancel);
+    REQUIRE(!grid_mil.points.empty());
+    GridData data_mil;
+    GridArray arr_mil;
+    arr_mil.layer_name    = "groundwave";
+    arr_mil.points        = grid_mil.points;
+    arr_mil.values.assign(grid_mil.points.size(), 0.0);
+    arr_mil.width         = grid_mil.width;
+    arr_mil.height        = grid_mil.height;
+    arr_mil.lat_min       = s.grid.lat_min;
+    arr_mil.lat_max       = s.grid.lat_max;
+    arr_mil.lon_min       = s.grid.lon_min;
+    arr_mil.lon_max       = s.grid.lon_max;
+    arr_mil.resolution_km = s.grid.resolution_km;
+    data_mil.layers["groundwave"] = std::move(arr_mil);
+    computeGroundwave(data_mil, s, cancel);
+
+    // --- Run with GRWAVE ---
+    s.propagation_model = Scenario::PropagationModel::GRWAVE;
+    GridData data_grw;
+    GridArray arr_grw;
+    arr_grw.layer_name    = "groundwave";
+    arr_grw.points        = grid_mil.points;
+    arr_grw.values.assign(grid_mil.points.size(), 0.0);
+    arr_grw.width         = grid_mil.width;
+    arr_grw.height        = grid_mil.height;
+    arr_grw.lat_min       = s.grid.lat_min;
+    arr_grw.lat_max       = s.grid.lat_max;
+    arr_grw.lon_min       = s.grid.lon_min;
+    arr_grw.lon_max       = s.grid.lon_max;
+    arr_grw.resolution_km = s.grid.resolution_km;
+    data_grw.layers["groundwave"] = std::move(arr_grw);
+    computeGroundwave(data_grw, s, cancel);
+
+    // The two models must produce different values at at least one grid point.
+    const auto& vals_mil = data_mil.layers["groundwave"].values;
+    const auto& vals_grw = data_grw.layers["groundwave"].values;
+    REQUIRE(vals_mil.size() == vals_grw.size());
+    bool any_different = false;
+    for (size_t i = 0; i < vals_mil.size(); ++i) {
+        if (std::abs(vals_mil[i] - vals_grw[i]) > 0.01) {
+            any_different = true;
+            break;
+        }
+    }
+    CHECK(any_different);
+}
+
 // ---- TOML round-trip for GRWAVE ----
 // (TOML tests are in tests/model/test_toml_io.cpp)
