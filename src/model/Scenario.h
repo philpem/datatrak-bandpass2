@@ -94,8 +94,7 @@ struct Scenario {
     TerrainSource terrain_source = TerrainSource::Flat;
     std::string   terrain_file;
 
-    enum class DatumTransform { Helmert, OSTN15 };
-    DatumTransform datum_transform = DatumTransform::Helmert;
+
 };
 
 } // namespace bp

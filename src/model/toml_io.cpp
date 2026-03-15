@@ -176,13 +176,6 @@ Scenario load(const std::filesystem::path& path) {
         }
     }
 
-    // [datum]
-    if (auto d = tbl["datum"].as_table()) {
-        std::string tr = str((*d)["transform"], "helmert");
-        s.datum_transform = (tr == "ostn15") ? Scenario::DatumTransform::OSTN15
-                                             : Scenario::DatumTransform::Helmert;
-    }
-
     return s;
 }
 
@@ -211,9 +204,6 @@ void save(const Scenario& s, const std::filesystem::path& path) {
             {"min_stations",           (int64_t)s.receiver.min_stations},
             {"vp_ms",                  s.receiver.vp_ms},
             {"ellipsoid",              (s.receiver.ellipsoid == ReceiverModel::Ellipsoid::WGS84) ? "wgs84" : "airy1830"},
-        }},
-        {"datum", toml::table{
-            {"transform", (s.datum_transform == Scenario::DatumTransform::OSTN15) ? "ostn15" : "helmert"},
         }},
     };
 

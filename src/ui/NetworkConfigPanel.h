@@ -61,9 +61,6 @@ private:
     wxTextCtrl*   f2_field_        = nullptr;
     wxStaticText* ml_label_        = nullptr;
 
-    // Network
-    wxChoice*     datum_           = nullptr;
-
     // Grid bounds
     wxTextCtrl*   lat_min_field_   = nullptr;
     wxTextCtrl*   lat_max_field_   = nullptr;

@@ -74,18 +74,9 @@ NetworkConfigPanel::NetworkConfigPanel(wxWindow* parent)
         auto* gs    = new wxFlexGridSizer(2, 4, 6);
         gs->AddGrowableCol(1);
 
-        // Datum
+        // OSTN15 status note (spans both columns)
         gs->Add(new wxStaticText(this, wxID_ANY, "Datum"),
                 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
-        wxArrayString datums;
-        datums.Add("Helmert"); datums.Add("OSTN15");
-        datum_ = new wxChoice(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, datums);
-        datum_->SetSelection(0);
-        datum_->Bind(wxEVT_CHOICE, &NetworkConfigPanel::OnOtherChanged, this);
-        gs->Add(datum_, 1, wxEXPAND | wxBOTTOM, 2);
-
-        // OSTN15 status note
-        gs->Add(new wxStaticText(this, wxID_ANY, ""), 0);
         ostn15_label_ = new wxStaticText(this, wxID_ANY, "");
         gs->Add(ostn15_label_, 0, wxBOTTOM, 2);
 
@@ -229,8 +220,6 @@ void NetworkConfigPanel::SetScenario(Scenario* scenario) {
     f1_field_->ChangeValue(wxString::Format("%.4f", scenario_->frequencies.f1_hz / 1000.0));
     f2_field_->ChangeValue(wxString::Format("%.4f", scenario_->frequencies.f2_hz / 1000.0));
 
-    datum_->SetSelection(scenario_->datum_transform == Scenario::DatumTransform::OSTN15 ? 1 : 0);
-
     lat_min_field_->ChangeValue(wxString::Format("%.4f", scenario_->grid.lat_min));
     lat_max_field_->ChangeValue(wxString::Format("%.4f", scenario_->grid.lat_max));
     lon_min_field_->ChangeValue(wxString::Format("%.4f", scenario_->grid.lon_min));
@@ -271,9 +260,6 @@ void NetworkConfigPanel::SaveToScenario() {
     if (f1 >= F_MIN_KHZ && f1 <= F_MAX_KHZ) scenario_->frequencies.f1_hz = f1 * 1000.0;
     if (f2 >= F_MIN_KHZ && f2 <= F_MAX_KHZ) scenario_->frequencies.f2_hz = f2 * 1000.0;
     scenario_->frequencies.recompute();
-
-    scenario_->datum_transform = (datum_->GetSelection() == 1) ? Scenario::DatumTransform::OSTN15
-                                                                : Scenario::DatumTransform::Helmert;
 
     double lat_min = wxAtof(lat_min_field_->GetValue());
     double lat_max = wxAtof(lat_max_field_->GetValue());
@@ -509,16 +495,12 @@ void NetworkConfigPanel::UpdateResCountDisplay() {
 
 void NetworkConfigPanel::UpdateOstn15Label() {
     if (!ostn15_label_) return;
-    if (datum_->GetSelection() == 1) {
-        if (osgb::ostn15_loaded()) {
-            ostn15_label_->SetLabel("OSTN15 grid loaded (+/-0.1 m)");
-            ostn15_label_->SetForegroundColour(*wxBLACK);
-        } else {
-            ostn15_label_->SetLabel("Grid not loaded - run ostn15_download.py");
-            ostn15_label_->SetForegroundColour(*wxRED);
-        }
+    if (osgb::ostn15_loaded()) {
+        ostn15_label_->SetLabel("OSTN15 (+/-0.1 m)");
+        ostn15_label_->SetForegroundColour(*wxBLACK);
     } else {
-        ostn15_label_->SetLabel("");
+        ostn15_label_->SetLabel("Helmert (+/-5 m) - run ostn15_download.py for better accuracy");
+        ostn15_label_->SetForegroundColour(*wxRED);
     }
     ostn15_label_->GetParent()->Layout();
 }
