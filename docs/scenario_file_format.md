@@ -47,7 +47,7 @@ rejected on load.
 | `vehicle_noise_dbuvpm` | float | `27.0` | Vehicle electrical noise (dBuV/m) |
 | `max_range_km` | float | `350.0` | Maximum usable range from any transmitter (km) |
 | `min_stations` | int | `4` | Minimum stations required for a position fix |
-| `vp_ms` | float | `299892718` | Velocity of propagation (m/s) |
+| `vp_ms` | float | `299702547` | Velocity of propagation (m/s); ~99.97% of c |
 | `ellipsoid` | string | `"airy1830"` | `"airy1830"` (matches Mk4 Locator firmware) or `"wgs84"` |
 
 ### `[[transmitters]]`
@@ -157,7 +157,7 @@ noise_floor_dbuvpm   = 14.0
 vehicle_noise_dbuvpm = 27.0
 max_range_km         = 350.0
 min_stations         = 4
-vp_ms                = 299892718
+vp_ms                = 299702547
 ellipsoid            = "airy1830"
 
 # Master station

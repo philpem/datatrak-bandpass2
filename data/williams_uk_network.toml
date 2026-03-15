@@ -57,7 +57,7 @@ noise_floor_dbuvpm   = 14.0
 vehicle_noise_dbuvpm = 27.0
 max_range_km         = 350.0
 min_stations         = 4
-vp_ms                = 299892718
+vp_ms                = 299702547
 ellipsoid            = "airy1830"
 # =============================================================================
 # Transmitter sites

@@ -212,8 +212,9 @@ void ParamEditor::BuildReceiverPage(wxWindow* page) {
     rx_ellipsoid_->Bind(wxEVT_CHOICE, &ParamEditor::OnRxField, this);
     gs->Add(rx_ellipsoid_, 1, wxEXPAND | wxBOTTOM, 4);
 
-    rx_vp_ = MakeField(page, "VP (m/s)", gs);
-    rx_vp_->SetToolTip("Velocity of propagation used by receiver firmware (m/s).");
+    rx_vp_ = MakeField(page, "VP (% of c)", gs);
+    rx_vp_->SetToolTip("Velocity of propagation as a percentage of the speed of light in vacuum.\n"
+                       "Ground-level LF propagation is typically ~99.97% of c.");
     rx_vp_->Bind(wxEVT_TEXT, &ParamEditor::OnRxField, this);
 
     gs->Add(new wxStaticText(page, wxID_ANY, "Lock position"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
@@ -288,7 +289,7 @@ void ParamEditor::LoadReceiver(const ReceiverModel& rx) {
     rx_range_->ChangeValue(wxString::Format("%.1f", rx.max_range_km));
     rx_minstns_->SetValue(rx.min_stations);
     rx_ellipsoid_->SetSelection(rx.ellipsoid == ReceiverModel::Ellipsoid::WGS84 ? 1 : 0);
-    rx_vp_->ChangeValue(wxString::Format("%.1f", rx.vp_ms));
+    rx_vp_->ChangeValue(wxString::Format("%.4f", rx.vp_percent_c()));
     notebook_->SetSelection(1);
     updating_ = false;
     UpdateRxFieldStates();
@@ -605,7 +606,7 @@ void ParamEditor::OnRxMode(wxCommandEvent& /*evt*/) {
     rx.min_stations         = rx_minstns_->GetValue();
     rx.ellipsoid = (rx_ellipsoid_->GetSelection() == 1) ? ReceiverModel::Ellipsoid::WGS84
                                                          : ReceiverModel::Ellipsoid::Airy1830;
-    rx.vp_ms = wxAtof(rx_vp_->GetValue());
+    rx.set_vp_from_percent_c(wxAtof(rx_vp_->GetValue()));
     current_rx_ = rx;
     on_receiver_changed(rx);
 }

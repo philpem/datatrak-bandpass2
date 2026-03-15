@@ -29,7 +29,7 @@ All receiver parameters are set via the **Parameter Editor** panel
 | Vehicle noise | dBµV/m | 27.0 | In-cab electrical noise contribution |
 | Max range | km | 350.0 | Stations beyond this are excluded |
 | Min stations | count | 4 | Minimum stations needed for a fix |
-| Phase velocity | m/s | 299,892,718 | Speed used for range calculation |
+| Phase velocity | % of c | 99.97 | Speed used for range calculation (% of speed of light) |
 | Ellipsoid | — | Airy 1830 | Range calculation ellipsoid |
 
 ### Noise floor
@@ -50,11 +50,13 @@ N_total = 10 log10(10^(N_atm/10) + 10^(N_veh/10)) dBµV/m
 
 ### Phase velocity
 
-The Mk4 Locator uses a fixed phase velocity of 299,892,718 m/s (slightly
-less than c in vacuum) to convert phase measurements to ranges.  This
-value accounts for the average reduction in wave speed over typical ground
-paths.  BANDPASS II uses this as the default; it can be changed if modelling
-alternative receiver firmware.
+The Mk4 Locator uses a fixed phase velocity to convert phase measurements
+to ranges.  The default of 99.97% of c (299,702,547 m/s) accounts for the
+average reduction in LF wave speed at ground level through the atmosphere.
+The UI displays this as a percentage of the speed of light in vacuum, which
+is more intuitive than a raw m/s value.  It can be changed if modelling
+alternative receiver firmware, but the speed of LF radio waves at ground
+level is essentially constant so there is rarely a need to adjust it.
 
 ### Ellipsoid
 
