@@ -24,8 +24,6 @@ NetworkConfigPanel::NetworkConfigPanel(wxWindow* parent)
     debounce_.Bind(wxEVT_TIMER, &NetworkConfigPanel::OnDebounceTimer, this);
 
     auto* outer = new wxBoxSizer(wxVERTICAL);
-    outer->Add(new wxStaticText(this, wxID_ANY, "Network Configuration"),
-               0, wxALL, 6);
 
     // ── Scenario ────────────────────────────────────────────────────────────
     {
