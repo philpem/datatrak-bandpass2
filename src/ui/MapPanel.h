@@ -15,8 +15,10 @@ public:
     explicit MapPanel(wxWindow* parent, uint16_t tile_port = 0);
 
     // C++ → JavaScript
+    // slot_count > 1 renders a visually distinct multi-slot icon with a badge.
     void AddTransmitterMarker(int id, double lat, double lon,
-                               const std::string& name, bool locked = false);
+                               const std::string& name, bool locked = false,
+                               int slot_count = 1);
     void MoveTransmitterMarker(int id, double lat, double lon);
     void RemoveTransmitterMarker(int id);
     void LockTransmitter(int id, bool locked);

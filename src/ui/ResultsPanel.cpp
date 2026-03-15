@@ -57,7 +57,7 @@ void ResultsPanel::DrawPlot(wxDC& dc) {
 
     if (W < 160 || H < 80) return;
 
-    if (!scenario_ || scenario_->transmitters.empty()) {
+    if (!scenario_ || scenario_->transmitter_sites.empty()) {
         dc.SetTextForeground(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
         wxFont f(8, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL);
         dc.SetFont(f);
@@ -153,8 +153,9 @@ void ResultsPanel::DrawPlot(wxDC& dc) {
     struct LegendEntry { wxString label; wxColour col; bool dashed; };
     std::vector<LegendEntry> legend;
 
-    for (int ti = 0; ti < (int)scenario_->transmitters.size(); ++ti) {
-        const auto& tx = scenario_->transmitters[ti];
+    const auto flat_txs = scenario_->flatTransmitters();
+    for (int ti = 0; ti < (int)flat_txs.size(); ++ti) {
+        const auto& tx = flat_txs[ti];
         if (tx.power_w <= 0.0) continue;
 
         wxColour col = TX_COLOURS[ti % N_TX_COLOURS];

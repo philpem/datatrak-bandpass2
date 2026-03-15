@@ -55,7 +55,7 @@ static std::string make_header(const Scenario& scenario, FirmwareFormat fmt) {
 std::string generate_sg(const Scenario& scenario) {
     std::ostringstream ss;
     ss << "# Sg commands — station grid (OSGB National Grid)\n";
-    for (const auto& tx : scenario.transmitters) {
+    for (const auto& tx : scenario.flatTransmitters()) {
         // Convert WGS84 lat/lon to OSGB36 then Easting/Northing
         LatLon osgb36 = osgb::wgs84_to_osgb36({tx.lat, tx.lon});
         EastNorth en  = national_grid::latlon_to_en(osgb36);
@@ -74,7 +74,7 @@ std::string generate_sg(const Scenario& scenario) {
 std::string generate_stxs(const Scenario& scenario) {
     std::ostringstream ss;
     ss << "# Stxs commands — slot-to-station assignment\n";
-    for (const auto& tx : scenario.transmitters) {
+    for (const auto& tx : scenario.flatTransmitters()) {
         ss << "Stxs " << tx.slot << " " << tx.slot << "\n";
     }
     return ss.str();
@@ -170,13 +170,8 @@ std::vector<PatternOffset> compute_po_at_point(
     auto cond_map    = make_conductivity_map(scenario);
     auto terrain_map = make_terrain_map(scenario);
 
-    // Build master-slot → transmitter lookup
-    std::map<int, const Transmitter*> master_by_slot;
-    for (const auto& tx : scenario.transmitters)
-        master_by_slot[tx.slot] = &tx;
-
     std::vector<PatternOffset> result;
-    for (const auto& tx : scenario.transmitters) {
+    for (const auto& tx : scenario.flatTransmitters()) {
         if (tx.is_master) continue;           // masters don't have a po entry
         if (tx.master_slot <= 0) continue;    // no master assigned
 
@@ -206,16 +201,18 @@ std::vector<PatternOffset> compute_po_at_point(
 std::vector<PatternOffset> compute_po_mode1(const Scenario& scenario,
                                              int nsamples)
 {
-    // Build slot → transmitter lookup
+    const auto flat_txs = scenario.flatTransmitters();
+
+    // Build slot → transmitter lookup (into the stable flat_txs vector)
     std::map<int, const Transmitter*> by_slot;
-    for (const auto& tx : scenario.transmitters)
+    for (const auto& tx : flat_txs)
         by_slot[tx.slot] = &tx;
 
     auto cond_map    = make_conductivity_map(scenario);
     auto terrain_map = make_terrain_map(scenario);
 
     std::vector<PatternOffset> result;
-    for (const auto& tx : scenario.transmitters) {
+    for (const auto& tx : flat_txs) {
         if (tx.is_master) continue;
         if (tx.master_slot <= 0) continue;
 
