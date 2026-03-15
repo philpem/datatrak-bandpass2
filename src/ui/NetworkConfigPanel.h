@@ -1,5 +1,7 @@
 #pragma once
 #include <functional>
+#include <string>
+#include <vector>
 #include <wx/scrolwin.h>
 #include <wx/textctrl.h>
 #include <wx/choice.h>
@@ -40,7 +42,6 @@ private:
     void OnFieldKillFocus(wxFocusEvent& evt);
     void OnTerrainSrcChanged(wxCommandEvent& evt);
     void OnCondSrcChanged(wxCommandEvent& evt);
-    void OnTerrainBrowse(wxCommandEvent& evt);
     void OnCondBrowse(wxCommandEvent& evt);
     void OnFilePath(wxCommandEvent& evt);
     void ValidateFreqFields();
@@ -51,9 +52,16 @@ private:
     void ValidateResField();
     void UpdateMlDisplay();
     void UpdateResCountDisplay();
-    void UpdateTerrainFileState();
     void UpdateCondFileState();
-    bool IsResValid() const;   // true iff resolution is in range AND point count is within limit
+    bool IsResValid() const;
+
+    // Terrain dropdown helpers
+    void PopulateTerrainChoices();
+    int  TerrainIndexForPath(const std::string& path) const;
+
+    // Conductivity dropdown helpers
+    void PopulateCondChoices();
+    int  CondIndexForPath(const std::string& path) const;
 
     // Scenario metadata
     wxTextCtrl*   name_field_      = nullptr;
@@ -73,13 +81,15 @@ private:
     wxTextCtrl*   res_field_       = nullptr;
     wxStaticText* res_count_label_ = nullptr;
 
-    // Terrain
+    // Terrain — dropdown populated with discovered files + "Other..."
     wxChoice*     terrain_src_          = nullptr;
-    wxTextCtrl*   terrain_file_         = nullptr;
-    wxButton*     terrain_browse_       = nullptr;
     wxStaticText* terrain_status_label_ = nullptr;
+    // Index 0 = "Flat", indices 1..N = discovered files, index N+1 = "Other..."
+    // terrain_paths_[i] is the resolved absolute path for dropdown index i+1
+    // (index 0 is Flat, last index is "Other...")
+    std::vector<std::string> terrain_paths_;
 
-    // Conductivity
+    // Conductivity — dropdown with Built-in + discovered files + "Other..."
     wxChoice*     cond_src_             = nullptr;
     wxTextCtrl*   cond_file_            = nullptr;
     wxButton*     cond_browse_          = nullptr;

@@ -8,6 +8,7 @@
 #include <wx/filename.h>
 #include <cmath>
 #include <filesystem>
+#include <set>
 
 namespace bp {
 
@@ -21,6 +22,90 @@ static wxTextCtrl* MakeField(wxWindow* parent, const char* label,
     return tc;
 }
 
+// Scan data search dirs for terrain files (.tif/.tiff) and SRTM tile
+// directories (directories containing .hgt files).
+static std::vector<std::pair<std::string, std::string>>
+discover_terrain_files() {
+    // pair<display_name, absolute_path>
+    std::vector<std::pair<std::string, std::string>> results;
+    std::set<std::string> seen;  // deduplicate by canonical path
+
+    for (const auto& dir : data_search_dirs()) {
+        if (!std::filesystem::is_directory(dir)) continue;
+        try {
+            for (const auto& entry : std::filesystem::directory_iterator(dir)) {
+                std::string canonical;
+                try {
+                    canonical = std::filesystem::canonical(entry.path()).string();
+                } catch (...) {
+                    canonical = entry.path().string();
+                }
+                if (seen.count(canonical)) continue;
+
+                if (entry.is_regular_file()) {
+                    auto ext = entry.path().extension().string();
+                    // case-insensitive extension check
+                    for (auto& c : ext) c = (char)std::tolower((unsigned char)c);
+                    if (ext == ".tif" || ext == ".tiff") {
+                        seen.insert(canonical);
+                        results.push_back({entry.path().filename().string(),
+                                           entry.path().string()});
+                    }
+                } else if (entry.is_directory()) {
+                    // Check if directory contains any .hgt files
+                    bool has_hgt = false;
+                    try {
+                        for (const auto& sub : std::filesystem::directory_iterator(entry.path())) {
+                            if (sub.is_regular_file()) {
+                                auto se = sub.path().extension().string();
+                                for (auto& c : se) c = (char)std::tolower((unsigned char)c);
+                                if (se == ".hgt") { has_hgt = true; break; }
+                            }
+                        }
+                    } catch (...) {}
+                    if (has_hgt) {
+                        seen.insert(canonical);
+                        results.push_back({entry.path().filename().string() + "/",
+                                           entry.path().string()});
+                    }
+                }
+            }
+        } catch (...) {}
+    }
+    return results;
+}
+
+// Scan data search dirs for conductivity GeoTIFF files.
+static std::vector<std::pair<std::string, std::string>>
+discover_conductivity_files() {
+    std::vector<std::pair<std::string, std::string>> results;
+    std::set<std::string> seen;
+
+    for (const auto& dir : data_search_dirs()) {
+        if (!std::filesystem::is_directory(dir)) continue;
+        try {
+            for (const auto& entry : std::filesystem::directory_iterator(dir)) {
+                if (!entry.is_regular_file()) continue;
+                auto ext = entry.path().extension().string();
+                for (auto& c : ext) c = (char)std::tolower((unsigned char)c);
+                if (ext != ".tif" && ext != ".tiff") continue;
+
+                std::string canonical;
+                try {
+                    canonical = std::filesystem::canonical(entry.path()).string();
+                } catch (...) {
+                    canonical = entry.path().string();
+                }
+                if (seen.count(canonical)) continue;
+                seen.insert(canonical);
+                results.push_back({entry.path().filename().string(),
+                                   entry.path().string()});
+            }
+        } catch (...) {}
+    }
+    return results;
+}
+
 NetworkConfigPanel::NetworkConfigPanel(wxWindow* parent)
     : wxScrolledWindow(parent)
 {
@@ -28,7 +113,7 @@ NetworkConfigPanel::NetworkConfigPanel(wxWindow* parent)
 
     auto* outer = new wxBoxSizer(wxVERTICAL);
 
-    // ── Scenario ────────────────────────────────────────────────────────────
+    // -- Scenario ---------------------------------------------------------
     {
         auto* box   = new wxStaticBox(this, wxID_ANY, "Scenario");
         auto* bsiz  = new wxStaticBoxSizer(box, wxVERTICAL);
@@ -42,7 +127,7 @@ NetworkConfigPanel::NetworkConfigPanel(wxWindow* parent)
         outer->Add(bsiz, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 6);
     }
 
-    // ── Frequencies ─────────────────────────────────────────────────────────
+    // -- Frequencies ------------------------------------------------------
     {
         auto* box   = new wxStaticBox(this, wxID_ANY, "Frequencies");
         auto* bsiz  = new wxStaticBoxSizer(box, wxVERTICAL);
@@ -69,8 +154,7 @@ NetworkConfigPanel::NetworkConfigPanel(wxWindow* parent)
         outer->Add(bsiz, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 6);
     }
 
-
-    // ── Propagation ──────────────────────────────────────────────────────────
+    // -- Propagation ------------------------------------------------------
     {
         auto* box   = new wxStaticBox(this, wxID_ANY, "Propagation");
         auto* bsiz  = new wxStaticBoxSizer(box, wxVERTICAL);
@@ -90,7 +174,7 @@ NetworkConfigPanel::NetworkConfigPanel(wxWindow* parent)
         outer->Add(bsiz, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 6);
     }
 
-    // ── Grid ────────────────────────────────────────────────────────────────
+    // -- Grid -------------------------------------------------------------
     {
         auto* box   = new wxStaticBox(this, wxID_ANY, "Grid");
         auto* bsiz  = new wxStaticBoxSizer(box, wxVERTICAL);
@@ -140,7 +224,7 @@ NetworkConfigPanel::NetworkConfigPanel(wxWindow* parent)
         outer->Add(bsiz, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 6);
     }
 
-    // ── Terrain ─────────────────────────────────────────────────────────────
+    // -- Terrain ----------------------------------------------------------
     {
         auto* box   = new wxStaticBox(this, wxID_ANY, "Terrain");
         auto* bsiz  = new wxStaticBoxSizer(box, wxVERTICAL);
@@ -149,27 +233,9 @@ NetworkConfigPanel::NetworkConfigPanel(wxWindow* parent)
 
         gs->Add(new wxStaticText(this, wxID_ANY, "Source"),
                 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
-        wxArrayString terr_opts;
-        terr_opts.Add("Flat"); terr_opts.Add("File");
-        terrain_src_ = new wxChoice(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, terr_opts);
-        terrain_src_->SetSelection(0);
+        terrain_src_ = new wxChoice(this, wxID_ANY);
         terrain_src_->Bind(wxEVT_CHOICE, &NetworkConfigPanel::OnTerrainSrcChanged, this);
         gs->Add(terrain_src_, 1, wxEXPAND | wxBOTTOM, 2);
-
-        // File path row
-        gs->Add(new wxStaticText(this, wxID_ANY, "File"),
-                0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
-        {
-            auto* row = new wxBoxSizer(wxHORIZONTAL);
-            terrain_file_ = new wxTextCtrl(this, wxID_ANY);
-            terrain_file_->Bind(wxEVT_TEXT, &NetworkConfigPanel::OnFilePath, this);
-            terrain_browse_ = new wxButton(this, wxID_ANY, "Browse...",
-                                            wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
-            terrain_browse_->Bind(wxEVT_BUTTON, &NetworkConfigPanel::OnTerrainBrowse, this);
-            row->Add(terrain_file_,   1, wxEXPAND | wxRIGHT, 4);
-            row->Add(terrain_browse_, 0, wxALIGN_CENTER_VERTICAL);
-            gs->Add(row, 1, wxEXPAND | wxBOTTOM, 2);
-        }
 
         // Status
         gs->Add(new wxStaticText(this, wxID_ANY, ""), 0);
@@ -179,8 +245,9 @@ NetworkConfigPanel::NetworkConfigPanel(wxWindow* parent)
         bsiz->Add(gs, 0, wxEXPAND | wxALL, 4);
         outer->Add(bsiz, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 6);
     }
+    PopulateTerrainChoices();
 
-    // ── Conductivity ────────────────────────────────────────────────────────
+    // -- Conductivity -----------------------------------------------------
     {
         auto* box   = new wxStaticBox(this, wxID_ANY, "Conductivity");
         auto* bsiz  = new wxStaticBoxSizer(box, wxVERTICAL);
@@ -189,15 +256,11 @@ NetworkConfigPanel::NetworkConfigPanel(wxWindow* parent)
 
         gs->Add(new wxStaticText(this, wxID_ANY, "Source"),
                 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
-        wxArrayString cond_opts;
-        cond_opts.Add("Built-in"); cond_opts.Add("ITU P.832");
-        cond_opts.Add("BGS"); cond_opts.Add("File");
-        cond_src_ = new wxChoice(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, cond_opts);
-        cond_src_->SetSelection(0);
+        cond_src_ = new wxChoice(this, wxID_ANY);
         cond_src_->Bind(wxEVT_CHOICE, &NetworkConfigPanel::OnCondSrcChanged, this);
         gs->Add(cond_src_, 1, wxEXPAND | wxBOTTOM, 2);
 
-        // File path row
+        // File path row (only shown for "Other...")
         gs->Add(new wxStaticText(this, wxID_ANY, "File"),
                 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
         {
@@ -220,15 +283,131 @@ NetworkConfigPanel::NetworkConfigPanel(wxWindow* parent)
         bsiz->Add(gs, 0, wxEXPAND | wxALL, 4);
         outer->Add(bsiz, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 6);
     }
+    PopulateCondChoices();
 
     SetSizer(outer);
     SetScrollRate(0, 10);
     FitInside();
 
-    UpdateTerrainFileState();
     UpdateCondFileState();
     UpdateTerrainLabel();
     UpdateCondLabel();
+}
+
+// ---------------------------------------------------------------------------
+// Terrain dropdown: discover files and populate
+// ---------------------------------------------------------------------------
+
+void NetworkConfigPanel::PopulateTerrainChoices() {
+    terrain_paths_.clear();
+    terrain_src_->Clear();
+
+    // Index 0: Flat
+    terrain_src_->Append("Flat");
+
+    // Discovered terrain files and SRTM tile directories
+    auto discovered = discover_terrain_files();
+    for (const auto& [name, path] : discovered) {
+        terrain_src_->Append(name);
+        terrain_paths_.push_back(path);
+    }
+
+    // Last entry: Other...
+    terrain_src_->Append("Other...");
+    terrain_src_->SetSelection(0);
+}
+
+int NetworkConfigPanel::TerrainIndexForPath(const std::string& path) const {
+    if (path.empty()) return 0;  // Flat
+
+    // Try canonical match against discovered paths
+    std::string canonical;
+    try {
+        if (std::filesystem::exists(path))
+            canonical = std::filesystem::canonical(path).string();
+        else
+            canonical = path;
+    } catch (...) {
+        canonical = path;
+    }
+
+    for (size_t i = 0; i < terrain_paths_.size(); ++i) {
+        std::string cand;
+        try {
+            if (std::filesystem::exists(terrain_paths_[i]))
+                cand = std::filesystem::canonical(terrain_paths_[i]).string();
+            else
+                cand = terrain_paths_[i];
+        } catch (...) {
+            cand = terrain_paths_[i];
+        }
+        if (cand == canonical)
+            return (int)(i + 1);  // +1 because index 0 is "Flat"
+    }
+
+    // Not in the discovered list — add it dynamically before "Other..."
+    return -1;  // caller should handle
+}
+
+// ---------------------------------------------------------------------------
+// Conductivity dropdown: Built-in + discovered files + Other...
+// ---------------------------------------------------------------------------
+
+void NetworkConfigPanel::PopulateCondChoices() {
+    cond_src_->Clear();
+
+    // Index 0: Built-in
+    cond_src_->Append("Built-in");
+
+    // Discovered conductivity files
+    auto discovered = discover_conductivity_files();
+    for (const auto& [name, path] : discovered) {
+        // Use friendly names for well-known files
+        std::string display = name;
+        if (name == "conductivity_p832.tif") display = "ITU P.832 (conductivity_p832.tif)";
+        else if (name == "conductivity_bgs.tif") display = "BGS (conductivity_bgs.tif)";
+        cond_src_->Append(display);
+    }
+
+    // Last entry: Other...
+    cond_src_->Append("Other...");
+    cond_src_->SetSelection(0);
+
+    // Store paths for lookup (not including Built-in or Other...)
+    // Reuse terrain_paths_ pattern — but we need a separate member.
+    // For now, use client data on the wxChoice items.
+    // Actually, store them similarly to terrain.
+    // We'll just re-discover in SaveToScenario. Keep it simple.
+}
+
+int NetworkConfigPanel::CondIndexForPath(const std::string& path) const {
+    if (path.empty()) return 0;  // Built-in
+
+    auto discovered = discover_conductivity_files();
+    std::string canonical;
+    try {
+        if (std::filesystem::exists(path))
+            canonical = std::filesystem::canonical(path).string();
+        else
+            canonical = path;
+    } catch (...) {
+        canonical = path;
+    }
+
+    for (size_t i = 0; i < discovered.size(); ++i) {
+        std::string cand;
+        try {
+            if (std::filesystem::exists(discovered[i].second))
+                cand = std::filesystem::canonical(discovered[i].second).string();
+            else
+                cand = discovered[i].second;
+        } catch (...) {
+            cand = discovered[i].second;
+        }
+        if (cand == canonical)
+            return (int)(i + 1);  // +1 because index 0 is "Built-in"
+    }
+    return -1;
 }
 
 // ---------------------------------------------------------------------------
@@ -255,19 +434,43 @@ void NetworkConfigPanel::SetScenario(Scenario* scenario) {
     res_field_->ChangeValue(wxString::Format("%.1f", scenario_->grid.resolution_km));
 
     // Terrain
-    int terr_sel = (scenario_->terrain_source == Scenario::TerrainSource::File) ? 1 : 0;
-    terrain_src_->SetSelection(terr_sel);
-    terrain_file_->ChangeValue(scenario_->terrain_file);
-    UpdateTerrainFileState();
+    if (scenario_->terrain_source == Scenario::TerrainSource::Flat ||
+        scenario_->terrain_file.empty()) {
+        terrain_src_->SetSelection(0);
+    } else {
+        int idx = TerrainIndexForPath(scenario_->terrain_file);
+        if (idx >= 0) {
+            terrain_src_->SetSelection(idx);
+        } else {
+            // Not in discovered list — insert before "Other..."
+            int other_idx = (int)terrain_src_->GetCount() - 1;
+            std::filesystem::path p(scenario_->terrain_file);
+            std::string display = p.filename().string();
+            if (std::filesystem::is_directory(scenario_->terrain_file))
+                display += "/";
+            terrain_src_->Insert(display, other_idx);
+            terrain_paths_.push_back(scenario_->terrain_file);
+            terrain_src_->SetSelection(other_idx);
+        }
+    }
     UpdateTerrainLabel();
 
     // Conductivity
-    int cond_sel = 0;
-    if (scenario_->conductivity_source == Scenario::ConductivitySource::ItuP832) cond_sel = 1;
-    else if (scenario_->conductivity_source == Scenario::ConductivitySource::BGS) cond_sel = 2;
-    else if (scenario_->conductivity_source == Scenario::ConductivitySource::File) cond_sel = 3;
-    cond_src_->SetSelection(cond_sel);
-    cond_file_->ChangeValue(scenario_->conductivity_file);
+    if (scenario_->conductivity_source == Scenario::ConductivitySource::BuiltIn ||
+        scenario_->conductivity_file.empty()) {
+        cond_src_->SetSelection(0);
+        cond_file_->ChangeValue("");
+    } else {
+        int idx = CondIndexForPath(scenario_->conductivity_file);
+        if (idx >= 0) {
+            cond_src_->SetSelection(idx);
+            cond_file_->ChangeValue("");
+        } else {
+            // Select "Other..." and put the path in the file field
+            cond_src_->SetSelection((int)cond_src_->GetCount() - 1);
+            cond_file_->ChangeValue(scenario_->conductivity_file);
+        }
+    }
     UpdateCondFileState();
     UpdateCondLabel();
 
@@ -309,25 +512,38 @@ void NetworkConfigPanel::SaveToScenario() {
     double res = wxAtof(res_field_->GetValue());
     if (res >= RES_MIN_KM && res <= RES_MAX_KM) scenario_->grid.resolution_km = res;
 
-    // Terrain — store path relativized for portability
+    // Terrain
     int terr_sel = terrain_src_->GetSelection();
-    if (terr_sel == 0)  scenario_->terrain_source = Scenario::TerrainSource::Flat;
-    else {
+    int terr_last = (int)terrain_src_->GetCount() - 1;  // "Other..." index
+    if (terr_sel == 0) {
+        scenario_->terrain_source = Scenario::TerrainSource::Flat;
+        scenario_->terrain_file.clear();
+    } else if (terr_sel < terr_last) {
+        // A discovered or user-added file
         scenario_->terrain_source = Scenario::TerrainSource::File;
-        scenario_->terrain_file = make_relative_data_path(
-            terrain_file_->GetValue().ToStdString());
+        int path_idx = terr_sel - 1;  // terrain_paths_ is 0-indexed, dropdown is 1-indexed
+        if (path_idx >= 0 && path_idx < (int)terrain_paths_.size())
+            scenario_->terrain_file = terrain_paths_[path_idx];
     }
+    // terr_sel == terr_last means "Other..." is still selected but no file was
+    // picked — leave terrain unchanged
 
-    // Conductivity — store path relativized for portability
+    // Conductivity
     int cond_sel = cond_src_->GetSelection();
-    if (cond_sel == 0)      scenario_->conductivity_source = Scenario::ConductivitySource::BuiltIn;
-    else if (cond_sel == 1) {
-        scenario_->conductivity_source = Scenario::ConductivitySource::ItuP832;
-        scenario_->conductivity_file = resolve_data_path("conductivity_p832.tif");
-    } else if (cond_sel == 2) {
-        scenario_->conductivity_source = Scenario::ConductivitySource::BGS;
-        scenario_->conductivity_file = resolve_data_path("conductivity_bgs.tif");
+    int cond_last = (int)cond_src_->GetCount() - 1;  // "Other..." index
+    if (cond_sel == 0) {
+        scenario_->conductivity_source = Scenario::ConductivitySource::BuiltIn;
+        scenario_->conductivity_file.clear();
+    } else if (cond_sel < cond_last) {
+        // A discovered file
+        auto discovered = discover_conductivity_files();
+        int path_idx = cond_sel - 1;
+        if (path_idx >= 0 && path_idx < (int)discovered.size()) {
+            scenario_->conductivity_source = Scenario::ConductivitySource::File;
+            scenario_->conductivity_file = discovered[path_idx].second;
+        }
     } else {
+        // "Other..." — use the file field
         scenario_->conductivity_source = Scenario::ConductivitySource::File;
         scenario_->conductivity_file = make_relative_data_path(
             cond_file_->GetValue().ToStdString());
@@ -388,14 +604,14 @@ void NetworkConfigPanel::OnFieldKillFocus(wxFocusEvent& evt) {
     if (!debounce_.IsRunning()) return;
     debounce_.Stop();
     if (!scenario_ || !on_changed) return;
-    if (!IsResValid()) return;  // don't trigger compute when over point limit
+    if (!IsResValid()) return;
     SaveToScenario();
     on_changed(*scenario_);
 }
 
 void NetworkConfigPanel::OnDebounceTimer(wxTimerEvent& /*evt*/) {
     if (!scenario_ || !on_changed) return;
-    if (!IsResValid()) return;  // guard: bounds changed after timer was started
+    if (!IsResValid()) return;
     SaveToScenario();
     on_changed(*scenario_);
 }
@@ -405,28 +621,60 @@ void NetworkConfigPanel::OnDebounceTimer(wxTimerEvent& /*evt*/) {
 // ---------------------------------------------------------------------------
 
 void NetworkConfigPanel::OnTerrainSrcChanged(wxCommandEvent& /*evt*/) {
-    UpdateTerrainFileState();
+    int sel = terrain_src_->GetSelection();
+    int last = (int)terrain_src_->GetCount() - 1;
+
+    if (sel == last) {
+        // "Other..." selected — open file dialog
+        wxFileDialog dlg(this, "Select terrain data file", "", "",
+                         "GeoTIFF (*.tif;*.tiff)|*.tif;*.tiff|"
+                         "HGT (*.hgt)|*.hgt|"
+                         "All files (*)|*",
+                         wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+        if (dlg.ShowModal() == wxID_OK) {
+            std::string chosen = dlg.GetPath().ToStdString();
+            // Check if it matches an existing entry
+            int idx = TerrainIndexForPath(chosen);
+            if (idx >= 0) {
+                terrain_src_->SetSelection(idx);
+            } else {
+                // Insert before "Other..."
+                std::filesystem::path p(chosen);
+                terrain_src_->Insert(p.filename().string(), last);
+                terrain_paths_.push_back(chosen);
+                terrain_src_->SetSelection(last);  // the newly inserted item
+            }
+        } else {
+            // User cancelled — revert to previous selection (Flat)
+            terrain_src_->SetSelection(0);
+        }
+    }
+
     UpdateTerrainLabel();
     debounce_.StartOnce(500);
 }
 
 void NetworkConfigPanel::OnCondSrcChanged(wxCommandEvent& /*evt*/) {
+    int sel = cond_src_->GetSelection();
+    int last = (int)cond_src_->GetCount() - 1;
+
+    if (sel == last) {
+        // "Other..." selected — open file dialog
+        wxFileDialog dlg(this, "Select conductivity data file", "", "",
+                         "GeoTIFF (*.tif;*.tiff)|*.tif;*.tiff|"
+                         "All files (*)|*",
+                         wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+        if (dlg.ShowModal() == wxID_OK) {
+            cond_file_->ChangeValue(dlg.GetPath());
+        } else {
+            // User cancelled — revert to Built-in
+            cond_src_->SetSelection(0);
+        }
+    }
+
     UpdateCondFileState();
     UpdateCondLabel();
     debounce_.StartOnce(500);
-}
-
-void NetworkConfigPanel::OnTerrainBrowse(wxCommandEvent& /*evt*/) {
-    wxFileDialog dlg(this, "Select terrain data file", "", "",
-                     "GeoTIFF (*.tif;*.tiff)|*.tif;*.tiff|"
-                     "HGT (*.hgt)|*.hgt|"
-                     "All files (*)|*",
-                     wxFD_OPEN | wxFD_FILE_MUST_EXIST);
-    if (dlg.ShowModal() == wxID_OK) {
-        terrain_file_->ChangeValue(dlg.GetPath());
-        UpdateTerrainLabel();
-        debounce_.StartOnce(500);
-    }
 }
 
 void NetworkConfigPanel::OnCondBrowse(wxCommandEvent& /*evt*/) {
@@ -442,21 +690,16 @@ void NetworkConfigPanel::OnCondBrowse(wxCommandEvent& /*evt*/) {
 }
 
 void NetworkConfigPanel::OnFilePath(wxCommandEvent& /*evt*/) {
-    UpdateTerrainLabel();
     UpdateCondLabel();
     debounce_.StartOnce(500);
 }
 
-void NetworkConfigPanel::UpdateTerrainFileState() {
-    bool file_mode = (terrain_src_->GetSelection() == 1);  // File
-    terrain_file_->Enable(file_mode);
-    terrain_browse_->Enable(file_mode);
-}
-
 void NetworkConfigPanel::UpdateCondFileState() {
-    bool file_mode = (cond_src_->GetSelection() == 3);
-    cond_file_->Enable(file_mode);
-    cond_browse_->Enable(file_mode);
+    int sel = cond_src_->GetSelection();
+    int last = (int)cond_src_->GetCount() - 1;
+    bool other_mode = (sel == last);
+    cond_file_->Enable(other_mode);
+    cond_browse_->Enable(other_mode);
 }
 
 // ---------------------------------------------------------------------------
@@ -543,20 +786,15 @@ void NetworkConfigPanel::UpdateTerrainLabel() {
     wxString msg;
     wxColour col = *wxBLACK;
     if (sel == 0) {
-        // Flat — always available
+        // Flat
     } else {
-        // File — GeoTIFF or directory of .hgt tiles (auto-detected)
-        wxString path = terrain_file_->GetValue();
-        if (path.empty()) {
-            msg = "Set path to terrain GeoTIFF or SRTM tile directory";
-            col = *wxRED;
-        } else if (!wxFileName::FileExists(path) && !wxFileName::DirExists(path)) {
-            msg = "Not found - using flat fallback";
-            col = *wxRED;
-        } else if (wxFileName::DirExists(path)) {
-            msg = "SRTM tile directory OK";
-        } else {
-            msg = "File OK";
+        int path_idx = sel - 1;
+        if (path_idx >= 0 && path_idx < (int)terrain_paths_.size()) {
+            const auto& path = terrain_paths_[path_idx];
+            if (std::filesystem::is_directory(path))
+                msg = "SRTM tile directory";
+            else
+                msg = wxString(path.c_str());
         }
     }
     terrain_status_label_->SetLabel(msg);
@@ -567,34 +805,14 @@ void NetworkConfigPanel::UpdateTerrainLabel() {
 void NetworkConfigPanel::UpdateCondLabel() {
     if (!cond_status_label_) return;
     int sel = cond_src_->GetSelection();
+    int last = (int)cond_src_->GetCount() - 1;
     wxString msg;
     wxColour col = *wxBLACK;
+
     if (sel == 0) {
-        // Built-in — always available
-    } else if (sel == 1) {
-        // ITU P.832 — well-known filename in data dirs
-        {
-            std::string resolved = resolve_data_path("conductivity_p832.tif");
-            if (std::filesystem::exists(resolved)) {
-                msg = "conductivity_p832.tif OK";
-            } else {
-                msg = "conductivity_p832.tif not found - run itu_p832_import.py";
-                col = *wxRED;
-            }
-        }
-    } else if (sel == 2) {
-        // BGS — well-known filename in data dirs
-        {
-            std::string resolved = resolve_data_path("conductivity_bgs.tif");
-            if (std::filesystem::exists(resolved)) {
-                msg = "conductivity_bgs.tif OK";
-            } else {
-                msg = "conductivity_bgs.tif not found - run bgs_import.py";
-                col = *wxRED;
-            }
-        }
-    } else {
-        // File — user sets the path; check it exists
+        // Built-in
+    } else if (sel == last) {
+        // "Other..." — check the file field
         wxString path = cond_file_->GetValue();
         if (path.empty()) {
             msg = "No file set - using built-in fallback";
@@ -603,8 +821,14 @@ void NetworkConfigPanel::UpdateCondLabel() {
             msg = "File not found - using built-in fallback";
             col = *wxRED;
         } else {
-            msg = "File OK";
+            msg = wxString(path.c_str());
         }
+    } else {
+        // A discovered file — show its path
+        auto discovered = discover_conductivity_files();
+        int path_idx = sel - 1;
+        if (path_idx >= 0 && path_idx < (int)discovered.size())
+            msg = wxString(discovered[path_idx].second.c_str());
     }
     cond_status_label_->SetLabel(msg);
     cond_status_label_->SetForegroundColour(col);
