@@ -574,8 +574,12 @@ def main():
 
     if verbose:
         print(
-            "Done.  Place the .dat file where BANDPASS II can find it,\n"
-            "then set the datum to OSTN15 in the Network Configuration panel."
+            "Done.  BANDPASS II searches for OSTN15.dat in this order:\n"
+            "  1. Next to the executable\n"
+            "  2. data/ subdirectory next to the executable\n"
+            "  3. User data directory (~/.local/share/bandpass2 on Linux)\n"
+            "  4. data/ in the parent of the executable directory (dev builds)\n"
+            "Copy the .dat file to one of these locations."
         )
 
 
