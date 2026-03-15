@@ -1,4 +1,5 @@
 #include "terrain.h"
+#include "model/DataPaths.h"
 #include <GeographicLib/Geodesic.hpp>
 #include <GeographicLib/GeodesicLine.hpp>
 #include <stdexcept>
@@ -189,8 +190,11 @@ std::unique_ptr<TerrainMap> make_terrain_map(const Scenario& scenario) {
         return std::make_unique<FlatTerrainMap>();
 
     bool srtm_dir = (scenario.terrain_source == TS::SRTM);
+    std::string resolved = srtm_dir
+        ? resolve_data_dir(scenario.terrain_file)
+        : resolve_data_path(scenario.terrain_file);
     try {
-        return std::make_unique<GdalTerrainMap>(scenario.terrain_file, srtm_dir);
+        return std::make_unique<GdalTerrainMap>(resolved, srtm_dir);
     } catch (...) {
         return std::make_unique<FlatTerrainMap>();
     }

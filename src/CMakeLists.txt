@@ -1,6 +1,7 @@
 set(BP_SOURCES
     main.cpp
     model/toml_io.cpp
+    model/DataPaths.cpp
     coords/Osgb.cpp
     coords/NationalGrid.cpp
     engine/grid.cpp

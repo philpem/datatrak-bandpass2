@@ -1,9 +1,11 @@
 #include "NetworkConfigPanel.h"
 #include "../coords/Osgb.h"
+#include "../model/DataPaths.h"
 #include <wx/sizer.h>
 #include <wx/stattext.h>
 #include <wx/statbox.h>
 #include <wx/filedlg.h>
+#include <wx/dirdlg.h>
 #include <wx/filename.h>
 #include <cmath>
 
@@ -252,22 +254,27 @@ void NetworkConfigPanel::SetScenario(Scenario* scenario) {
     lon_max_field_->ChangeValue(wxString::Format("%.4f", scenario_->grid.lon_max));
     res_field_->ChangeValue(wxString::Format("%.1f", scenario_->grid.resolution_km));
 
-    // Terrain
+    // Terrain — resolve relative paths for display
     int terr_sel = 0;
     if (scenario_->terrain_source == Scenario::TerrainSource::SRTM)  terr_sel = 1;
     else if (scenario_->terrain_source == Scenario::TerrainSource::File) terr_sel = 2;
     terrain_src_->SetSelection(terr_sel);
-    terrain_file_->ChangeValue(scenario_->terrain_file);
+    {
+        std::string display_path = (terr_sel == 1)
+            ? resolve_data_dir(scenario_->terrain_file)
+            : resolve_data_path(scenario_->terrain_file);
+        terrain_file_->ChangeValue(display_path);
+    }
     UpdateTerrainFileState();
     UpdateTerrainLabel();
 
-    // Conductivity
+    // Conductivity — resolve relative paths for display
     int cond_sel = 0;
     if (scenario_->conductivity_source == Scenario::ConductivitySource::ItuP832) cond_sel = 1;
     else if (scenario_->conductivity_source == Scenario::ConductivitySource::BGS) cond_sel = 2;
     else if (scenario_->conductivity_source == Scenario::ConductivitySource::File) cond_sel = 3;
     cond_src_->SetSelection(cond_sel);
-    cond_file_->ChangeValue(scenario_->conductivity_file);
+    cond_file_->ChangeValue(resolve_data_path(scenario_->conductivity_file));
     UpdateCondFileState();
     UpdateCondLabel();
 
@@ -309,25 +316,28 @@ void NetworkConfigPanel::SaveToScenario() {
     double res = wxAtof(res_field_->GetValue());
     if (res >= RES_MIN_KM && res <= RES_MAX_KM) scenario_->grid.resolution_km = res;
 
-    // Terrain
+    // Terrain — store path relativized for portability
     int terr_sel = terrain_src_->GetSelection();
     if (terr_sel == 0)      scenario_->terrain_source = Scenario::TerrainSource::Flat;
     else if (terr_sel == 1) {
         scenario_->terrain_source = Scenario::TerrainSource::SRTM;
-        scenario_->terrain_file = terrain_file_->GetValue().ToStdString();
+        scenario_->terrain_file = make_relative_data_path(
+            terrain_file_->GetValue().ToStdString());
     } else {
         scenario_->terrain_source = Scenario::TerrainSource::File;
-        scenario_->terrain_file = terrain_file_->GetValue().ToStdString();
+        scenario_->terrain_file = make_relative_data_path(
+            terrain_file_->GetValue().ToStdString());
     }
 
-    // Conductivity
+    // Conductivity — store path relativized for portability
     int cond_sel = cond_src_->GetSelection();
     if (cond_sel == 0)      scenario_->conductivity_source = Scenario::ConductivitySource::BuiltIn;
     else if (cond_sel == 1) scenario_->conductivity_source = Scenario::ConductivitySource::ItuP832;
     else if (cond_sel == 2) scenario_->conductivity_source = Scenario::ConductivitySource::BGS;
     else {
         scenario_->conductivity_source = Scenario::ConductivitySource::File;
-        scenario_->conductivity_file = cond_file_->GetValue().ToStdString();
+        scenario_->conductivity_file = make_relative_data_path(
+            cond_file_->GetValue().ToStdString());
     }
 }
 
