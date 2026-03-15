@@ -2,6 +2,7 @@
 #include "PoRefDialog.h"
 #include "../almanac/AlmanacExport.h"
 #include "../coords/NationalGrid.h"
+#include "../coords/Osgb.h"
 #include <wx/msgdlg.h>
 #include <wx/sizer.h>
 #include <wx/statbox.h>
@@ -112,8 +113,7 @@ void PoRefDialog::OnAddMarker(wxCommandEvent& /*evt*/) {
     // Parse coordinate using CoordSystem auto-detect
     double lat = 0.0, lon = 0.0;
     try {
-        bool use_ostn15 = (scenario_.datum_transform == Scenario::DatumTransform::OSTN15);
-        auto latlng = national_grid::parse_coordinate(text, use_ostn15);
+        auto latlng = national_grid::parse_coordinate(text, osgb::ostn15_loaded());
         lat = latlng.lat;
         lon = latlng.lon;
     } catch (const std::exception& e) {
