@@ -1,112 +1,253 @@
 #include "NetworkConfigPanel.h"
 #include <wx/sizer.h>
 #include <wx/stattext.h>
+#include <wx/statbox.h>
+#include <wx/filedlg.h>
+#include <wx/filename.h>
 #include <cmath>
 
 namespace bp {
+
+// Helper: create a labelled text field inside a flex grid sizer.
+static wxTextCtrl* MakeField(wxWindow* parent, const char* label,
+                              wxFlexGridSizer* gs) {
+    gs->Add(new wxStaticText(parent, wxID_ANY, label),
+            0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
+    auto* tc = new wxTextCtrl(parent, wxID_ANY);
+    gs->Add(tc, 1, wxEXPAND | wxBOTTOM, 2);
+    return tc;
+}
 
 NetworkConfigPanel::NetworkConfigPanel(wxWindow* parent)
     : wxScrolledWindow(parent)
 {
     debounce_.Bind(wxEVT_TIMER, &NetworkConfigPanel::OnDebounceTimer, this);
 
-    auto* gs = new wxFlexGridSizer(2, 4, 6);
-    gs->AddGrowableCol(1);
+    auto* outer = new wxBoxSizer(wxVERTICAL);
 
-    // F1
-    gs->Add(new wxStaticText(this, wxID_ANY, "F1 (kHz)"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
-    f1_field_ = new wxTextCtrl(this, wxID_ANY, "146.4375");
-    f1_field_->Bind(wxEVT_TEXT,       &NetworkConfigPanel::OnFreqChanged,    this);
-    f1_field_->Bind(wxEVT_KILL_FOCUS, &NetworkConfigPanel::OnFieldKillFocus, this);
-    gs->Add(f1_field_, 1, wxEXPAND | wxBOTTOM, 2);
+    // ── Scenario ────────────────────────────────────────────────────────────
+    {
+        auto* box   = new wxStaticBox(this, wxID_ANY, "Scenario");
+        auto* bsiz  = new wxStaticBoxSizer(box, wxVERTICAL);
+        auto* gs    = new wxFlexGridSizer(2, 4, 6);
+        gs->AddGrowableCol(1);
 
-    // F2
-    gs->Add(new wxStaticText(this, wxID_ANY, "F2 (kHz)"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
-    f2_field_ = new wxTextCtrl(this, wxID_ANY, "131.2500");
-    f2_field_->Bind(wxEVT_TEXT,       &NetworkConfigPanel::OnFreqChanged,    this);
-    f2_field_->Bind(wxEVT_KILL_FOCUS, &NetworkConfigPanel::OnFieldKillFocus, this);
-    gs->Add(f2_field_, 1, wxEXPAND | wxBOTTOM, 2);
+        name_field_ = MakeField(this, "Name", gs);
+        name_field_->Bind(wxEVT_TEXT, &NetworkConfigPanel::OnOtherChanged, this);
 
-    // Millilane display
-    gs->Add(new wxStaticText(this, wxID_ANY, ""), 0);
-    ml_label_ = new wxStaticText(this, wxID_ANY, "1 ml(f1) = 2.047 m   1 ml(f2) = 2.285 m");
-    gs->Add(ml_label_, 0, wxBOTTOM, 6);
+        bsiz->Add(gs, 0, wxEXPAND | wxALL, 4);
+        outer->Add(bsiz, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 6);
+    }
 
-    // Mode
-    gs->Add(new wxStaticText(this, wxID_ANY, "Mode"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
-    wxArrayString modes;
-    modes.Add("8-slot"); modes.Add("Interlaced");
-    mode_ = new wxChoice(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, modes);
-    mode_->SetSelection(0);
-    mode_->Bind(wxEVT_CHOICE, &NetworkConfigPanel::OnOtherChanged, this);
-    gs->Add(mode_, 1, wxEXPAND | wxBOTTOM, 2);
+    // ── Frequencies ─────────────────────────────────────────────────────────
+    {
+        auto* box   = new wxStaticBox(this, wxID_ANY, "Frequencies");
+        auto* bsiz  = new wxStaticBoxSizer(box, wxVERTICAL);
+        auto* gs    = new wxFlexGridSizer(2, 4, 6);
+        gs->AddGrowableCol(1);
 
-    // Datum
-    gs->Add(new wxStaticText(this, wxID_ANY, "Datum"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
-    wxArrayString datums;
-    datums.Add("Helmert"); datums.Add("OSTN15");
-    datum_ = new wxChoice(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, datums);
-    datum_->SetSelection(0);
-    datum_->Bind(wxEVT_CHOICE, &NetworkConfigPanel::OnOtherChanged, this);
-    gs->Add(datum_, 1, wxEXPAND | wxBOTTOM, 2);
+        f1_field_ = MakeField(this, "F1 (kHz)", gs);
+        f1_field_->SetValue("146.4375");
+        f1_field_->Bind(wxEVT_TEXT,       &NetworkConfigPanel::OnFreqChanged,    this);
+        f1_field_->Bind(wxEVT_KILL_FOCUS, &NetworkConfigPanel::OnFieldKillFocus, this);
 
-    // ── Grid bounds ──
-    gs->Add(new wxStaticText(this, wxID_ANY, "Lat min"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
-    lat_min_field_ = new wxTextCtrl(this, wxID_ANY, "49.5");
-    lat_min_field_->Bind(wxEVT_TEXT,       &NetworkConfigPanel::OnBoundsChanged,  this);
-    lat_min_field_->Bind(wxEVT_KILL_FOCUS, &NetworkConfigPanel::OnFieldKillFocus, this);
-    gs->Add(lat_min_field_, 1, wxEXPAND | wxBOTTOM, 2);
+        f2_field_ = MakeField(this, "F2 (kHz)", gs);
+        f2_field_->SetValue("131.2500");
+        f2_field_->Bind(wxEVT_TEXT,       &NetworkConfigPanel::OnFreqChanged,    this);
+        f2_field_->Bind(wxEVT_KILL_FOCUS, &NetworkConfigPanel::OnFieldKillFocus, this);
 
-    gs->Add(new wxStaticText(this, wxID_ANY, "Lat max"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
-    lat_max_field_ = new wxTextCtrl(this, wxID_ANY, "61.0");
-    lat_max_field_->Bind(wxEVT_TEXT,       &NetworkConfigPanel::OnBoundsChanged,  this);
-    lat_max_field_->Bind(wxEVT_KILL_FOCUS, &NetworkConfigPanel::OnFieldKillFocus, this);
-    gs->Add(lat_max_field_, 1, wxEXPAND | wxBOTTOM, 2);
+        // Millilane display (spanning both columns)
+        gs->Add(new wxStaticText(this, wxID_ANY, ""), 0);
+        ml_label_ = new wxStaticText(this, wxID_ANY,
+                        "1 ml(f1) = 2.047 m   1 ml(f2) = 2.285 m");
+        gs->Add(ml_label_, 0, wxBOTTOM, 2);
 
-    gs->Add(new wxStaticText(this, wxID_ANY, "Lon min"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
-    lon_min_field_ = new wxTextCtrl(this, wxID_ANY, "-7.0");
-    lon_min_field_->Bind(wxEVT_TEXT,       &NetworkConfigPanel::OnBoundsChanged,  this);
-    lon_min_field_->Bind(wxEVT_KILL_FOCUS, &NetworkConfigPanel::OnFieldKillFocus, this);
-    gs->Add(lon_min_field_, 1, wxEXPAND | wxBOTTOM, 2);
+        bsiz->Add(gs, 0, wxEXPAND | wxALL, 4);
+        outer->Add(bsiz, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 6);
+    }
 
-    gs->Add(new wxStaticText(this, wxID_ANY, "Lon max"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
-    lon_max_field_ = new wxTextCtrl(this, wxID_ANY, "2.5");
-    lon_max_field_->Bind(wxEVT_TEXT,       &NetworkConfigPanel::OnBoundsChanged,  this);
-    lon_max_field_->Bind(wxEVT_KILL_FOCUS, &NetworkConfigPanel::OnFieldKillFocus, this);
-    gs->Add(lon_max_field_, 1, wxEXPAND | wxBOTTOM, 2);
+    // ── Network ─────────────────────────────────────────────────────────────
+    {
+        auto* box   = new wxStaticBox(this, wxID_ANY, "Network");
+        auto* bsiz  = new wxStaticBoxSizer(box, wxVERTICAL);
+        auto* gs    = new wxFlexGridSizer(2, 4, 6);
+        gs->AddGrowableCol(1);
 
-    // ── Grid resolution ──
-    gs->Add(new wxStaticText(this, wxID_ANY, "Grid res (km)"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
-    res_field_ = new wxTextCtrl(this, wxID_ANY, "10.0");
-    res_field_->Bind(wxEVT_TEXT,       &NetworkConfigPanel::OnResChanged,     this);
-    res_field_->Bind(wxEVT_KILL_FOCUS, &NetworkConfigPanel::OnFieldKillFocus, this);
-    gs->Add(res_field_, 1, wxEXPAND | wxBOTTOM, 2);
+        // Datum
+        gs->Add(new wxStaticText(this, wxID_ANY, "Datum"),
+                0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
+        wxArrayString datums;
+        datums.Add("Helmert"); datums.Add("OSTN15");
+        datum_ = new wxChoice(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, datums);
+        datum_->SetSelection(0);
+        datum_->Bind(wxEVT_CHOICE, &NetworkConfigPanel::OnOtherChanged, this);
+        gs->Add(datum_, 1, wxEXPAND | wxBOTTOM, 2);
 
-    // Point count display (below resolution field)
-    gs->Add(new wxStaticText(this, wxID_ANY, ""), 0);
-    res_count_label_ = new wxStaticText(this, wxID_ANY, "");
-    gs->Add(res_count_label_, 0, wxBOTTOM, 6);
+        bsiz->Add(gs, 0, wxEXPAND | wxALL, 4);
+        outer->Add(bsiz, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 6);
+    }
 
-    auto* sizer = new wxBoxSizer(wxVERTICAL);
-    sizer->Add(new wxStaticText(this, wxID_ANY, "Network Configuration"), 0, wxALL, 6);
-    sizer->Add(gs, 0, wxALL | wxEXPAND, 8);
-    SetSizer(sizer);
+    // ── Grid ────────────────────────────────────────────────────────────────
+    {
+        auto* box   = new wxStaticBox(this, wxID_ANY, "Grid");
+        auto* bsiz  = new wxStaticBoxSizer(box, wxVERTICAL);
+        auto* gs    = new wxFlexGridSizer(2, 4, 6);
+        gs->AddGrowableCol(1);
+
+        lat_min_field_ = MakeField(this, "Lat min", gs);
+        lat_min_field_->SetValue("49.5");
+        lat_min_field_->Bind(wxEVT_TEXT,       &NetworkConfigPanel::OnBoundsChanged,  this);
+        lat_min_field_->Bind(wxEVT_KILL_FOCUS, &NetworkConfigPanel::OnFieldKillFocus, this);
+
+        lat_max_field_ = MakeField(this, "Lat max", gs);
+        lat_max_field_->SetValue("61.0");
+        lat_max_field_->Bind(wxEVT_TEXT,       &NetworkConfigPanel::OnBoundsChanged,  this);
+        lat_max_field_->Bind(wxEVT_KILL_FOCUS, &NetworkConfigPanel::OnFieldKillFocus, this);
+
+        lon_min_field_ = MakeField(this, "Lon min", gs);
+        lon_min_field_->SetValue("-7.0");
+        lon_min_field_->Bind(wxEVT_TEXT,       &NetworkConfigPanel::OnBoundsChanged,  this);
+        lon_min_field_->Bind(wxEVT_KILL_FOCUS, &NetworkConfigPanel::OnFieldKillFocus, this);
+
+        lon_max_field_ = MakeField(this, "Lon max", gs);
+        lon_max_field_->SetValue("2.5");
+        lon_max_field_->Bind(wxEVT_TEXT,       &NetworkConfigPanel::OnBoundsChanged,  this);
+        lon_max_field_->Bind(wxEVT_KILL_FOCUS, &NetworkConfigPanel::OnFieldKillFocus, this);
+
+        // Resolution
+        gs->Add(new wxStaticText(this, wxID_ANY, "Grid res (km)"),
+                0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
+        res_field_ = new wxTextCtrl(this, wxID_ANY, "10.0");
+        res_field_->Bind(wxEVT_TEXT,       &NetworkConfigPanel::OnResChanged,     this);
+        res_field_->Bind(wxEVT_KILL_FOCUS, &NetworkConfigPanel::OnFieldKillFocus, this);
+        gs->Add(res_field_, 1, wxEXPAND | wxBOTTOM, 2);
+
+        // Point count display
+        gs->Add(new wxStaticText(this, wxID_ANY, ""), 0);
+        res_count_label_ = new wxStaticText(this, wxID_ANY, "");
+        gs->Add(res_count_label_, 0, wxBOTTOM, 2);
+
+        bsiz->Add(gs, 0, wxEXPAND | wxALL, 4);
+        outer->Add(bsiz, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 6);
+    }
+
+    // ── Terrain ─────────────────────────────────────────────────────────────
+    {
+        auto* box   = new wxStaticBox(this, wxID_ANY, "Terrain");
+        auto* bsiz  = new wxStaticBoxSizer(box, wxVERTICAL);
+        auto* gs    = new wxFlexGridSizer(2, 4, 6);
+        gs->AddGrowableCol(1);
+
+        gs->Add(new wxStaticText(this, wxID_ANY, "Source"),
+                0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
+        wxArrayString terr_opts;
+        terr_opts.Add("Flat"); terr_opts.Add("SRTM"); terr_opts.Add("File");
+        terrain_src_ = new wxChoice(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, terr_opts);
+        terrain_src_->SetSelection(0);
+        terrain_src_->Bind(wxEVT_CHOICE, &NetworkConfigPanel::OnTerrainSrcChanged, this);
+        gs->Add(terrain_src_, 1, wxEXPAND | wxBOTTOM, 2);
+
+        // File path row
+        gs->Add(new wxStaticText(this, wxID_ANY, "File"),
+                0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
+        {
+            auto* row = new wxBoxSizer(wxHORIZONTAL);
+            terrain_file_ = new wxTextCtrl(this, wxID_ANY);
+            terrain_file_->Bind(wxEVT_TEXT, &NetworkConfigPanel::OnFilePath, this);
+            terrain_browse_ = new wxButton(this, wxID_ANY, "Browse...",
+                                            wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
+            terrain_browse_->Bind(wxEVT_BUTTON, &NetworkConfigPanel::OnTerrainBrowse, this);
+            row->Add(terrain_file_,   1, wxEXPAND | wxRIGHT, 4);
+            row->Add(terrain_browse_, 0, wxALIGN_CENTER_VERTICAL);
+            gs->Add(row, 1, wxEXPAND | wxBOTTOM, 2);
+        }
+
+        bsiz->Add(gs, 0, wxEXPAND | wxALL, 4);
+        outer->Add(bsiz, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 6);
+    }
+
+    // ── Conductivity ────────────────────────────────────────────────────────
+    {
+        auto* box   = new wxStaticBox(this, wxID_ANY, "Conductivity");
+        auto* bsiz  = new wxStaticBoxSizer(box, wxVERTICAL);
+        auto* gs    = new wxFlexGridSizer(2, 4, 6);
+        gs->AddGrowableCol(1);
+
+        gs->Add(new wxStaticText(this, wxID_ANY, "Source"),
+                0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
+        wxArrayString cond_opts;
+        cond_opts.Add("Built-in"); cond_opts.Add("ITU P.832");
+        cond_opts.Add("BGS"); cond_opts.Add("File");
+        cond_src_ = new wxChoice(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, cond_opts);
+        cond_src_->SetSelection(0);
+        cond_src_->Bind(wxEVT_CHOICE, &NetworkConfigPanel::OnCondSrcChanged, this);
+        gs->Add(cond_src_, 1, wxEXPAND | wxBOTTOM, 2);
+
+        // File path row
+        gs->Add(new wxStaticText(this, wxID_ANY, "File"),
+                0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
+        {
+            auto* row = new wxBoxSizer(wxHORIZONTAL);
+            cond_file_ = new wxTextCtrl(this, wxID_ANY);
+            cond_file_->Bind(wxEVT_TEXT, &NetworkConfigPanel::OnFilePath, this);
+            cond_browse_ = new wxButton(this, wxID_ANY, "Browse...",
+                                         wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
+            cond_browse_->Bind(wxEVT_BUTTON, &NetworkConfigPanel::OnCondBrowse, this);
+            row->Add(cond_file_,   1, wxEXPAND | wxRIGHT, 4);
+            row->Add(cond_browse_, 0, wxALIGN_CENTER_VERTICAL);
+            gs->Add(row, 1, wxEXPAND | wxBOTTOM, 2);
+        }
+
+        bsiz->Add(gs, 0, wxEXPAND | wxALL, 4);
+        outer->Add(bsiz, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 6);
+    }
+
+    SetSizer(outer);
     SetScrollRate(0, 10);
     FitInside();
+
+    UpdateTerrainFileState();
+    UpdateCondFileState();
 }
+
+// ---------------------------------------------------------------------------
+// SetScenario / SaveToScenario
+// ---------------------------------------------------------------------------
 
 void NetworkConfigPanel::SetScenario(Scenario* scenario) {
     scenario_ = scenario;
     if (!scenario_) return;
+
+    name_field_->ChangeValue(scenario_->name);
+
     f1_field_->ChangeValue(wxString::Format("%.4f", scenario_->frequencies.f1_hz / 1000.0));
     f2_field_->ChangeValue(wxString::Format("%.4f", scenario_->frequencies.f2_hz / 1000.0));
+
+    datum_->SetSelection(scenario_->datum_transform == Scenario::DatumTransform::OSTN15 ? 1 : 0);
+
     lat_min_field_->ChangeValue(wxString::Format("%.4f", scenario_->grid.lat_min));
     lat_max_field_->ChangeValue(wxString::Format("%.4f", scenario_->grid.lat_max));
     lon_min_field_->ChangeValue(wxString::Format("%.4f", scenario_->grid.lon_min));
     lon_max_field_->ChangeValue(wxString::Format("%.4f", scenario_->grid.lon_max));
     res_field_->ChangeValue(wxString::Format("%.1f", scenario_->grid.resolution_km));
-    mode_->SetSelection(scenario_->mode == Scenario::OperationMode::Interlaced ? 1 : 0);
-    datum_->SetSelection(scenario_->datum_transform == Scenario::DatumTransform::OSTN15 ? 1 : 0);
+
+    // Terrain
+    int terr_sel = 0;
+    if (scenario_->terrain_source == Scenario::TerrainSource::SRTM)  terr_sel = 1;
+    else if (scenario_->terrain_source == Scenario::TerrainSource::File) terr_sel = 2;
+    terrain_src_->SetSelection(terr_sel);
+    terrain_file_->ChangeValue(scenario_->terrain_file);
+    UpdateTerrainFileState();
+
+    // Conductivity
+    int cond_sel = 0;
+    if (scenario_->conductivity_source == Scenario::ConductivitySource::ItuP832) cond_sel = 1;
+    else if (scenario_->conductivity_source == Scenario::ConductivitySource::BGS) cond_sel = 2;
+    else if (scenario_->conductivity_source == Scenario::ConductivitySource::File) cond_sel = 3;
+    cond_src_->SetSelection(cond_sel);
+    cond_file_->ChangeValue(scenario_->conductivity_file);
+    UpdateCondFileState();
+
     UpdateMlDisplay();
     ValidateBoundsFields();
     ValidateResField();
@@ -115,11 +256,17 @@ void NetworkConfigPanel::SetScenario(Scenario* scenario) {
 
 void NetworkConfigPanel::SaveToScenario() {
     if (!scenario_) return;
+
+    scenario_->name = name_field_->GetValue().ToStdString();
+
     double f1 = wxAtof(f1_field_->GetValue());
     double f2 = wxAtof(f2_field_->GetValue());
     if (f1 >= F_MIN_KHZ && f1 <= F_MAX_KHZ) scenario_->frequencies.f1_hz = f1 * 1000.0;
     if (f2 >= F_MIN_KHZ && f2 <= F_MAX_KHZ) scenario_->frequencies.f2_hz = f2 * 1000.0;
     scenario_->frequencies.recompute();
+
+    scenario_->datum_transform = (datum_->GetSelection() == 1) ? Scenario::DatumTransform::OSTN15
+                                                                : Scenario::DatumTransform::Helmert;
 
     double lat_min = wxAtof(lat_min_field_->GetValue());
     double lat_max = wxAtof(lat_max_field_->GetValue());
@@ -136,11 +283,29 @@ void NetworkConfigPanel::SaveToScenario() {
     double res = wxAtof(res_field_->GetValue());
     if (res >= RES_MIN_KM && res <= RES_MAX_KM) scenario_->grid.resolution_km = res;
 
-    scenario_->mode = (mode_->GetSelection() == 1) ? Scenario::OperationMode::Interlaced
-                                                    : Scenario::OperationMode::EightSlot;
-    scenario_->datum_transform = (datum_->GetSelection() == 1) ? Scenario::DatumTransform::OSTN15
-                                                                : Scenario::DatumTransform::Helmert;
+    // Terrain
+    int terr_sel = terrain_src_->GetSelection();
+    if (terr_sel == 0)      scenario_->terrain_source = Scenario::TerrainSource::Flat;
+    else if (terr_sel == 1) scenario_->terrain_source = Scenario::TerrainSource::SRTM;
+    else {
+        scenario_->terrain_source = Scenario::TerrainSource::File;
+        scenario_->terrain_file = terrain_file_->GetValue().ToStdString();
+    }
+
+    // Conductivity
+    int cond_sel = cond_src_->GetSelection();
+    if (cond_sel == 0)      scenario_->conductivity_source = Scenario::ConductivitySource::BuiltIn;
+    else if (cond_sel == 1) scenario_->conductivity_source = Scenario::ConductivitySource::ItuP832;
+    else if (cond_sel == 2) scenario_->conductivity_source = Scenario::ConductivitySource::BGS;
+    else {
+        scenario_->conductivity_source = Scenario::ConductivitySource::File;
+        scenario_->conductivity_file = cond_file_->GetValue().ToStdString();
+    }
 }
+
+// ---------------------------------------------------------------------------
+// Bounds from map
+// ---------------------------------------------------------------------------
 
 void NetworkConfigPanel::SetBoundsFromMap(double lat_min, double lat_max,
                                            double lon_min, double lon_max) {
@@ -152,6 +317,10 @@ void NetworkConfigPanel::SetBoundsFromMap(double lat_min, double lat_max,
     ValidateResField();
     UpdateResCountDisplay();
 }
+
+// ---------------------------------------------------------------------------
+// Event handlers — frequencies, bounds, resolution
+// ---------------------------------------------------------------------------
 
 void NetworkConfigPanel::OnFreqChanged(wxCommandEvent& /*evt*/) {
     ValidateFreqFields();
@@ -198,6 +367,63 @@ void NetworkConfigPanel::OnDebounceTimer(wxTimerEvent& /*evt*/) {
     SaveToScenario();
     on_changed(*scenario_);
 }
+
+// ---------------------------------------------------------------------------
+// Event handlers — terrain & conductivity
+// ---------------------------------------------------------------------------
+
+void NetworkConfigPanel::OnTerrainSrcChanged(wxCommandEvent& /*evt*/) {
+    UpdateTerrainFileState();
+    debounce_.StartOnce(500);
+}
+
+void NetworkConfigPanel::OnCondSrcChanged(wxCommandEvent& /*evt*/) {
+    UpdateCondFileState();
+    debounce_.StartOnce(500);
+}
+
+void NetworkConfigPanel::OnTerrainBrowse(wxCommandEvent& /*evt*/) {
+    wxFileDialog dlg(this, "Select terrain data file", "", "",
+                     "GeoTIFF (*.tif;*.tiff)|*.tif;*.tiff|"
+                     "HGT (*.hgt)|*.hgt|"
+                     "All files (*)|*",
+                     wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+    if (dlg.ShowModal() == wxID_OK) {
+        terrain_file_->ChangeValue(dlg.GetPath());
+        debounce_.StartOnce(500);
+    }
+}
+
+void NetworkConfigPanel::OnCondBrowse(wxCommandEvent& /*evt*/) {
+    wxFileDialog dlg(this, "Select conductivity data file", "", "",
+                     "GeoTIFF (*.tif;*.tiff)|*.tif;*.tiff|"
+                     "All files (*)|*",
+                     wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+    if (dlg.ShowModal() == wxID_OK) {
+        cond_file_->ChangeValue(dlg.GetPath());
+        debounce_.StartOnce(500);
+    }
+}
+
+void NetworkConfigPanel::OnFilePath(wxCommandEvent& /*evt*/) {
+    debounce_.StartOnce(500);
+}
+
+void NetworkConfigPanel::UpdateTerrainFileState() {
+    bool file_mode = (terrain_src_->GetSelection() == 2);
+    terrain_file_->Enable(file_mode);
+    terrain_browse_->Enable(file_mode);
+}
+
+void NetworkConfigPanel::UpdateCondFileState() {
+    bool file_mode = (cond_src_->GetSelection() == 3);
+    cond_file_->Enable(file_mode);
+    cond_browse_->Enable(file_mode);
+}
+
+// ---------------------------------------------------------------------------
+// Validation helpers
+// ---------------------------------------------------------------------------
 
 void NetworkConfigPanel::ValidateFreqFields() {
     auto validate = [&](wxTextCtrl* field) {

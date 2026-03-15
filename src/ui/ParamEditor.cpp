@@ -202,6 +202,20 @@ void ParamEditor::BuildReceiverPage(wxWindow* page) {
                                   wxSP_ARROW_KEYS, 2, 8, 4);
     gs->Add(rx_minstns_, 1, wxEXPAND | wxBOTTOM, 4);
 
+    gs->Add(new wxStaticText(page, wxID_ANY, "Ellipsoid"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
+    wxArrayString ellipsoids;
+    ellipsoids.Add("Airy 1830"); ellipsoids.Add("WGS84");
+    rx_ellipsoid_ = new wxChoice(page, wxID_ANY, wxDefaultPosition, wxDefaultSize, ellipsoids);
+    rx_ellipsoid_->SetSelection(0);
+    rx_ellipsoid_->SetToolTip("Ellipsoid used by the Virtual Locator for range computation. "
+                              "Airy 1830 matches Mk4 Datatrak firmware.");
+    rx_ellipsoid_->Bind(wxEVT_CHOICE, &ParamEditor::OnRxField, this);
+    gs->Add(rx_ellipsoid_, 1, wxEXPAND | wxBOTTOM, 4);
+
+    rx_vp_ = MakeField(page, "VP (m/s)", gs);
+    rx_vp_->SetToolTip("Velocity of propagation used by receiver firmware (m/s).");
+    rx_vp_->Bind(wxEVT_TEXT, &ParamEditor::OnRxField, this);
+
     gs->Add(new wxStaticText(page, wxID_ANY, "Lock position"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
     rx_locked_ = new wxCheckBox(page, wxID_ANY, "");
     gs->Add(rx_locked_, 0, wxBOTTOM, 4);
@@ -273,6 +287,8 @@ void ParamEditor::LoadReceiver(const ReceiverModel& rx) {
     rx_vnoise_->ChangeValue(wxString::Format("%.1f", rx.vehicle_noise_dbuvpm));
     rx_range_->ChangeValue(wxString::Format("%.1f", rx.max_range_km));
     rx_minstns_->SetValue(rx.min_stations);
+    rx_ellipsoid_->SetSelection(rx.ellipsoid == ReceiverModel::Ellipsoid::WGS84 ? 1 : 0);
+    rx_vp_->ChangeValue(wxString::Format("%.1f", rx.vp_ms));
     notebook_->SetSelection(1);
     updating_ = false;
     UpdateRxFieldStates();
@@ -587,6 +603,9 @@ void ParamEditor::OnRxMode(wxCommandEvent& /*evt*/) {
     rx.vehicle_noise_dbuvpm = wxAtof(rx_vnoise_->GetValue());
     rx.max_range_km         = wxAtof(rx_range_->GetValue());
     rx.min_stations         = rx_minstns_->GetValue();
+    rx.ellipsoid = (rx_ellipsoid_->GetSelection() == 1) ? ReceiverModel::Ellipsoid::WGS84
+                                                         : ReceiverModel::Ellipsoid::Airy1830;
+    rx.vp_ms = wxAtof(rx_vp_->GetValue());
     current_rx_ = rx;
     on_receiver_changed(rx);
 }

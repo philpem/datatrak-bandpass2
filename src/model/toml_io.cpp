@@ -26,9 +26,6 @@ Scenario load(const std::filesystem::path& path) {
     if (auto sc = tbl["scenario"].as_table()) {
         s.name    = str((*sc)["name"],    "Untitled");
         s.created = str((*sc)["created"], "");
-        std::string crs = str((*sc)["display_crs"], "osgb_ng");
-        s.display_crs = (crs == "wgs84") ? Scenario::DisplayCRS::WGS84
-                                         : Scenario::DisplayCRS::OSGB_NG;
     }
 
     // [grid]
@@ -194,7 +191,6 @@ void save(const Scenario& s, const std::filesystem::path& path) {
         {"scenario", toml::table{
             {"name",        s.name},
             {"created",     s.created},
-            {"display_crs", (s.display_crs == Scenario::DisplayCRS::WGS84) ? "wgs84" : "osgb_ng"},
         }},
         {"grid", toml::table{
             {"lat_min",       s.grid.lat_min},

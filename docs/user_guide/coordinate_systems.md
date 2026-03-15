@@ -54,13 +54,9 @@ lon = -0.1848
 ```
 
 The `osgb_easting` and `osgb_northing` fields are informational only;
-they are recomputed from lat/lon and never read back.  The `display_crs`
-field controls which system is shown in the UI:
-
-```toml
-[scenario]
-display_crs = "osgb_ng"    # wgs84 | osgb_ng
-```
+they are recomputed from lat/lon and never read back.  The status bar
+always shows cursor position in both WGS84 and OSGB National Grid
+simultaneously.
 
 ---
 

@@ -52,12 +52,6 @@ struct Scenario {
     std::string name    = "Untitled";
     std::string created;
 
-    enum class DisplayCRS { WGS84, OSGB_NG };
-    DisplayCRS display_crs = DisplayCRS::OSGB_NG;
-
-    enum class OperationMode { EightSlot, Interlaced };
-    OperationMode mode = OperationMode::EightSlot;
-
     GridDef                     grid;
     Frequencies                 frequencies;
     ReceiverModel               receiver;
@@ -102,11 +96,6 @@ struct Scenario {
 
     enum class DatumTransform { Helmert, OSTN15 };
     DatumTransform datum_transform = DatumTransform::Helmert;
-
-    std::vector<std::string> output_layers = {
-        "groundwave", "snr", "gdr", "whdop",
-        "repeatable", "asf", "confidence"
-    };
 };
 
 } // namespace bp
