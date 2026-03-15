@@ -4,6 +4,7 @@
 #include <wx/textctrl.h>
 #include <wx/choice.h>
 #include <wx/stattext.h>
+#include <wx/button.h>
 #include <wx/timer.h>
 #include "../model/Scenario.h"
 
@@ -37,17 +38,32 @@ private:
     void OnOtherChanged(wxCommandEvent& evt);
     void OnDebounceTimer(wxTimerEvent& evt);
     void OnFieldKillFocus(wxFocusEvent& evt);
+    void OnTerrainSrcChanged(wxCommandEvent& evt);
+    void OnCondSrcChanged(wxCommandEvent& evt);
+    void OnTerrainBrowse(wxCommandEvent& evt);
+    void OnCondBrowse(wxCommandEvent& evt);
+    void OnFilePath(wxCommandEvent& evt);
     void ValidateFreqFields();
     void ValidateBoundsFields();
     void ValidateResField();
     void UpdateMlDisplay();
     void UpdateResCountDisplay();
+    void UpdateTerrainFileState();
+    void UpdateCondFileState();
     bool IsResValid() const;   // true iff resolution is in range AND point count is within limit
 
+    // Scenario metadata
+    wxTextCtrl*   name_field_      = nullptr;
+
+    // Frequencies
     wxTextCtrl*   f1_field_        = nullptr;
     wxTextCtrl*   f2_field_        = nullptr;
     wxStaticText* ml_label_        = nullptr;
+
+    // Network
     wxChoice*     mode_            = nullptr;
+    wxChoice*     display_crs_     = nullptr;
+    wxChoice*     datum_           = nullptr;
 
     // Grid bounds
     wxTextCtrl*   lat_min_field_   = nullptr;
@@ -59,7 +75,15 @@ private:
     wxTextCtrl*   res_field_       = nullptr;
     wxStaticText* res_count_label_ = nullptr;
 
-    wxChoice*     datum_           = nullptr;
+    // Terrain
+    wxChoice*     terrain_src_     = nullptr;
+    wxTextCtrl*   terrain_file_    = nullptr;
+    wxButton*     terrain_browse_  = nullptr;
+
+    // Conductivity
+    wxChoice*     cond_src_        = nullptr;
+    wxTextCtrl*   cond_file_       = nullptr;
+    wxButton*     cond_browse_     = nullptr;
 
     wxTimer      debounce_;
     Scenario*    scenario_  = nullptr;
@@ -68,7 +92,7 @@ private:
     static constexpr double F_MAX_KHZ    =  300.0;
     static constexpr double RES_MIN_KM   =    0.001;  // sanity floor only; point count is the real limit
     static constexpr double RES_MAX_KM   = 1000.0;
-    // UK full-coverage at 1 km spacing ≈ 766k points; use 800k as hard ceiling.
+    // UK full-coverage at 1 km spacing ~ 766k points; use 800k as hard ceiling.
     static constexpr int    MAX_GRID_PTS = 800000;
 };
 

@@ -102,11 +102,6 @@ struct Scenario {
 
     enum class DatumTransform { Helmert, OSTN15 };
     DatumTransform datum_transform = DatumTransform::Helmert;
-
-    std::vector<std::string> output_layers = {
-        "groundwave", "snr", "gdr", "whdop",
-        "repeatable", "asf", "confidence"
-    };
 };
 
 } // namespace bp

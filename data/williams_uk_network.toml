@@ -352,5 +352,3 @@ source = "builtin"
 source = "flat"
 [datum]
 transform = "helmert"
-[output]
-layers = ["groundwave", "snr", "gdr", "whdop", "repeatable", "asf", "confidence", "coverage"]

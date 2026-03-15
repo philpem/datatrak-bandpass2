@@ -55,7 +55,8 @@ lon = -0.1848
 
 The `osgb_easting` and `osgb_northing` fields are informational only;
 they are recomputed from lat/lon and never read back.  The `display_crs`
-field controls which system is shown in the UI:
+setting controls which system is shown in the UI.  It can be changed in the
+Network Configuration panel (Display CRS dropdown) or in the TOML file:
 
 ```toml
 [scenario]

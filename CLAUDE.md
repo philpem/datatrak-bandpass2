@@ -204,12 +204,15 @@ Frequency is set in a dedicated **Network Configuration panel** (not the
 transmitter/receiver parameter editor). This panel covers the settings that
 apply to the network as a whole rather than to individual stations:
 
+- Scenario name
 - F1 frequency (kHz) — floating-point field, 4 decimal places, step 0.0001
 - F2 frequency (kHz) — as above
 - Mode (8-slot / interlaced)
-- Grid resolution (km)
-- Receiver model (simple / advanced)
+- Display CRS (OSGB National Grid / WGS84)
 - Datum transform (Helmert / OSTN15)
+- Grid bounds (lat/lon min/max) and resolution (km)
+- Terrain source (Flat / SRTM / File) with file picker
+- Conductivity source (Built-in / ITU P.832 / BGS / File) with file picker
 
 The Network Configuration panel is a separate dockable panel accessible via
 View → Network Configuration. It is distinct from `ParamEditor` (which handles
@@ -618,9 +621,6 @@ source = "srtm"        # flat | srtm | /path/to/file.tif
 
 [datum]
 transform = "helmert"  # helmert | ostn15
-
-[output]
-layers = ["groundwave","snr","gdr","whdop","repeatable","asf","confidence"]
 ```
 
 ---
@@ -739,7 +739,7 @@ build → test → archive artifact.
 | P1-06 | ✓ | `coords/` module: WGS84↔OSGB36 (Helmert), National Grid E/N↔lat/lon, grid ref formatting, OSTN15 loader stub. Regression tests vs known OS benchmark points. |
 | P1-07 | ✓ | Transmitter placement UI: click map → add/drag transmitters, coordinate display in both systems, sync to Scenario |
 | P1-08 | ✓ | Parameter editor panel (`ParamEditor`): per-transmitter and per-receiver forms, validation, simple/advanced receiver mode toggle |
-| P1-08b | ✓ | Network Configuration panel (`NetworkConfigPanel`): F1/F2 frequency fields, mode, grid resolution, receiver model, datum. 500 ms debounce → full recompute. |
+| P1-08b | ✓ | Network Configuration panel (`NetworkConfigPanel`): scenario name, F1/F2 frequency fields, mode, display CRS, datum, grid bounds/resolution, terrain source, conductivity source. 500 ms debounce → full recompute. |
 | P1-09 | ✓ | `ComputeManager` + worker thread: grid definition, message queue, cancellation flag, `wxQueueEvent` dispatch. Unit tests. |
 
 ### Phase 2 — Core propagation (partial)

@@ -104,12 +104,14 @@ private:
     double           f1_hz_             = 146437.5;
 
     // ── Receiver tab ────────────────────────────────────────────────────────
-    wxChoice*   rx_mode_    = nullptr;
-    wxTextCtrl* rx_noise_   = nullptr;
-    wxTextCtrl* rx_vnoise_  = nullptr;
-    wxTextCtrl* rx_range_   = nullptr;
-    wxSpinCtrl* rx_minstns_ = nullptr;
-    wxCheckBox* rx_locked_  = nullptr;
+    wxChoice*   rx_mode_      = nullptr;
+    wxTextCtrl* rx_noise_     = nullptr;
+    wxTextCtrl* rx_vnoise_    = nullptr;
+    wxTextCtrl* rx_range_     = nullptr;
+    wxSpinCtrl* rx_minstns_   = nullptr;
+    wxChoice*   rx_ellipsoid_ = nullptr;
+    wxTextCtrl* rx_vp_        = nullptr;
+    wxCheckBox* rx_locked_    = nullptr;
     ReceiverModel current_rx_;
 };
 

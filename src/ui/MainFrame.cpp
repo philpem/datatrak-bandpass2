@@ -153,7 +153,7 @@ MainFrame::MainFrame()
     aui_.AddPane(net_config_, wxAuiPaneInfo()
         .Right().Layer(1).Position(0).Name("netcfg")
         .Caption("Network Configuration").CloseButton(true).PinButton(true)
-        .BestSize(260, 220).MinSize(200, 180));
+        .BestSize(260, 520).MinSize(200, 300));
     aui_.AddPane(param_editor_, wxAuiPaneInfo()
         .Right().Layer(1).Position(1).Name("params")
         .Caption("Parameters").CloseButton(true).PinButton(true)

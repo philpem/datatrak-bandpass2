@@ -130,17 +130,6 @@ calibration.
 | `transform` | `"helmert"` | Helmert 7-parameter transform (+-5 m accuracy, no data files needed) |
 | | `"ostn15"` | OSTN15 transform (+-0.1 m, requires `tools/ostn15_download.py`) |
 
-### `[output]`
-
-| Field | Type | Description |
-|---|---|---|
-| `layers` | array of strings | Map layers to compute and display |
-
-Valid layer keys: `"groundwave"`, `"skywave"`, `"atm_noise"`, `"snr"`, `"sgr"`,
-`"gdr"`, `"whdop"`, `"repeatable"`, `"asf"`, `"asf_gradient"`,
-`"absolute_accuracy"`, `"absolute_accuracy_corrected"`,
-`"absolute_accuracy_delta"`, `"confidence"`, `"coverage"`.
-
 ## Example
 
 ```toml
@@ -204,8 +193,6 @@ source = "flat"
 [datum]
 transform = "helmert"
 
-[output]
-layers = ["groundwave", "snr", "gdr", "whdop", "repeatable", "asf", "confidence", "coverage"]
 ```
 
 ## Notes
