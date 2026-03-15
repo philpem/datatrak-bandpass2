@@ -46,6 +46,7 @@ bool invert2x2(double a00, double a01, double a11,
 double compute_whdop(const std::vector<StationGeometry>& all_stations,
                      int min_stations,
                      double max_range_km,
+                     int max_slots,
                      std::vector<int>& selected_out)
 {
     selected_out.clear();
@@ -62,11 +63,11 @@ double compute_whdop(const std::vector<StationGeometry>& all_stations,
 
     if ((int)candidates.size() < min_stations) return std::numeric_limits<double>::quiet_NaN();
 
-    // Sort by SNR descending; pick top-8 (Appendix K rule: at most 8 slots)
+    // Sort by SNR descending; apply Appendix K slot cap
     std::sort(candidates.begin(), candidates.end(), [&](int a, int b){
         return all_stations[a].snr_db > all_stations[b].snr_db;
     });
-    if ((int)candidates.size() > 8) candidates.resize(8);
+    if ((int)candidates.size() > max_slots) candidates.resize(max_slots);
 
     // Build weight matrix elements
     double snr_sum = 0.0;
@@ -159,6 +160,9 @@ void computeWHDOP(GridData& data, const Scenario& scenario,
 
     if (cancel.load()) return;
 
+    // Appendix K slot cap: up to 24 slots
+    const int max_slots = 24;
+
     // Per grid point: build station geometry, compute WHDOP and repeatable
     for (size_t i = 0; i < n; ++i) {
         if (cancel.load()) return;
@@ -190,6 +194,7 @@ void computeWHDOP(GridData& data, const Scenario& scenario,
         double whdop = compute_whdop(stations,
                                       scenario.receiver.min_stations,
                                       scenario.receiver.max_range_km,
+                                      max_slots,
                                       selected);
 
         if (it_whdop != data.layers.end())

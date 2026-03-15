@@ -32,6 +32,11 @@ static std::string make_header(const Scenario& scenario, FirmwareFormat fmt) {
     ss << "# BANDPASS II Almanac Export\n";
     ss << "# Scenario: " << scenario.name << "\n";
     ss << "# Format: " << (fmt == FirmwareFormat::V7 ? "V7" : "V16") << "\n";
+    int max_slot = 0;
+    for (const auto& tx : scenario.transmitters)
+        max_slot = std::max(max_slot, tx.slot);
+    ss << "# Slots: " << scenario.transmitters.size()
+       << " transmitters, max slot " << max_slot << "\n";
     ss << std::fixed << std::setprecision(4);
     ss << "# F1: " << f1_khz << " kHz  lane width: "
        << std::setprecision(2) << lw1 << " m  (1 ml = "

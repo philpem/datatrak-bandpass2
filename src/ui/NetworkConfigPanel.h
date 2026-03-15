@@ -47,8 +47,6 @@ private:
     wxTextCtrl*   f1_field_        = nullptr;
     wxTextCtrl*   f2_field_        = nullptr;
     wxStaticText* ml_label_        = nullptr;
-    wxChoice*     mode_            = nullptr;
-
     // Grid bounds
     wxTextCtrl*   lat_min_field_   = nullptr;
     wxTextCtrl*   lat_max_field_   = nullptr;

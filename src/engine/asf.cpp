@@ -204,6 +204,9 @@ void computeASF(GridData& data, const Scenario& scenario,
     const double veh_noise  = vehicle_noise_dbuvm(scenario.receiver.vehicle_noise_dbuvpm);
     const double atm_noise_v = atm_noise_dbuvm(scenario.frequencies.f1_hz);
 
+    // Appendix K slot cap: up to 24 slots
+    const int max_slots = 24;
+
     // ASF values grid: store for gradient computation after main loop
     std::vector<double> asf_grid(n, 0.0);
 
@@ -284,6 +287,7 @@ void computeASF(GridData& data, const Scenario& scenario,
             double whdop_local = compute_whdop(stations,
                                                scenario.receiver.min_stations,
                                                scenario.receiver.max_range_km,
+                                               max_slots,
                                                selected);
             double err = std::isnan(whdop_local)
                        ? std::numeric_limits<double>::quiet_NaN()

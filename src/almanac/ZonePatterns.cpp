@@ -151,6 +151,10 @@ std::vector<ZoneResult> compute_zone_patterns(
         };
         std::vector<PairResult> viable;
 
+        // Slot cap: up to 24 slots. Pairs are always 2 stations so this
+        // never truncates; kept for API consistency with compute_whdop().
+        const int max_slots = 24;
+
         for (int i = 0; i < (int)stations.size(); ++i) {
             if (!stations[i].usable) continue;
             for (int j = i + 1; j < (int)stations.size(); ++j) {
@@ -159,7 +163,8 @@ std::vector<ZoneResult> compute_zone_patterns(
                 std::vector<StationGeometry> pair_st = {stations[i], stations[j]};
                 std::vector<int> sel;
                 double whdop = compute_whdop(pair_st, 2,
-                                             scenario.receiver.max_range_km, sel);
+                                             scenario.receiver.max_range_km,
+                                             max_slots, sel);
                 if (whdop < 9990.0) {
                     viable.push_back({stations[i].slot, stations[j].slot, whdop});
                 }

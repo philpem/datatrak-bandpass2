@@ -32,14 +32,17 @@ NetworkConfigPanel::NetworkConfigPanel(wxWindow* parent)
     ml_label_ = new wxStaticText(this, wxID_ANY, "1 ml(f1) = 2.047 m   1 ml(f2) = 2.285 m");
     gs->Add(ml_label_, 0, wxBOTTOM, 6);
 
-    // Mode
-    gs->Add(new wxStaticText(this, wxID_ANY, "Mode"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
-    wxArrayString modes;
-    modes.Add("8-slot"); modes.Add("Interlaced");
-    mode_ = new wxChoice(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, modes);
-    mode_->SetSelection(0);
-    mode_->Bind(wxEVT_CHOICE, &NetworkConfigPanel::OnOtherChanged, this);
-    gs->Add(mode_, 1, wxEXPAND | wxBOTTOM, 2);
+    // Grid resolution
+    gs->Add(new wxStaticText(this, wxID_ANY, "Grid res (km)"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
+    res_field_ = new wxTextCtrl(this, wxID_ANY, "10.0");
+    res_field_->Bind(wxEVT_TEXT,       &NetworkConfigPanel::OnResChanged,     this);
+    res_field_->Bind(wxEVT_KILL_FOCUS, &NetworkConfigPanel::OnFieldKillFocus, this);
+    gs->Add(res_field_, 1, wxEXPAND | wxBOTTOM, 2);
+
+    // Grid point count display (below resolution field)
+    gs->Add(new wxStaticText(this, wxID_ANY, ""), 0);
+    res_count_label_ = new wxStaticText(this, wxID_ANY, "");
+    gs->Add(res_count_label_, 0, wxBOTTOM, 6);
 
     // Datum
     gs->Add(new wxStaticText(this, wxID_ANY, "Datum"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
@@ -105,7 +108,6 @@ void NetworkConfigPanel::SetScenario(Scenario* scenario) {
     lon_min_field_->ChangeValue(wxString::Format("%.4f", scenario_->grid.lon_min));
     lon_max_field_->ChangeValue(wxString::Format("%.4f", scenario_->grid.lon_max));
     res_field_->ChangeValue(wxString::Format("%.1f", scenario_->grid.resolution_km));
-    mode_->SetSelection(scenario_->mode == Scenario::OperationMode::Interlaced ? 1 : 0);
     datum_->SetSelection(scenario_->datum_transform == Scenario::DatumTransform::OSTN15 ? 1 : 0);
     UpdateMlDisplay();
     ValidateBoundsFields();
@@ -135,9 +137,6 @@ void NetworkConfigPanel::SaveToScenario() {
 
     double res = wxAtof(res_field_->GetValue());
     if (res >= RES_MIN_KM && res <= RES_MAX_KM) scenario_->grid.resolution_km = res;
-
-    scenario_->mode = (mode_->GetSelection() == 1) ? Scenario::OperationMode::Interlaced
-                                                    : Scenario::OperationMode::EightSlot;
     scenario_->datum_transform = (datum_->GetSelection() == 1) ? Scenario::DatumTransform::OSTN15
                                                                 : Scenario::DatumTransform::Helmert;
 }
