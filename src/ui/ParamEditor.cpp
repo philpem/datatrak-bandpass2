@@ -224,6 +224,12 @@ void ParamEditor::BuildReceiverPage(wxWindow* page) {
 // ---------------------------------------------------------------------------
 
 void ParamEditor::LoadSite(int id, const TransmitterSite& site) {
+    // Keep updating_ true for the entire method to suppress spurious
+    // wxEVT_CHOICE / wxEVT_LISTBOX events fired by Clear()/Append()/
+    // SetSelection() calls.  Without this, RebuildMasterSlotChoices →
+    // Clear() fires wxEVT_CHOICE → OnSlotField → on_site_changed →
+    // SetSiteList → RebuildMasterSlotChoices (re-entrant), corrupting
+    // state and crashing.
     updating_ = true;
     current_site_id_  = id;
     current_site_     = site;
@@ -238,7 +244,6 @@ void ParamEditor::LoadSite(int id, const TransmitterSite& site) {
     tx_delete_->Enable(true);
 
     notebook_->SetSelection(0);
-    updating_ = false;
 
     RebuildMasterSlotChoices();
     UpdateSlotListBox();
@@ -255,6 +260,7 @@ void ParamEditor::LoadSite(int id, const TransmitterSite& site) {
         tx_delay_->ChangeValue("0.000");
     }
     btn_remove_slot_->Enable(!site.slots.empty());
+    updating_ = false;
 }
 
 void ParamEditor::LoadReceiver(const ReceiverModel& rx) {
@@ -290,6 +296,8 @@ void ParamEditor::ClearSelection() {
 void ParamEditor::SetSiteList(const std::vector<TransmitterSite>& sites) {
     site_list_ = sites;
     if (current_site_id_ < 0) return;
+    bool was_updating = updating_;
+    updating_ = true;
     int prev_sel = 0;
     int cur = tx_mslot_choice_->GetSelection();
     if (cur >= 0 && cur < (int)master_slot_values_.size())
@@ -299,6 +307,7 @@ void ParamEditor::SetSiteList(const std::vector<TransmitterSite>& sites) {
     for (int i = 0; i < (int)master_slot_values_.size(); ++i)
         if (master_slot_values_[i] == prev_sel) { new_sel = i; break; }
     tx_mslot_choice_->SetSelection(new_sel);
+    updating_ = was_updating;
 }
 
 // ---------------------------------------------------------------------------
@@ -306,6 +315,7 @@ void ParamEditor::SetSiteList(const std::vector<TransmitterSite>& sites) {
 // ---------------------------------------------------------------------------
 
 void ParamEditor::UpdateSlotListBox() {
+    bool was_updating = updating_;
     updating_ = true;
     tx_slot_list_->Clear();
     for (const auto& sc : current_site_.slots) {
@@ -315,11 +325,12 @@ void ParamEditor::UpdateSlotListBox() {
             label += wxString::Format("  \u2192 Slot %d", sc.master_slot);
         tx_slot_list_->Append(label);
     }
-    updating_ = false;
+    updating_ = was_updating;
 }
 
 void ParamEditor::LoadSlotFields(int slot_idx) {
     if (slot_idx < 0 || slot_idx >= (int)current_site_.slots.size()) return;
+    bool was_updating = updating_;
     updating_ = true;
     current_slot_idx_ = slot_idx;
     const auto& sc = current_site_.slots[slot_idx];
@@ -334,7 +345,7 @@ void ParamEditor::LoadSlotFields(int slot_idx) {
         if (master_slot_values_[i] == sc.master_slot) { sel = i; break; }
     tx_mslot_choice_->SetSelection(sel);
 
-    updating_ = false;
+    updating_ = was_updating;
     UpdateMasterSlotState();
     UpdateSpoCalcState();
 }
@@ -353,6 +364,8 @@ void ParamEditor::SaveCurrentSlotFields() {
 }
 
 void ParamEditor::RebuildMasterSlotChoices() {
+    bool was_updating = updating_;
+    updating_ = true;
     tx_mslot_choice_->Clear();
     master_slot_values_.clear();
     tx_mslot_choice_->Append("None (is master)");
@@ -382,6 +395,7 @@ void ParamEditor::RebuildMasterSlotChoices() {
             master_slot_values_.push_back(sc.slot);
         }
     }
+    updating_ = was_updating;
 }
 
 void ParamEditor::UpdateMasterSlotState() {
@@ -393,18 +407,6 @@ void ParamEditor::UpdateSpoCalcState() {
     int sel = tx_mslot_choice_->GetSelection();
     bool has_master = !is_master && sel > 0 && sel < (int)master_slot_values_.size();
     btn_spo_calc_->Enable(has_master);
-}
-
-TransmitterSite ParamEditor::BuildSiteFromForm() const {
-    TransmitterSite site = current_site_;
-    site.name    = tx_name_->GetValue().ToStdString();
-    site.lat     = wxAtof(tx_lat_->GetValue());
-    site.lon     = wxAtof(tx_lon_->GetValue());
-    site.power_w = wxAtof(tx_power_->GetValue());
-    site.height_m = wxAtof(tx_height_->GetValue());
-    site.locked  = tx_locked_->GetValue();
-    // Per-slot fields already written into current_site_.slots by SaveCurrentSlotFields()
-    return site;
 }
 
 // ---------------------------------------------------------------------------
@@ -508,17 +510,6 @@ void ParamEditor::OnCalcSPO(wxCommandEvent& /*evt*/) {
             }
         }
         if (found) break;
-    }
-    if (!found) return;
-
-    // Also check current site's own slots
-    if (!found) {
-        for (const auto& sc : current_site_.slots) {
-            if (sc.slot == master_slot) {
-                master_lat = current_site_.lat; master_lon = current_site_.lon;
-                found = true; break;
-            }
-        }
     }
     if (!found) return;
 

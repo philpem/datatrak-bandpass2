@@ -64,9 +64,6 @@ private:
     void LoadSlotFields(int slot_idx);
     void SaveCurrentSlotFields();
 
-    // Builds the edited site from form fields (site-level + current slot)
-    TransmitterSite BuildSiteFromForm() const;
-
     wxNotebook* notebook_ = nullptr;
 
     // ── Transmitter tab ──────────────────────────────────────────────────────

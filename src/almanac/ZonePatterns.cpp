@@ -107,6 +107,8 @@ std::vector<ZoneResult> compute_zone_patterns(
     const double atm_noise = atm_noise_dbuvm(scenario.frequencies.f1_hz);
     const double veh_noise = vehicle_noise_dbuvm(scenario.receiver.vehicle_noise_dbuvpm);
 
+    const auto flat_txs = scenario.flatTransmitters();
+
     for (const auto& zone : zones) {
         ZoneResult res;
         res.zone_id      = zone.zone_id;
@@ -116,7 +118,6 @@ std::vector<ZoneResult> compute_zone_patterns(
 
         // Build StationGeometry for each transmitter at this zone centroid
         std::vector<StationGeometry> stations;
-        const auto flat_txs = scenario.flatTransmitters();
         stations.reserve(flat_txs.size());
 
         for (const auto& tx : flat_txs) {

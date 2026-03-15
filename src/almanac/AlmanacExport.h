@@ -37,7 +37,7 @@ std::string generate_po(const Scenario& scenario,
 // ---------------------------------------------------------------------------
 // Pattern offset computation from a reference point (P5-10)
 //
-// For each non-master transmitter in scenario.transmitters, computes the
+// For each non-master transmitter in scenario.flatTransmitters(), computes the
 // Monteath ASF at (ref_lat, ref_lon) and returns a PatternOffset per pattern.
 // Pattern string: "{slave_slot},{master_slot}".
 //
