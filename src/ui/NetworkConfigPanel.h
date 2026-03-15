@@ -44,6 +44,7 @@ private:
     void OnCondBrowse(wxCommandEvent& evt);
     void OnFilePath(wxCommandEvent& evt);
     void ValidateFreqFields();
+    void UpdateOstn15Label();
     void ValidateBoundsFields();
     void ValidateResField();
     void UpdateMlDisplay();
@@ -82,6 +83,9 @@ private:
     wxChoice*     cond_src_        = nullptr;
     wxTextCtrl*   cond_file_       = nullptr;
     wxButton*     cond_browse_     = nullptr;
+
+    // OSTN15 status
+    wxStaticText* ostn15_label_    = nullptr;
 
     wxTimer      debounce_;
     Scenario*    scenario_  = nullptr;

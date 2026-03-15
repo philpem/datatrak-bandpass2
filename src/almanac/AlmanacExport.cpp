@@ -55,9 +55,11 @@ static std::string make_header(const Scenario& scenario, FirmwareFormat fmt) {
 std::string generate_sg(const Scenario& scenario) {
     std::ostringstream ss;
     ss << "# Sg commands — station grid (OSGB National Grid)\n";
+    bool use_ostn15 = (scenario.datum_transform == Scenario::DatumTransform::OSTN15);
     for (const auto& tx : scenario.flatTransmitters()) {
         // Convert WGS84 lat/lon to OSGB36 then Easting/Northing
-        LatLon osgb36 = osgb::wgs84_to_osgb36({tx.lat, tx.lon});
+        LatLon osgb36 = use_ostn15 ? osgb::wgs84_to_osgb36_ostn15({tx.lat, tx.lon})
+                                   : osgb::wgs84_to_osgb36({tx.lat, tx.lon});
         EastNorth en  = national_grid::latlon_to_en(osgb36);
         ss << "Sg " << tx.slot
            << " " << (int)std::round(en.easting)

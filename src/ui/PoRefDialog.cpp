@@ -112,7 +112,8 @@ void PoRefDialog::OnAddMarker(wxCommandEvent& /*evt*/) {
     // Parse coordinate using CoordSystem auto-detect
     double lat = 0.0, lon = 0.0;
     try {
-        auto latlng = national_grid::parse_coordinate(text);
+        bool use_ostn15 = (scenario_.datum_transform == Scenario::DatumTransform::OSTN15);
+        auto latlng = national_grid::parse_coordinate(text, use_ostn15);
         lat = latlng.lat;
         lon = latlng.lon;
     } catch (const std::exception& e) {

@@ -461,7 +461,9 @@ void MainFrame::OnTransmitterMoved(int id, double lat, double lon) {
 void MainFrame::OnCursorMoved(double lat, double lon) {
     SetStatusText(wxString::Format("%.5f, %.5f", lat, lon), SB_WGS84);
     try {
-        LatLon osgb36 = osgb::wgs84_to_osgb36({lat, lon});
+        bool use_ostn15 = (scenario_.datum_transform == Scenario::DatumTransform::OSTN15);
+        LatLon osgb36 = use_ostn15 ? osgb::wgs84_to_osgb36_ostn15({lat, lon})
+                                   : osgb::wgs84_to_osgb36({lat, lon});
         EastNorth en  = national_grid::latlon_to_en(osgb36);
         std::string ref = national_grid::en_to_gridref(en, 8);
         SetStatusText(ref, SB_OSGB);
@@ -556,10 +558,11 @@ void MainFrame::DeleteSite(int id) {
     TriggerRecompute();
 }
 
-static wxString FormatReceiverPosition(double lat, double lon) {
+static wxString FormatReceiverPosition(double lat, double lon, bool use_ostn15) {
     wxString pos = wxString::Format("RX: %.5f, %.5f", lat, lon);
     try {
-        LatLon osgb36 = osgb::wgs84_to_osgb36({lat, lon});
+        LatLon osgb36 = use_ostn15 ? osgb::wgs84_to_osgb36_ostn15({lat, lon})
+                                   : osgb::wgs84_to_osgb36({lat, lon});
         EastNorth en  = national_grid::latlon_to_en(osgb36);
         pos += "  |  " + wxString::FromUTF8(national_grid::en_to_gridref(en, 8));
     } catch (...) {}
@@ -575,7 +578,8 @@ void MainFrame::OnReceiverPlaced(double lat, double lon) {
     GetToolBar()->ToggleTool(ID_TOOL_PLACE_RX, false);
     map_panel_->SetReceiverPlacementMode(false);
     map_panel_->SetReceiverMarker(lat, lon, rx_locked_);
-    receiver_panel_->SetPositionText(FormatReceiverPosition(lat, lon));
+    receiver_panel_->SetPositionText(FormatReceiverPosition(lat, lon,
+        scenario_.datum_transform == Scenario::DatumTransform::OSTN15));
     auto results = computeAtPoint(lat, lon, scenario_);
     receiver_panel_->SetResults(results);
 }
@@ -779,7 +783,8 @@ void MainFrame::OnReceiverMoved(double lat, double lon) {
     rx_lat_    = lat;
     rx_lon_    = lon;
     rx_placed_ = true;
-    receiver_panel_->SetPositionText(FormatReceiverPosition(lat, lon));
+    receiver_panel_->SetPositionText(FormatReceiverPosition(lat, lon,
+        scenario_.datum_transform == Scenario::DatumTransform::OSTN15));
     auto results = computeAtPoint(lat, lon, scenario_);
     receiver_panel_->SetResults(results);
 }
