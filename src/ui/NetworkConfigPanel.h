@@ -45,6 +45,8 @@ private:
     void OnFilePath(wxCommandEvent& evt);
     void ValidateFreqFields();
     void UpdateOstn15Label();
+    void UpdateTerrainLabel();
+    void UpdateCondLabel();
     void ValidateBoundsFields();
     void ValidateResField();
     void UpdateMlDisplay();
@@ -72,17 +74,19 @@ private:
     wxStaticText* res_count_label_ = nullptr;
 
     // Terrain
-    wxChoice*     terrain_src_     = nullptr;
-    wxTextCtrl*   terrain_file_    = nullptr;
-    wxButton*     terrain_browse_  = nullptr;
+    wxChoice*     terrain_src_          = nullptr;
+    wxTextCtrl*   terrain_file_         = nullptr;
+    wxButton*     terrain_browse_       = nullptr;
+    wxStaticText* terrain_status_label_ = nullptr;
 
     // Conductivity
-    wxChoice*     cond_src_        = nullptr;
-    wxTextCtrl*   cond_file_       = nullptr;
-    wxButton*     cond_browse_     = nullptr;
+    wxChoice*     cond_src_             = nullptr;
+    wxTextCtrl*   cond_file_            = nullptr;
+    wxButton*     cond_browse_          = nullptr;
+    wxStaticText* cond_status_label_    = nullptr;
 
-    // OSTN15 status
-    wxStaticText* ostn15_label_    = nullptr;
+    // Grid / datum status
+    wxStaticText* ostn15_label_         = nullptr;
 
     wxTimer      debounce_;
     Scenario*    scenario_  = nullptr;
