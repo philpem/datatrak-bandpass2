@@ -82,26 +82,72 @@ Accuracy: ±5 m over GB.  Adequate for scenario planning.
 ### OSTN15 (requires data download, ±0.1 m)
 
 The Ordnance Survey OSTN15 datum shift grid gives sub-metre accuracy
-between WGS84 and OSGB36 National Grid.  It requires downloading the
-OS data file using the provided tool:
+between WGS84 and OSGB36 National Grid.  It is not bundled with
+BANDPASS II and must be downloaded separately.
+
+#### Automatic download
 
 ```bash
 python3 tools/ostn15_download.py --out OSTN15.dat
 ```
 
-Place `OSTN15.dat` alongside the BANDPASS II executable (or set the
-path via `datum.ostn15_path` in the TOML).  BANDPASS II loads it at
-startup and uses bilinear interpolation within the grid.  Outside the
-GB coverage area (or when the file is absent), it falls back to Helmert.
+This fetches the NTv2 grid file from the official
+[OrdnanceSurvey/os-transform](https://github.com/OrdnanceSurvey/os-transform)
+GitHub repository and converts it to BANDPASS II's compact binary format.
 
-To activate OSTN15 in a scenario:
+#### Manual download
+
+If the automatic download fails (network restrictions, etc.):
+
+1. Download `OSTN15_NTv2_OSGBtoETRS.gsb` from
+   https://github.com/OrdnanceSurvey/os-transform
+2. Run:
+   ```bash
+   python3 tools/ostn15_download.py --input-ntv2 OSTN15_NTv2_OSGBtoETRS.gsb
+   ```
+
+Alternatively, download the developer pack from
+https://www.ordnancesurvey.co.uk/geodesy-positioning/coordinate-transformations/resources,
+extract `OSTN15_OSGM15_DataFile.txt`, and run:
+```bash
+python3 tools/ostn15_download.py --input-csv OSTN15_OSGM15_DataFile.txt
+```
+
+#### Installation
+
+Place `OSTN15.dat` in any of these locations (searched in order):
+
+1. Same directory as the BANDPASS II executable (recommended)
+2. User data directory (`~/.local/share/bandpass2/` on Linux)
+3. `data/` subdirectory relative to the executable (development tree)
+
+BANDPASS II loads the file at startup automatically.  Outside the GB
+coverage area, or when the file is absent, it falls back to Helmert.
+
+The Network Configuration panel shows **"OSTN15 grid loaded (±0.1 m)"**
+when the grid is active, or a red warning if it is not loaded.
+
+#### Activation
+
+Select OSTN15 in the Network Configuration panel, or set in the TOML:
 
 ```toml
 [datum]
 transform = "ostn15"
 ```
 
-The current transform is shown in the Network Configuration panel.
+#### What OSTN15 affects
+
+The datum selection controls coordinate *display and export* only —
+it does not affect the physics pipeline.  Specifically it changes:
+
+- Status bar OSGB36 grid reference as the cursor moves
+- Receiver position display in the Receiver panel
+- Easting/northing values in almanac `Sg` commands
+- Parsing of OSGB36 coordinates typed into reference-point dialogs
+
+The Virtual Locator range computations use the Airy 1830 ellipsoid
+directly (matching Mk4 firmware) regardless of datum setting.
 
 ---
 
