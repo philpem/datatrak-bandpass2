@@ -492,6 +492,46 @@ patterns until the transmitters are physically calibrated during commissioning.
 Internal storage is always WGS84. `display_crs` controls which coordinate
 system is shown in the UI.
 
+### Transmitter sites and slots
+
+Transmitters are represented as a two-level structure:
+
+- **`[[transmitter_sites]]`** — the physical mast location (name, lat/lon,
+  power, height). A site may have one or more slots.
+- **`[[transmitter_sites.slots]]`** — per-slot timing parameters (slot number,
+  master/slave relationship, SPO, station delay). Most sites have exactly one
+  slot; a colocated pair shares the site and has two slot entries.
+
+**Backward compatibility**: the old flat `[[transmitters]]` format is still
+accepted on load. Each old entry is automatically migrated to a single-slot
+`[[transmitter_sites]]`. Entries that were physically colocated in the old
+format are **not** automatically merged into one site — they load as separate
+single-slot sites. Merge them manually in the editor if needed.
+
+**Colocated example** (two slots at one mast):
+
+```toml
+[[transmitter_sites]]
+name    = "Droitwich"
+lat     = 52.2981
+lon     = -2.1035
+power_w = 40.0
+height_m = 50.0
+
+  [[transmitter_sites.slots]]
+  slot     = 3
+  is_master = true
+  spo_us   = 0.0
+  station_delay_us = 0.0
+
+  [[transmitter_sites.slots]]
+  slot     = 7
+  is_master = false
+  master_slot = 3
+  spo_us   = 0.0
+  station_delay_us = 0.31
+```
+
 ```toml
 [scenario]
 name         = "UK Datatrak baseline"
@@ -518,7 +558,7 @@ min_stations          = 4
 vp_ms                 = 299892718
 ellipsoid             = "airy1830"    # airy1830 | wgs84
 
-[[transmitters]]
+[[transmitter_sites]]
 name             = "Huntingdon"
 lat              = 52.3247
 lon              = -0.1848
@@ -526,21 +566,26 @@ osgb_easting     = 513054    # informational — computed from lat/lon
 osgb_northing    = 262453
 power_w          = 40.0
 height_m         = 50.0
-slot             = 1
-is_master        = true
-spo_us           = 0.0
-station_delay_us = 0.0
 
-[[transmitters]]
+  [[transmitter_sites.slots]]
+  slot             = 1
+  is_master        = true
+  spo_us           = 0.0
+  station_delay_us = 0.0
+
+[[transmitter_sites]]
 name             = "Selsey"
 lat              = 50.7300
 lon              = -0.7900
 power_w          = 40.0
 height_m         = 50.0
-slot             = 2
-master_slot      = 1
-spo_us           = 0.0
-station_delay_us = 0.19
+
+  [[transmitter_sites.slots]]
+  slot             = 2
+  is_master        = false
+  master_slot      = 1
+  spo_us           = 0.0
+  station_delay_us = 0.19
 
 [[monitor_stations]]
 name             = "Huntingdon Monitor"
