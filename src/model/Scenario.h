@@ -55,9 +55,6 @@ struct Scenario {
     enum class DisplayCRS { WGS84, OSGB_NG };
     DisplayCRS display_crs = DisplayCRS::OSGB_NG;
 
-    enum class OperationMode { EightSlot, Interlaced };
-    OperationMode mode = OperationMode::EightSlot;
-
     GridDef                     grid;
     Frequencies                 frequencies;
     ReceiverModel               receiver;

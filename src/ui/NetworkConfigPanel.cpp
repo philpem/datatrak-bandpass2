@@ -73,16 +73,6 @@ NetworkConfigPanel::NetworkConfigPanel(wxWindow* parent)
         auto* gs    = new wxFlexGridSizer(2, 4, 6);
         gs->AddGrowableCol(1);
 
-        // Mode
-        gs->Add(new wxStaticText(this, wxID_ANY, "Mode"),
-                0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
-        wxArrayString modes;
-        modes.Add("8-slot"); modes.Add("Interlaced");
-        mode_ = new wxChoice(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, modes);
-        mode_->SetSelection(0);
-        mode_->Bind(wxEVT_CHOICE, &NetworkConfigPanel::OnOtherChanged, this);
-        gs->Add(mode_, 1, wxEXPAND | wxBOTTOM, 2);
-
         // Display CRS
         gs->Add(new wxStaticText(this, wxID_ANY, "Display CRS"),
                 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
@@ -243,7 +233,6 @@ void NetworkConfigPanel::SetScenario(Scenario* scenario) {
     f1_field_->ChangeValue(wxString::Format("%.4f", scenario_->frequencies.f1_hz / 1000.0));
     f2_field_->ChangeValue(wxString::Format("%.4f", scenario_->frequencies.f2_hz / 1000.0));
 
-    mode_->SetSelection(scenario_->mode == Scenario::OperationMode::Interlaced ? 1 : 0);
     display_crs_->SetSelection(scenario_->display_crs == Scenario::DisplayCRS::WGS84 ? 1 : 0);
     datum_->SetSelection(scenario_->datum_transform == Scenario::DatumTransform::OSTN15 ? 1 : 0);
 
@@ -287,8 +276,6 @@ void NetworkConfigPanel::SaveToScenario() {
     if (f2 >= F_MIN_KHZ && f2 <= F_MAX_KHZ) scenario_->frequencies.f2_hz = f2 * 1000.0;
     scenario_->frequencies.recompute();
 
-    scenario_->mode = (mode_->GetSelection() == 1) ? Scenario::OperationMode::Interlaced
-                                                    : Scenario::OperationMode::EightSlot;
     scenario_->display_crs = (display_crs_->GetSelection() == 1)
                              ? Scenario::DisplayCRS::WGS84
                              : Scenario::DisplayCRS::OSGB_NG;

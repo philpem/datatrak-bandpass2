@@ -61,7 +61,6 @@ private:
     wxStaticText* ml_label_        = nullptr;
 
     // Network
-    wxChoice*     mode_            = nullptr;
     wxChoice*     display_crs_     = nullptr;
     wxChoice*     datum_           = nullptr;
 
