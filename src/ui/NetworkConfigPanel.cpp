@@ -67,23 +67,6 @@ NetworkConfigPanel::NetworkConfigPanel(wxWindow* parent)
         outer->Add(bsiz, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 6);
     }
 
-    // ── Network ─────────────────────────────────────────────────────────────
-    {
-        auto* box   = new wxStaticBox(this, wxID_ANY, "Network");
-        auto* bsiz  = new wxStaticBoxSizer(box, wxVERTICAL);
-        auto* gs    = new wxFlexGridSizer(2, 4, 6);
-        gs->AddGrowableCol(1);
-
-        // OSTN15 status note (spans both columns)
-        gs->Add(new wxStaticText(this, wxID_ANY, "Datum"),
-                0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
-        ostn15_label_ = new wxStaticText(this, wxID_ANY, "");
-        gs->Add(ostn15_label_, 0, wxBOTTOM, 2);
-
-        bsiz->Add(gs, 0, wxEXPAND | wxALL, 4);
-        outer->Add(bsiz, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 6);
-    }
-
     // ── Grid ────────────────────────────────────────────────────────────────
     {
         auto* box   = new wxStaticBox(this, wxID_ANY, "Grid");
@@ -124,6 +107,12 @@ NetworkConfigPanel::NetworkConfigPanel(wxWindow* parent)
         res_count_label_ = new wxStaticText(this, wxID_ANY, "");
         gs->Add(res_count_label_, 0, wxBOTTOM, 2);
 
+        // Datum / OSTN15 status
+        gs->Add(new wxStaticText(this, wxID_ANY, "Datum"),
+                0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
+        ostn15_label_ = new wxStaticText(this, wxID_ANY, "");
+        gs->Add(ostn15_label_, 0, wxBOTTOM, 2);
+
         bsiz->Add(gs, 0, wxEXPAND | wxALL, 4);
         outer->Add(bsiz, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 6);
     }
@@ -158,6 +147,11 @@ NetworkConfigPanel::NetworkConfigPanel(wxWindow* parent)
             row->Add(terrain_browse_, 0, wxALIGN_CENTER_VERTICAL);
             gs->Add(row, 1, wxEXPAND | wxBOTTOM, 2);
         }
+
+        // Status
+        gs->Add(new wxStaticText(this, wxID_ANY, ""), 0);
+        terrain_status_label_ = new wxStaticText(this, wxID_ANY, "");
+        gs->Add(terrain_status_label_, 0, wxBOTTOM, 2);
 
         bsiz->Add(gs, 0, wxEXPAND | wxALL, 4);
         outer->Add(bsiz, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 6);
@@ -195,6 +189,11 @@ NetworkConfigPanel::NetworkConfigPanel(wxWindow* parent)
             gs->Add(row, 1, wxEXPAND | wxBOTTOM, 2);
         }
 
+        // Status
+        gs->Add(new wxStaticText(this, wxID_ANY, ""), 0);
+        cond_status_label_ = new wxStaticText(this, wxID_ANY, "");
+        gs->Add(cond_status_label_, 0, wxBOTTOM, 2);
+
         bsiz->Add(gs, 0, wxEXPAND | wxALL, 4);
         outer->Add(bsiz, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 6);
     }
@@ -205,6 +204,8 @@ NetworkConfigPanel::NetworkConfigPanel(wxWindow* parent)
 
     UpdateTerrainFileState();
     UpdateCondFileState();
+    UpdateTerrainLabel();
+    UpdateCondLabel();
 }
 
 // ---------------------------------------------------------------------------
@@ -233,6 +234,7 @@ void NetworkConfigPanel::SetScenario(Scenario* scenario) {
     terrain_src_->SetSelection(terr_sel);
     terrain_file_->ChangeValue(scenario_->terrain_file);
     UpdateTerrainFileState();
+    UpdateTerrainLabel();
 
     // Conductivity
     int cond_sel = 0;
@@ -242,6 +244,7 @@ void NetworkConfigPanel::SetScenario(Scenario* scenario) {
     cond_src_->SetSelection(cond_sel);
     cond_file_->ChangeValue(scenario_->conductivity_file);
     UpdateCondFileState();
+    UpdateCondLabel();
 
     UpdateOstn15Label();
     UpdateMlDisplay();
@@ -368,11 +371,13 @@ void NetworkConfigPanel::OnDebounceTimer(wxTimerEvent& /*evt*/) {
 
 void NetworkConfigPanel::OnTerrainSrcChanged(wxCommandEvent& /*evt*/) {
     UpdateTerrainFileState();
+    UpdateTerrainLabel();
     debounce_.StartOnce(500);
 }
 
 void NetworkConfigPanel::OnCondSrcChanged(wxCommandEvent& /*evt*/) {
     UpdateCondFileState();
+    UpdateCondLabel();
     debounce_.StartOnce(500);
 }
 
@@ -384,6 +389,7 @@ void NetworkConfigPanel::OnTerrainBrowse(wxCommandEvent& /*evt*/) {
                      wxFD_OPEN | wxFD_FILE_MUST_EXIST);
     if (dlg.ShowModal() == wxID_OK) {
         terrain_file_->ChangeValue(dlg.GetPath());
+        UpdateTerrainLabel();
         debounce_.StartOnce(500);
     }
 }
@@ -395,11 +401,14 @@ void NetworkConfigPanel::OnCondBrowse(wxCommandEvent& /*evt*/) {
                      wxFD_OPEN | wxFD_FILE_MUST_EXIST);
     if (dlg.ShowModal() == wxID_OK) {
         cond_file_->ChangeValue(dlg.GetPath());
+        UpdateCondLabel();
         debounce_.StartOnce(500);
     }
 }
 
 void NetworkConfigPanel::OnFilePath(wxCommandEvent& /*evt*/) {
+    UpdateTerrainLabel();
+    UpdateCondLabel();
     debounce_.StartOnce(500);
 }
 
@@ -491,6 +500,67 @@ void NetworkConfigPanel::UpdateResCountDisplay() {
     else
         label = wxString::Format("~%d points", total);
     res_count_label_->SetLabel(label);
+}
+
+void NetworkConfigPanel::UpdateTerrainLabel() {
+    if (!terrain_status_label_) return;
+    int sel = terrain_src_->GetSelection();
+    wxString msg;
+    wxColour col = *wxBLACK;
+    if (sel == 0) {
+        // Flat — always available, nothing to warn about
+        msg = "";
+    } else {
+        wxString path = terrain_file_->GetValue();
+        if (path.empty()) {
+            msg = "No path set - using flat fallback";
+            col = *wxRED;
+        } else if (sel == 1) {
+            // SRTM — expects a directory
+            if (!wxFileName::DirExists(path)) {
+                msg = "Directory not found - using flat fallback";
+                col = *wxRED;
+            } else {
+                msg = "Directory OK";
+            }
+        } else {
+            // File
+            if (!wxFileName::FileExists(path)) {
+                msg = "File not found - using flat fallback";
+                col = *wxRED;
+            } else {
+                msg = "File OK";
+            }
+        }
+    }
+    terrain_status_label_->SetLabel(msg);
+    terrain_status_label_->SetForegroundColour(col);
+    terrain_status_label_->GetParent()->Layout();
+}
+
+void NetworkConfigPanel::UpdateCondLabel() {
+    if (!cond_status_label_) return;
+    int sel = cond_src_->GetSelection();
+    wxString msg;
+    wxColour col = *wxBLACK;
+    if (sel == 0) {
+        // Built-in — always available
+        msg = "";
+    } else {
+        wxString path = cond_file_->GetValue();
+        if (path.empty()) {
+            msg = "No file set - using built-in fallback";
+            col = *wxRED;
+        } else if (!wxFileName::FileExists(path)) {
+            msg = "File not found - using built-in fallback";
+            col = *wxRED;
+        } else {
+            msg = "File OK";
+        }
+    }
+    cond_status_label_->SetLabel(msg);
+    cond_status_label_->SetForegroundColour(col);
+    cond_status_label_->GetParent()->Layout();
 }
 
 void NetworkConfigPanel::UpdateOstn15Label() {
