@@ -1,4 +1,5 @@
 #include "groundwave.h"
+#include "grwave.h"
 #include "conductivity.h"
 #include <GeographicLib/Geodesic.hpp>
 #include <GeographicLib/GeodesicLine.hpp>
@@ -147,6 +148,73 @@ double millington_field_dbuvm(double freq_hz,
 }
 
 // ---------------------------------------------------------------------------
+// Millington with pluggable per-segment function.
+// ---------------------------------------------------------------------------
+double millington_with(double freq_hz,
+                       double lat_tx, double lon_tx,
+                       double lat_rx, double lon_rx,
+                       const ConductivityMap& cond,
+                       double power_w,
+                       SegmentFieldFn seg_fn,
+                       int nsamples)
+{
+    if (nsamples < 1) nsamples = 1;
+    if (power_w <= 0.0) return -200.0;
+
+    const GeographicLib::Geodesic& geod = GeographicLib::Geodesic::WGS84();
+
+    double total_dist_m = 0.0;
+    geod.Inverse(lat_tx, lon_tx, lat_rx, lon_rx, total_dist_m);
+    double total_dist_km = total_dist_m / 1000.0;
+    if (total_dist_km < 0.1) return -200.0;
+
+    struct Seg {
+        double d_end_km;
+        GroundConstants gc;
+    };
+
+    std::vector<Seg> segs;
+    segs.reserve(nsamples);
+
+    GeographicLib::GeodesicLine line = geod.InverseLine(lat_tx, lon_tx, lat_rx, lon_rx);
+
+    double prev_lat = lat_tx, prev_lon = lon_tx;
+    for (int i = 1; i <= nsamples; ++i) {
+        double s   = (double(i) / nsamples) * total_dist_m;
+        double lat = 0.0, lon = 0.0;
+        line.Position(s, lat, lon);
+
+        double mid_lat = 0.5 * (prev_lat + lat);
+        double mid_lon = 0.5 * (prev_lon + lon);
+
+        segs.push_back({ s / 1000.0, cond.lookup(mid_lat, mid_lon) });
+
+        prev_lat = lat;
+        prev_lon = lon;
+    }
+
+    int N = (int)segs.size();
+
+    double E_fwd = seg_fn(freq_hz, total_dist_km, segs[N-1].gc, power_w);
+    for (int k = 0; k < N - 1; ++k) {
+        double D = segs[k].d_end_km;
+        E_fwd += seg_fn(freq_hz, D, segs[k  ].gc, power_w)
+               - seg_fn(freq_hz, D, segs[k+1].gc, power_w);
+    }
+
+    double E_back = seg_fn(freq_hz, total_dist_km, segs[0].gc, power_w);
+    for (int k = 0; k < N - 1; ++k) {
+        double D_back = total_dist_km - segs[N-2-k].d_end_km;
+        E_back += seg_fn(freq_hz, D_back, segs[N-1-k].gc, power_w)
+                - seg_fn(freq_hz, D_back, segs[N-2-k].gc, power_w);
+    }
+
+    double lin_fwd  = std::pow(10.0, E_fwd  / 20.0);
+    double lin_back = std::pow(10.0, E_back / 20.0);
+    return 20.0 * std::log10(0.5 * (lin_fwd + lin_back));
+}
+
+// ---------------------------------------------------------------------------
 // Homogeneous-path groundwave: single midpoint conductivity lookup.
 // ---------------------------------------------------------------------------
 double homogeneous_field_dbuvm(double freq_hz,
@@ -184,6 +252,12 @@ double groundwave_for_model(double freq_hz,
         return homogeneous_field_dbuvm(freq_hz,
                                        lat_tx, lon_tx, lat_rx, lon_rx,
                                        cond, power_w);
+    }
+    if (model == Scenario::PropagationModel::GRWAVE) {
+        return millington_with(freq_hz,
+                               lat_tx, lon_tx, lat_rx, lon_rx,
+                               cond, power_w,
+                               grwave_field_dbuvm, nsamples);
     }
     return millington_field_dbuvm(freq_hz,
                                   lat_tx, lon_tx, lat_rx, lon_rx,
