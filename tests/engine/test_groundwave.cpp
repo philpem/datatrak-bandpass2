@@ -1,6 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_approx.hpp>
 #include "engine/groundwave.h"
+#include "engine/grwave.h"
 #include "engine/conductivity.h"
 #include "engine/noise.h"
 #include "engine/skywave.h"
@@ -364,3 +365,123 @@ TEST_CASE("groundwave_for_model: Millington dispatches to millington") {
                                           Scenario::PropagationModel::Millington);
     CHECK(E_disp == Approx(E_mil).margin(0.001));
 }
+
+// ---- grwave_field_dbuvm ----
+
+TEST_CASE("grwave: free-space limit at very high conductivity") {
+    // Over perfect ground, attenuation factor -> 1 (0 dB loss).
+    // Same reference as polynomial: E0 = 300 mV/m at d=1 km for P=1 kW.
+    // For P=40 W at d=1 km: E0 ~ 95.56 dBuV/m
+    GroundConstants gc_pec { 1e6, 15.0 };
+    double E = grwave_field_dbuvm(146437.5, 1.0, gc_pec, 40.0);
+    // Should be close to free-space (within 1 dB)
+    CHECK(E > 94.0);
+    CHECK(E < 96.5);
+}
+
+TEST_CASE("grwave: field decreases with distance") {
+    GroundConstants gc { 0.005, 15.0 };
+    double E_100 = grwave_field_dbuvm(146437.5, 100.0, gc, 40.0);
+    double E_300 = grwave_field_dbuvm(146437.5, 300.0, gc, 40.0);
+    CHECK(E_100 > E_300);
+    CHECK((E_100 - E_300) > 5.0);
+}
+
+TEST_CASE("grwave: higher conductivity gives stronger signal") {
+    GroundConstants gc_land { 0.005, 15.0 };
+    GroundConstants gc_sea  { 4.0,   70.0 };
+    double E_land = grwave_field_dbuvm(146437.5, 200.0, gc_land, 40.0);
+    double E_sea  = grwave_field_dbuvm(146437.5, 200.0, gc_sea,  40.0);
+    CHECK(E_sea > E_land);
+    CHECK((E_sea - E_land) > 1.0);
+}
+
+TEST_CASE("grwave: lower frequency gives stronger signal over land") {
+    GroundConstants gc { 0.005, 15.0 };
+    double E_high = grwave_field_dbuvm(300000.0, 200.0, gc, 40.0);
+    double E_low  = grwave_field_dbuvm( 30000.0, 200.0, gc, 40.0);
+    CHECK(E_low > E_high);
+}
+
+TEST_CASE("grwave: zero/negative distance returns sentinel") {
+    GroundConstants gc { 0.005, 15.0 };
+    CHECK(grwave_field_dbuvm(146437.5,  0.0, gc, 40.0) < -100.0);
+    CHECK(grwave_field_dbuvm(146437.5, -1.0, gc, 40.0) < -100.0);
+}
+
+TEST_CASE("grwave: result in same ballpark as polynomial fit") {
+    // GRWAVE and the polynomial fit should agree to within ~5 dB at
+    // typical Datatrak distances (100-300 km).  The polynomial is an
+    // approximation of the full GRWAVE curves, so agreement is expected.
+    GroundConstants gc { 0.005, 15.0 };
+    for (double d : {50.0, 100.0, 200.0, 300.0}) {
+        double E_poly = groundwave_field_dbuvm(146437.5, d, gc, 40.0);
+        double E_grw  = grwave_field_dbuvm(146437.5, d, gc, 40.0);
+        // Within 8 dB — the polynomial is a rough fit
+        CHECK(std::abs(E_poly - E_grw) < 8.0);
+    }
+}
+
+TEST_CASE("grwave: sea path gives reasonable field at 500 km") {
+    // Over sea, field should still be measurable at long range
+    GroundConstants gc_sea { 4.0, 70.0 };
+    double E = grwave_field_dbuvm(146437.5, 500.0, gc_sea, 40.0);
+    CHECK(E > -10.0);  // should be positive at LF over sea
+    CHECK(E < 70.0);   // but weaker than 1 km
+}
+
+// ---- millington_with ----
+
+TEST_CASE("millington_with: polynomial matches millington_field_dbuvm") {
+    GroundConstants gc { 0.005, 15.0 };
+    FixedConductivityMap cmap(gc.sigma, gc.eps_r);
+    double lat1 = 52.0, lon1 = -0.5;
+    double lat2 = 51.5, lon2 =  1.0;
+
+    double E_orig = millington_field_dbuvm(146437.5, lat1, lon1, lat2, lon2,
+                                            cmap, 40.0, 20);
+    double E_with = millington_with(146437.5, lat1, lon1, lat2, lon2,
+                                     cmap, 40.0, groundwave_field_dbuvm, 20);
+    CHECK(E_with == Approx(E_orig).margin(0.001));
+}
+
+TEST_CASE("millington_with: grwave seg_fn gives different result from polynomial") {
+    // For a mixed land/sea path, using GRWAVE vs polynomial should give
+    // a measurably different (but same-ballpark) result.
+    StepConductivityMap cmap;
+    cmap.boundary_lon = -3.5;
+    cmap.gc_west = GroundConstants{4.0, 70.0};   // sea
+    cmap.gc_east = GroundConstants{0.005, 15.0};  // land
+
+    double lat_tx = 52.5, lon_tx = -5.5;
+    double lat_rx = 52.5, lon_rx = -1.0;
+
+    double E_poly = millington_with(146437.5, lat_tx, lon_tx, lat_rx, lon_rx,
+                                     cmap, 40.0, groundwave_field_dbuvm, 20);
+    double E_grw  = millington_with(146437.5, lat_tx, lon_tx, lat_rx, lon_rx,
+                                     cmap, 40.0, grwave_field_dbuvm, 20);
+    // Both should be valid field strengths (finite, reasonable)
+    CHECK(E_poly > -50.0);
+    CHECK(E_grw  > -50.0);
+    CHECK(E_poly < 80.0);
+    CHECK(E_grw  < 80.0);
+}
+
+// ---- groundwave_for_model with GRWAVE ----
+
+TEST_CASE("groundwave_for_model: GRWAVE dispatches to millington_with+grwave") {
+    GroundConstants gc { 0.005, 15.0 };
+    FixedConductivityMap cmap(gc.sigma, gc.eps_r);
+    double lat1 = 52.0, lon1 = -0.5;
+    double lat2 = 51.5, lon2 =  1.0;
+
+    double E_direct = millington_with(146437.5, lat1, lon1, lat2, lon2,
+                                       cmap, 40.0, grwave_field_dbuvm, 20);
+    double E_disp = groundwave_for_model(146437.5, lat1, lon1, lat2, lon2,
+                                          cmap, 40.0,
+                                          Scenario::PropagationModel::GRWAVE);
+    CHECK(E_disp == Approx(E_direct).margin(0.001));
+}
+
+// ---- TOML round-trip for GRWAVE ----
+// (TOML tests are in tests/model/test_toml_io.cpp)

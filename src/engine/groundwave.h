@@ -59,8 +59,25 @@ double homogeneous_field_dbuvm(double freq_hz,
                                 const ConductivityMap& cond,
                                 double power_w);
 
-// Dispatching function: calls homogeneous_field_dbuvm or millington_field_dbuvm
-// depending on the propagation model setting.
+// Per-segment field strength function type.
+// Signature matches groundwave_field_dbuvm(): (freq_hz, dist_km, gc, power_w) -> dBµV/m.
+using SegmentFieldFn = double(*)(double, double, const GroundConstants&, double);
+
+// Millington mixed-path with a user-chosen per-segment field function.
+// When seg_fn == groundwave_field_dbuvm, this is identical to millington_field_dbuvm().
+// When seg_fn == grwave_field_dbuvm, this uses full P.368 GRWAVE per segment.
+double millington_with(double freq_hz,
+                       double lat_tx, double lon_tx,
+                       double lat_rx, double lon_rx,
+                       const ConductivityMap& cond,
+                       double power_w,
+                       SegmentFieldFn seg_fn,
+                       int nsamples = 20);
+
+// Dispatching function: selects propagation model based on scenario setting.
+//   Homogeneous:  single midpoint, P.368 polynomial
+//   Millington:   Millington averaging, P.368 polynomial
+//   GRWAVE:       Millington averaging, P.368 GRWAVE residue series
 double groundwave_for_model(double freq_hz,
                             double lat_tx, double lon_tx,
                             double lat_rx, double lon_rx,
