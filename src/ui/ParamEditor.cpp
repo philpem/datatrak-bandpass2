@@ -322,7 +322,7 @@ void ParamEditor::UpdateSlotListBox() {
         wxString label = wxString::Format("Slot %d", sc.slot);
         if (sc.is_master) label += "  (Master)";
         else if (sc.master_slot > 0)
-            label += wxString::Format("  \u2192 Slot %d", sc.master_slot);
+            label += wxString::Format(" -> Slot %d", sc.master_slot);
         tx_slot_list_->Append(label);
     }
     updating_ = was_updating;
