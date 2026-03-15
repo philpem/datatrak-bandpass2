@@ -33,10 +33,10 @@ struct Frequencies {
 };
 
 struct GridDef {
-    double lat_min      = 49.5;
-    double lat_max      = 61.0;
-    double lon_min      = -7.0;
-    double lon_max      =  2.5;
+    double lat_min       = 49.5;
+    double lat_max       = 61.0;
+    double lon_min       = -7.0;
+    double lon_max       =  2.5;
     double resolution_km = 10.0;
 };
 

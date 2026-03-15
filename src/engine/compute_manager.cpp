@@ -1,5 +1,6 @@
 #include "compute_manager.h"
 #include "groundwave.h"
+#include <cmath>
 #include "skywave.h"
 #include "noise.h"
 #include "snr.h"
@@ -105,6 +106,23 @@ ComputeResult ComputeManager::RunPipeline(const Scenario& scenario,
     if (scenario.grid.resolution_km <= 0.0) {
         result.error = "Grid resolution must be > 0 km";
         return result;
+    }
+
+    // Reject grids that exceed the complexity limit (UK at 1 km spacing ≈ 766k points).
+    // This mirrors the red-highlight validation in NetworkConfigPanel.
+    {
+        double mid_lat = (scenario.grid.lat_min + scenario.grid.lat_max) / 2.0;
+        constexpr double DEG_PER_KM_LAT = 1.0 / 110.574;
+        double deg_per_km_lon = 1.0 / (111.320 * std::cos(mid_lat * M_PI / 180.0));
+        int rows = std::max(1, (int)((scenario.grid.lat_max - scenario.grid.lat_min)
+                                    / (scenario.grid.resolution_km * DEG_PER_KM_LAT)) + 1);
+        int cols = std::max(1, (int)((scenario.grid.lon_max - scenario.grid.lon_min)
+                                    / (scenario.grid.resolution_km * deg_per_km_lon)) + 1);
+        constexpr int MAX_GRID_POINTS = 800000;
+        if (rows * cols > MAX_GRID_POINTS) {
+            result.error = "Grid too large: reduce area or increase resolution";
+            return result;
+        }
     }
 
     if (scenario.transmitters.empty()) return result;

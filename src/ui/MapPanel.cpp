@@ -92,6 +92,9 @@ void MapPanel::OnScriptMessage(wxWebViewEvent& evt) {
             on_receiver_moved(j["lat"].get<double>(), j["lon"].get<double>());
         } else if (type == "cursor_moved" && on_cursor_moved) {
             on_cursor_moved(j["lat"].get<double>(), j["lon"].get<double>());
+        } else if (type == "grid_bounds_changed" && on_grid_bounds_changed) {
+            on_grid_bounds_changed(j["lat_min"].get<double>(), j["lat_max"].get<double>(),
+                                   j["lon_min"].get<double>(), j["lon_max"].get<double>());
         }
     } catch (...) {
         // Silently ignore malformed messages
@@ -199,6 +202,13 @@ void MapPanel::SetLayerOpacity(float opacity) {
 
 void MapPanel::SetPlacementMode(bool enabled) {
     RunScript(wxString::Format("setPlacementMode(%s);", enabled ? "true" : "false").ToStdString());
+}
+
+void MapPanel::SetGridBounds(double lat_min, double lat_max, double lon_min, double lon_max) {
+    char buf[128];
+    std::snprintf(buf, sizeof(buf), "setGridBounds(%f, %f, %f, %f);",
+                  lat_min, lat_max, lon_min, lon_max);
+    RunScript(buf);
 }
 
 void MapPanel::SetReceiverPlacementMode(bool enabled) {

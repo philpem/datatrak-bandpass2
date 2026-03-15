@@ -33,11 +33,11 @@ Scenario load(const std::filesystem::path& path) {
 
     // [grid]
     if (auto g = tbl["grid"].as_table()) {
-        if (auto v = (*g)["lat_min"].value<double>())      s.grid.lat_min       = *v;
-        if (auto v = (*g)["lat_max"].value<double>())      s.grid.lat_max       = *v;
-        if (auto v = (*g)["lon_min"].value<double>())      s.grid.lon_min       = *v;
-        if (auto v = (*g)["lon_max"].value<double>())      s.grid.lon_max       = *v;
-        if (auto v = (*g)["resolution_km"].value<double>())s.grid.resolution_km = *v;
+        if (auto v = (*g)["lat_min"].value<double>())       s.grid.lat_min       = *v;
+        if (auto v = (*g)["lat_max"].value<double>())       s.grid.lat_max       = *v;
+        if (auto v = (*g)["lon_min"].value<double>())       s.grid.lon_min       = *v;
+        if (auto v = (*g)["lon_max"].value<double>())       s.grid.lon_max       = *v;
+        if (auto v = (*g)["resolution_km"].value<double>()) s.grid.resolution_km = *v;
     }
 
     // [frequencies] — stored as kHz, converted to Hz

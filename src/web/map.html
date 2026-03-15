@@ -75,6 +75,92 @@
   var currentOpacity  = 0.4;
   var selectedTxId    = -1;
 
+  // ── Grid bounds rectangle ─────────────────────────────────────────────────
+  // Four draggable crosshair markers at the corners; a non-interactive rectangle
+  // drawn between them.  Dragging any corner updates all four bounds.
+  var boundsRect    = null;   // L.rectangle
+  var boundsCorners = {};     // NW, NE, SE, SW L.marker handles
+  var boundsActive  = false;
+
+  var cornerIcon = L.divIcon({
+    className: '',
+    html: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width="20" height="20">'
+        + '<circle cx="10" cy="10" r="8" fill="white" fill-opacity="0.75" stroke="#2255cc" stroke-width="2"/>'
+        + '<line x1="3"  y1="10" x2="17" y2="10" stroke="#2255cc" stroke-width="1.5"/>'
+        + '<line x1="10" y1="3"  x2="10" y2="17" stroke="#2255cc" stroke-width="1.5"/>'
+        + '</svg>',
+    iconSize:   [20, 20],
+    iconAnchor: [10, 10]
+  });
+
+  function boundsFromCorners() {
+    var nw = boundsCorners.NW.getLatLng();
+    var se = boundsCorners.SE.getLatLng();
+    return {
+      lat_min: Math.min(nw.lat, se.lat),
+      lat_max: Math.max(nw.lat, se.lat),
+      lon_min: Math.min(nw.lng, se.lng),
+      lon_max: Math.max(nw.lng, se.lng)
+    };
+  }
+
+  function setBoundsCorners(lat_min, lat_max, lon_min, lon_max) {
+    boundsCorners.NW.setLatLng([lat_max, lon_min]);
+    boundsCorners.NE.setLatLng([lat_max, lon_max]);
+    boundsCorners.SE.setLatLng([lat_min, lon_max]);
+    boundsCorners.SW.setLatLng([lat_min, lon_min]);
+    boundsRect.setBounds([[lat_min, lon_min], [lat_max, lon_max]]);
+  }
+
+  function onCornerDrag(movedKey, e) {
+    var ll  = e.target.getLatLng();
+    var nw  = boundsCorners.NW.getLatLng();
+    var se  = boundsCorners.SE.getLatLng();
+    // Each corner controls its lat and lon independently.
+    var lat_max = nw.lat, lon_min = nw.lng;
+    var lat_min = se.lat, lon_max = se.lng;
+    if      (movedKey === 'NW') { lat_max = ll.lat; lon_min = ll.lng; }
+    else if (movedKey === 'NE') { lat_max = ll.lat; lon_max = ll.lng; }
+    else if (movedKey === 'SE') { lat_min = ll.lat; lon_max = ll.lng; }
+    else if (movedKey === 'SW') { lat_min = ll.lat; lon_min = ll.lng; }
+    setBoundsCorners(Math.min(lat_min, lat_max), Math.max(lat_min, lat_max),
+                     Math.min(lon_min, lon_max), Math.max(lon_min, lon_max));
+  }
+
+  function onCornerDragEnd() {
+    var b = boundsFromCorners();
+    bandpassPostMessage({ type: 'grid_bounds_changed',
+      lat_min: b.lat_min, lat_max: b.lat_max, lon_min: b.lon_min, lon_max: b.lon_max });
+  }
+
+  function createBoundsHandles(lat_min, lat_max, lon_min, lon_max) {
+    var corners = {
+      NW: [lat_max, lon_min], NE: [lat_max, lon_max],
+      SE: [lat_min, lon_max], SW: [lat_min, lon_min]
+    };
+    for (var key in corners) {
+      (function(k) {
+        var m = L.marker(corners[k], { icon: cornerIcon, draggable: true, zIndexOffset: 1000 });
+        m.on('drag',    function(e){ onCornerDrag(k, e); });
+        m.on('dragend', onCornerDragEnd);
+        m.addTo(map);
+        boundsCorners[k] = m;
+      }(key));
+    }
+  }
+
+  window.setGridBounds = function (lat_min, lat_max, lon_min, lon_max) {
+    if (!boundsRect) {
+      boundsRect = L.rectangle([[lat_min, lon_min], [lat_max, lon_max]], {
+        color: '#2255cc', weight: 1.5, fill: false,
+        dashArray: '6 4', interactive: false
+      }).addTo(map);
+      createBoundsHandles(lat_min, lat_max, lon_min, lon_max);
+      boundsActive = true;
+    }
+    setBoundsCorners(lat_min, lat_max, lon_min, lon_max);
+  };
+
   // ── Custom icons ──────────────────────────────────────────────────────────
 
   // Broadcast tower: red, anchor at base of tower (bottom-centre).
