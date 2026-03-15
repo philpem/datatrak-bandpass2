@@ -91,7 +91,6 @@ NetworkConfigPanel::NetworkConfigPanel(wxWindow* parent)
     gs->Add(res_count_label_, 0, wxBOTTOM, 6);
 
     auto* sizer = new wxBoxSizer(wxVERTICAL);
-    sizer->Add(new wxStaticText(this, wxID_ANY, "Network Configuration"), 0, wxALL, 6);
     sizer->Add(gs, 0, wxALL | wxEXPAND, 8);
     SetSizer(sizer);
     SetScrollRate(0, 10);
