@@ -38,16 +38,12 @@ static void try_load_ostn15() {
 
     for (const wxFileName& candidate : candidates) {
         if (candidate.FileExists()) {
-            if (osgb::load_ostn15(candidate.GetFullPath().ToStdString())) {
-                wxLogMessage("OSTN15 grid loaded from %s",
-                             candidate.GetFullPath().c_str());
+            if (osgb::load_ostn15(candidate.GetFullPath().ToStdString()))
                 return;
-            }
             wxLogWarning("OSTN15 file found at %s but failed to load",
                          candidate.GetFullPath().c_str());
         }
     }
-    wxLogMessage("OSTN15 grid not found; using Helmert (±5 m) datum transform");
 }
 
 class BandpassApp : public wxApp {
