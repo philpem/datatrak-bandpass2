@@ -158,12 +158,16 @@ ComputeResult ComputeManager::RunPipeline(const Scenario& scenario,
     }
 
     // Stage 1 – Groundwave (ITU P.368)
-    PostProgress("Groundwave (P.368)", 5);
-    computeGroundwave(*data, scenario, cancel, [this](int pct) {
-        PostProgress("Groundwave (P.368)", 5 + pct * 15 / 100);
+    const char* gw_label =
+        scenario.propagation_model == Scenario::PropagationModel::GRWAVE      ? "Groundwave (GRWAVE)" :
+        scenario.propagation_model == Scenario::PropagationModel::Homogeneous ? "Groundwave (Homogeneous)" :
+                                                                                "Groundwave (Millington)";
+    PostProgress(gw_label, 5);
+    computeGroundwave(*data, scenario, cancel, [this, gw_label](int pct) {
+        PostProgress(gw_label, 5 + pct * 15 / 100);
     });
     if (cancel.load()) return result;
-    PostProgress("Groundwave (P.368)", 20);
+    PostProgress(gw_label, 20);
 
     // Stage 2 – Skywave (ITU P.684)
     PostProgress("Skywave (P.684)", 20);
