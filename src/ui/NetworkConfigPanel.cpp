@@ -1,4 +1,5 @@
 #include "NetworkConfigPanel.h"
+#include "../coords/Osgb.h"
 #include <wx/sizer.h>
 #include <wx/stattext.h>
 #include <wx/statbox.h>
@@ -82,6 +83,11 @@ NetworkConfigPanel::NetworkConfigPanel(wxWindow* parent)
         datum_->SetSelection(0);
         datum_->Bind(wxEVT_CHOICE, &NetworkConfigPanel::OnOtherChanged, this);
         gs->Add(datum_, 1, wxEXPAND | wxBOTTOM, 2);
+
+        // OSTN15 status note
+        gs->Add(new wxStaticText(this, wxID_ANY, ""), 0);
+        ostn15_label_ = new wxStaticText(this, wxID_ANY, "");
+        gs->Add(ostn15_label_, 0, wxBOTTOM, 2);
 
         bsiz->Add(gs, 0, wxEXPAND | wxALL, 4);
         outer->Add(bsiz, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 6);
@@ -248,6 +254,7 @@ void NetworkConfigPanel::SetScenario(Scenario* scenario) {
     cond_file_->ChangeValue(scenario_->conductivity_file);
     UpdateCondFileState();
 
+    UpdateOstn15Label();
     UpdateMlDisplay();
     ValidateBoundsFields();
     ValidateResField();
@@ -342,6 +349,7 @@ void NetworkConfigPanel::OnResChanged(wxCommandEvent& /*evt*/) {
 }
 
 void NetworkConfigPanel::OnOtherChanged(wxCommandEvent& /*evt*/) {
+    UpdateOstn15Label();
     debounce_.StartOnce(500);
 }
 
@@ -497,6 +505,22 @@ void NetworkConfigPanel::UpdateResCountDisplay() {
     else
         label = wxString::Format("~%d points", total);
     res_count_label_->SetLabel(label);
+}
+
+void NetworkConfigPanel::UpdateOstn15Label() {
+    if (!ostn15_label_) return;
+    if (datum_->GetSelection() == 1) {
+        if (osgb::ostn15_loaded()) {
+            ostn15_label_->SetLabel("OSTN15 grid loaded (+/-0.1 m)");
+            ostn15_label_->SetForegroundColour(*wxBLACK);
+        } else {
+            ostn15_label_->SetLabel("Grid not loaded - run ostn15_download.py");
+            ostn15_label_->SetForegroundColour(*wxRED);
+        }
+    } else {
+        ostn15_label_->SetLabel("");
+    }
+    ostn15_label_->GetParent()->Layout();
 }
 
 void NetworkConfigPanel::UpdateMlDisplay() {
