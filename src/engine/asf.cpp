@@ -89,17 +89,20 @@ double virtual_locator_error_m(
     double lat_p, double lon_p,
     const std::vector<double>& asf_m,   // ASF in metres per station
     const std::vector<StationGeometry>& geom,
-    const std::vector<int>& selected)
+    const std::vector<int>& selected,
+    const std::vector<double>& true_dist_m_cache)  // pre-computed Airy dist per station (or empty)
 {
     if (selected.empty()) return std::numeric_limits<double>::quiet_NaN();
     int N = (int)selected.size();
 
     // "Measured" pseudoranges: free-space + ASF (metres, Airy ellipsoid)
+    // Use pre-computed distances when available to avoid redundant geodesic calls.
     std::vector<double> rho_meas(N);
     for (int k = 0; k < N; ++k) {
         int idx = selected[k];
-        double dist_m = airy_dist_m(lat_p, lon_p,
-                                    geom[idx].lat_tx, geom[idx].lon_tx);
+        double dist_m = (!true_dist_m_cache.empty())
+            ? true_dist_m_cache[idx]
+            : airy_dist_m(lat_p, lon_p, geom[idx].lat_tx, geom[idx].lon_tx);
         rho_meas[k] = dist_m + asf_m[idx];
     }
 
@@ -210,6 +213,61 @@ void computeASF(GridData& data, const Scenario& scenario,
     const auto flat_txs = scenario.flatTransmitters();
     int last_pct = -1;
 
+    // -----------------------------------------------------------------------
+    // Groundwave cache: reuse per-transmitter field strength layers already
+    // computed by computeGroundwave() in Stage 1 (stored as "groundwave_<slot>").
+    // This avoids recomputing the full Millington/GRWAVE model for every
+    // TX-RX pair, which was the dominant cost in this stage.
+    // -----------------------------------------------------------------------
+    struct GwCacheEntry {
+        const std::vector<double>* values = nullptr;  // pointer into GridData layer
+        int slot = 0;
+    };
+    std::vector<GwCacheEntry> gw_cache;
+    gw_cache.reserve(flat_txs.size());
+    for (const auto& tx : flat_txs) {
+        GwCacheEntry entry;
+        entry.slot = tx.slot;
+        std::string key = "groundwave_" + std::to_string(tx.slot);
+        auto it = data.layers.find(key);
+        if (it != data.layers.end() && it->second.values.size() == n) {
+            entry.values = &it->second.values;
+        }
+        gw_cache.push_back(entry);
+    }
+
+    // -----------------------------------------------------------------------
+    // Pre-compute Airy distance and azimuth for all TX-RX pairs.
+    // These are needed both for building StationGeometry and inside the VL
+    // fix iteration — caching avoids redundant GeographicLib Inverse() calls.
+    // Layout: airy_dist[ti * n + i], airy_az[ti * n + i].
+    // -----------------------------------------------------------------------
+    size_t ntx = flat_txs.size();
+    std::vector<double> airy_dist(ntx * n);
+    std::vector<double> airy_az(ntx * n);
+
+    for (size_t ti = 0; ti < ntx; ++ti) {
+        if (cancel.load()) return;
+        const auto& tx = flat_txs[ti];
+        if (tx.power_w <= 0.0) {
+            // Fill with sentinel values; will be skipped by power_w check below
+            for (size_t i = 0; i < n; ++i) {
+                airy_dist[ti * n + i] = 0.0;
+                airy_az[ti * n + i] = 0.0;
+            }
+            continue;
+        }
+        for (size_t i = 0; i < n; ++i) {
+            double az = 0.0;
+            double d = airy_inverse(pts[i].lat, pts[i].lon,
+                                    tx.lat, tx.lon, az);
+            airy_dist[ti * n + i] = d;
+            airy_az[ti * n + i] = az;
+        }
+    }
+
+    if (cancel.load()) return;
+
     for (size_t i = 0; i < n; ++i) {
         if (cancel.load()) return;
 
@@ -221,18 +279,24 @@ void computeASF(GridData& data, const Scenario& scenario,
             const auto& tx = flat_txs[ti];
             if (tx.power_w <= 0.0) continue;
 
-            // Azimuth and distance (Airy ellipsoid, matching firmware P4-04)
-            double az_deg = 0.0;
-            double dist_m = airy_inverse(pts[i].lat, pts[i].lon,
-                                         tx.lat, tx.lon, az_deg);
+            // Azimuth and distance from pre-computed Airy cache
+            double az_deg = airy_az[ti * n + i];
+            double dist_m = airy_dist[ti * n + i];
             double dist_km = std::max(dist_m / 1000.0, 0.1);
 
-            // Groundwave SNR using selected propagation model.
-            double e_gw = groundwave_for_model(
-                scenario.frequencies.f1_hz,
-                tx.lat, tx.lon, pts[i].lat, pts[i].lon,
-                *cond_map, tx.power_w,
-                scenario.propagation_model, 20);
+            // Groundwave SNR: reuse cached Stage 1 result when available,
+            // otherwise fall back to computing it (should not happen in
+            // normal pipeline flow, but keeps the function self-contained).
+            double e_gw;
+            if (gw_cache[ti].values) {
+                e_gw = (*gw_cache[ti].values)[i];
+            } else {
+                e_gw = groundwave_for_model(
+                    scenario.frequencies.f1_hz,
+                    tx.lat, tx.lon, pts[i].lat, pts[i].lon,
+                    *cond_map, tx.power_w,
+                    scenario.propagation_model, 20);
+            }
             double snr  = compute_snr_db(e_gw, atm_noise_v, veh_noise);
 
             StationGeometry sg;
@@ -279,6 +343,13 @@ void computeASF(GridData& data, const Scenario& scenario,
             it_asf->second.values[i] = asf_mean_ml;
         asf_grid[i] = asf_mean_ml;
 
+        // Build per-station Airy distance cache for VL fix.
+        // Maps from station index (in stations[]) to pre-computed Airy distance.
+        std::vector<double> station_dist_cache(stations.size());
+        for (size_t k = 0; k < stations.size(); ++k) {
+            station_dist_cache[k] = airy_dist[tx_idx_map[k] * n + i];
+        }
+
         // Absolute accuracy from iterated WLS VL (P4-02)
         std::vector<int> selected;
         {
@@ -289,7 +360,8 @@ void computeASF(GridData& data, const Scenario& scenario,
             double err = std::isnan(whdop_local)
                        ? std::numeric_limits<double>::quiet_NaN()
                        : virtual_locator_error_m(pts[i].lat, pts[i].lon,
-                                                 asf_m_vals, stations, selected);
+                                                 asf_m_vals, stations, selected,
+                                                 station_dist_cache);
             if (it_abs != data.layers.end())
                 it_abs->second.values[i] = err;
         }
@@ -317,7 +389,8 @@ void computeASF(GridData& data, const Scenario& scenario,
                 }
             }
             double corr_err = virtual_locator_error_m(pts[i].lat, pts[i].lon,
-                                                       corrected_asf, stations, selected);
+                                                       corrected_asf, stations, selected,
+                                                       station_dist_cache);
             if (it_corr != data.layers.end())
                 it_corr->second.values[i] = corr_err;
 

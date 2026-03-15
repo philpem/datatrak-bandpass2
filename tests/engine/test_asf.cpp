@@ -3,6 +3,7 @@
 #include <cmath>
 #include "engine/monteath.h"
 #include "engine/asf.h"
+#include "engine/groundwave.h"
 #include "engine/grid.h"
 #include "engine/terrain.h"
 #include "engine/conductivity.h"
@@ -579,4 +580,64 @@ TEST_CASE("computeASF: absolute_accuracy_delta layer exists in output") {
     CHECK(data.layers.count("absolute_accuracy_delta") == 1);
     CHECK(data.layers.at("absolute_accuracy_delta").values.size()
           == data.layers.at("absolute_accuracy").values.size());
+}
+
+// ---------------------------------------------------------------------------
+// Groundwave cache test: verify ASF results are identical whether or not
+// computeGroundwave() has pre-populated the per-slot layers.
+// ---------------------------------------------------------------------------
+
+// Helper: run computeGroundwave + computeASF with cached groundwave values
+static GridData make_asf_grid_with_groundwave(const Scenario& s) {
+    std::atomic<bool> cancel{false};
+    auto grid = buildGrid(s.grid, cancel);
+    GridData data;
+    for (const char* name : {"groundwave","skywave","atm_noise","snr","sgr","gdr",
+                              "whdop","repeatable","asf","asf_gradient",
+                              "absolute_accuracy","absolute_accuracy_corrected",
+                              "absolute_accuracy_delta","confidence"}) {
+        GridArray arr;
+        arr.layer_name = name;
+        arr.points = grid.points;
+        arr.values.assign(grid.points.size(), 0.0);
+        arr.width = grid.width; arr.height = grid.height;
+        arr.lat_min = s.grid.lat_min; arr.lat_max = s.grid.lat_max;
+        arr.lon_min = s.grid.lon_min; arr.lon_max = s.grid.lon_max;
+        arr.resolution_km = s.grid.resolution_km;
+        data.layers[name] = std::move(arr);
+    }
+    // Run groundwave first — populates "groundwave_<slot>" layers
+    computeGroundwave(data, s, cancel);
+    computeASF(data, s, cancel);
+    return data;
+}
+
+TEST_CASE("computeASF: groundwave cache gives identical ASF results") {
+    // Run once without groundwave cache (no computeGroundwave),
+    // run again with cache (computeGroundwave first).
+    // Results must be identical.
+    Scenario s = make_4tx_scenario();
+
+    GridData data_no_cache = make_asf_grid(s);
+    GridData data_cached   = make_asf_grid_with_groundwave(s);
+
+    const auto& asf1 = data_no_cache.layers.at("asf").values;
+    const auto& asf2 = data_cached.layers.at("asf").values;
+    REQUIRE(asf1.size() == asf2.size());
+    for (size_t i = 0; i < asf1.size(); ++i) {
+        INFO("Point " << i);
+        CHECK(asf2[i] == Approx(asf1[i]).margin(0.01));
+    }
+
+    const auto& acc1 = data_no_cache.layers.at("absolute_accuracy").values;
+    const auto& acc2 = data_cached.layers.at("absolute_accuracy").values;
+    REQUIRE(acc1.size() == acc2.size());
+    for (size_t i = 0; i < acc1.size(); ++i) {
+        INFO("Point " << i);
+        if (std::isnan(acc1[i])) {
+            CHECK(std::isnan(acc2[i]));
+        } else {
+            CHECK(acc2[i] == Approx(acc1[i]).margin(0.1));
+        }
+    }
 }
