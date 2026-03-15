@@ -61,6 +61,7 @@ private:
     void UpdateMasterSlotState();
     void UpdateSpoCalcState();
     void UpdateSlotListBox();
+    void UpdateSlotNumWarning();  // red background on tx_slot_num_ if duplicate
     void LoadSlotFields(int slot_idx);
     void SaveCurrentSlotFields();
 

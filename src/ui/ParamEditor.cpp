@@ -1,6 +1,7 @@
 #include "ParamEditor.h"
 #include "UiConstants.h"
 #include <string>
+#include <wx/colour.h>
 #include <wx/msgdlg.h>
 #include <wx/sizer.h>
 #include <wx/stattext.h>
@@ -149,6 +150,7 @@ void ParamEditor::BuildTransmitterPage(wxWindow* page) {
     }
     tx_locked_->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent&) {
         if (updating_ || current_site_id_ < 0 || !on_site_lock_changed) return;
+        current_site_.locked = tx_locked_->GetValue();   // keep working copy in sync
         on_site_lock_changed(current_site_id_, tx_locked_->GetValue());
     });
 
@@ -318,8 +320,22 @@ void ParamEditor::UpdateSlotListBox() {
     bool was_updating = updating_;
     updating_ = true;
     tx_slot_list_->Clear();
+
+    // Count slot numbers to detect duplicates
+    // (small N, linear scan is fine)
+    auto is_duplicate = [&](int slot_num) {
+        int count = 0;
+        for (const auto& s : current_site_.slots)
+            if (s.slot == slot_num) ++count;
+        return count > 1;
+    };
+
     for (const auto& sc : current_site_.slots) {
-        wxString label = wxString::Format("Slot %d", sc.slot);
+        wxString label;
+        if (is_duplicate(sc.slot))
+            label = wxString::Format("(!) Slot %d", sc.slot);
+        else
+            label = wxString::Format("Slot %d", sc.slot);
         if (sc.is_master) label += "  (Master)";
         else if (sc.master_slot > 0)
             label += wxString::Format(" -> Slot %d", sc.master_slot);
@@ -348,6 +364,7 @@ void ParamEditor::LoadSlotFields(int slot_idx) {
     updating_ = was_updating;
     UpdateMasterSlotState();
     UpdateSpoCalcState();
+    UpdateSlotNumWarning();
 }
 
 void ParamEditor::SaveCurrentSlotFields() {
@@ -398,6 +415,21 @@ void ParamEditor::RebuildMasterSlotChoices() {
     updating_ = was_updating;
 }
 
+void ParamEditor::UpdateSlotNumWarning() {
+    bool dup = false;
+    if (current_slot_idx_ >= 0 && current_slot_idx_ < (int)current_site_.slots.size()) {
+        int n = current_site_.slots[current_slot_idx_].slot;
+        for (int i = 0; i < (int)current_site_.slots.size(); ++i) {
+            if (i != current_slot_idx_ && current_site_.slots[i].slot == n) {
+                dup = true;
+                break;
+            }
+        }
+    }
+    tx_slot_num_->SetBackgroundColour(dup ? wxColour(255, 180, 180) : wxNullColour);
+    tx_slot_num_->Refresh();
+}
+
 void ParamEditor::UpdateMasterSlotState() {
     tx_mslot_choice_->Enable(!tx_master_->GetValue());
 }
@@ -438,6 +470,7 @@ void ParamEditor::OnSlotField(wxCommandEvent& /*evt*/) {
     SaveCurrentSlotFields();
     // Rebuild list box label for the current slot (slot number or master may have changed)
     UpdateSlotListBox();
+    UpdateSlotNumWarning();
     updating_ = true;
     tx_slot_list_->SetSelection(current_slot_idx_);
     updating_ = false;

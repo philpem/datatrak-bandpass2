@@ -95,6 +95,143 @@ TEST_CASE("Missing [frequencies] section uses defaults", "[toml_io]") {
     std::filesystem::remove(path);
 }
 
+TEST_CASE("Multi-slot site round-trip", "[toml_io]") {
+    // A single physical site carrying two slots (colocated transmitters)
+    Scenario s;
+    TransmitterSite site;
+    site.name    = "Droitwich";
+    site.lat     = 52.2981;
+    site.lon     = -2.1035;
+    site.power_w = 40.0;
+    site.locked  = true;
+
+    SlotConfig sc1;
+    sc1.slot             = 3;
+    sc1.is_master        = true;
+    sc1.spo_us           = 0.0;
+    sc1.station_delay_us = 0.0;
+
+    SlotConfig sc2;
+    sc2.slot             = 7;
+    sc2.is_master        = false;
+    sc2.master_slot      = 3;
+    sc2.spo_us           = 0.0;
+    sc2.station_delay_us = 0.31;
+
+    site.slots.push_back(sc1);
+    site.slots.push_back(sc2);
+    s.transmitter_sites.push_back(site);
+
+    auto path = std::filesystem::temp_directory_path() / "bp2_multislot_roundtrip.toml";
+    toml_io::save(s, path);
+    auto s2 = toml_io::load(path);
+
+    REQUIRE(s2.transmitter_sites.size() == 1);
+    const auto& rs = s2.transmitter_sites[0];
+    REQUIRE(rs.name == "Droitwich");
+    REQUIRE_THAT(rs.lat, WithinAbs(52.2981, 1e-6));
+    REQUIRE_THAT(rs.lon, WithinAbs(-2.1035, 1e-6));
+    REQUIRE(rs.locked == true);
+    REQUIRE(rs.slots.size() == 2);
+
+    REQUIRE(rs.slots[0].slot == 3);
+    REQUIRE(rs.slots[0].is_master == true);
+    REQUIRE_THAT(rs.slots[0].station_delay_us, WithinAbs(0.0, 1e-9));
+
+    REQUIRE(rs.slots[1].slot == 7);
+    REQUIRE(rs.slots[1].is_master == false);
+    REQUIRE(rs.slots[1].master_slot == 3);
+    REQUIRE_THAT(rs.slots[1].station_delay_us, WithinAbs(0.31, 1e-9));
+
+    std::filesystem::remove(path);
+}
+
+TEST_CASE("Legacy [[transmitters]] format migrates to single-slot sites", "[toml_io]") {
+    // Write a file in the old flat format with two separate transmitter entries
+    auto path = std::filesystem::temp_directory_path() / "bp2_legacy_tx.toml";
+    {
+        std::ofstream f(path);
+        f << R"toml(
+[[transmitters]]
+name    = "Huntingdon"
+lat     = 52.3247
+lon     = -0.1848
+power_w = 40.0
+height_m = 50.0
+slot    = 1
+is_master = true
+master_slot = 0
+spo_us = 0.0
+station_delay_us = 0.0
+
+[[transmitters]]
+name    = "Selsey"
+lat     = 50.7300
+lon     = -0.7900
+power_w = 40.0
+height_m = 50.0
+slot    = 2
+is_master = false
+master_slot = 1
+spo_us = 0.0
+station_delay_us = 0.19
+)toml";
+    }
+
+    auto s = toml_io::load(path);
+
+    // Each old entry becomes a separate single-slot site
+    REQUIRE(s.transmitter_sites.size() == 2);
+
+    REQUIRE(s.transmitter_sites[0].name == "Huntingdon");
+    REQUIRE(s.transmitter_sites[0].slots.size() == 1);
+    REQUIRE(s.transmitter_sites[0].slots[0].slot == 1);
+    REQUIRE(s.transmitter_sites[0].slots[0].is_master == true);
+
+    REQUIRE(s.transmitter_sites[1].name == "Selsey");
+    REQUIRE(s.transmitter_sites[1].slots.size() == 1);
+    REQUIRE(s.transmitter_sites[1].slots[0].slot == 2);
+    REQUIRE(s.transmitter_sites[1].slots[0].is_master == false);
+    REQUIRE(s.transmitter_sites[1].slots[0].master_slot == 1);
+    REQUIRE_THAT(s.transmitter_sites[1].slots[0].station_delay_us, WithinAbs(0.19, 1e-9));
+
+    // flatTransmitters() must give one entry per (site × slot)
+    auto flat = s.flatTransmitters();
+    REQUIRE(flat.size() == 2);
+    REQUIRE(flat[0].slot == 1);
+    REQUIRE(flat[1].slot == 2);
+
+    std::filesystem::remove(path);
+}
+
+TEST_CASE("Site locked field round-trips through TOML", "[toml_io]") {
+    Scenario s;
+    TransmitterSite site;
+    site.name   = "TestSite";
+    site.lat    = 51.5;
+    site.lon    = -0.1;
+    site.locked = true;
+    SlotConfig sc;
+    sc.slot = 1;
+    sc.is_master = true;
+    site.slots.push_back(sc);
+    s.transmitter_sites.push_back(site);
+
+    auto path = std::filesystem::temp_directory_path() / "bp2_locked_roundtrip.toml";
+    toml_io::save(s, path);
+    auto s2 = toml_io::load(path);
+    REQUIRE(s2.transmitter_sites.size() == 1);
+    REQUIRE(s2.transmitter_sites[0].locked == true);
+
+    // Unlocked also round-trips correctly
+    s.transmitter_sites[0].locked = false;
+    toml_io::save(s, path);
+    auto s3 = toml_io::load(path);
+    REQUIRE(s3.transmitter_sites[0].locked == false);
+
+    std::filesystem::remove(path);
+}
+
 TEST_CASE("Invalid TOML throws runtime_error", "[toml_io]") {
     auto path = std::filesystem::temp_directory_path() / "bp2_bad.toml";
     {

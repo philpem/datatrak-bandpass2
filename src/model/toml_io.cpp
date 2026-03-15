@@ -72,6 +72,7 @@ Scenario load(const std::filesystem::path& path) {
                 if (auto v = (*t)["lon"].value<double>())      site.lon      = *v;
                 if (auto v = (*t)["power_w"].value<double>())  site.power_w  = *v;
                 if (auto v = (*t)["height_m"].value<double>()) site.height_m = *v;
+                if (auto v = (*t)["locked"].value<bool>())     site.locked   = *v;
                 if (auto slots_arr = (*t)["slots"].as_array()) {
                     for (auto& se : *slots_arr) {
                         if (auto st = se.as_table()) {
@@ -99,6 +100,7 @@ Scenario load(const std::filesystem::path& path) {
                 if (auto v = (*t)["lon"].value<double>())      site.lon      = *v;
                 if (auto v = (*t)["power_w"].value<double>())  site.power_w  = *v;
                 if (auto v = (*t)["height_m"].value<double>()) site.height_m = *v;
+                if (auto v = (*t)["locked"].value<bool>())     site.locked   = *v;
                 SlotConfig sc;
                 if (auto v = (*t)["slot"].value<int64_t>())            sc.slot             = (int)*v;
                 if (auto v = (*t)["is_master"].value<bool>())          sc.is_master        = *v;
@@ -238,6 +240,7 @@ void save(const Scenario& s, const std::filesystem::path& path) {
             {"lon",      site.lon},
             {"power_w",  site.power_w},
             {"height_m", site.height_m},
+            {"locked",   site.locked},
         };
         site_tbl.insert("slots", slots_arr);
         tx_arr.push_back(site_tbl);
