@@ -31,7 +31,7 @@ public:
 
     // Keep the configured F1 frequency up to date so the SPO estimate button
     // uses the correct carrier.  Defaults to Datatrak standard 146.4375 kHz.
-    void SetFrequency(double f1_hz) { f1_hz_ = f1_hz; }
+    void SetFrequency(double f1_hz) { f1_hz_ = f1_hz; RecomputeSPO(); }
 
     // Callbacks wired by MainFrame
     std::function<void(int site_id, const TransmitterSite&)> on_site_changed;
@@ -52,14 +52,12 @@ private:
     void OnSlotField(wxCommandEvent& evt);
     void OnAddSlot(wxCommandEvent& evt);
     void OnRemoveSlot(wxCommandEvent& evt);
-    void OnCalcSPO(wxCommandEvent& evt);
-
     void OnRxField(wxCommandEvent& evt);
     void OnRxMode(wxCommandEvent& evt);
     void UpdateRxFieldStates();
     void RebuildMasterSlotChoices();
     void UpdateMasterSlotState();
-    void UpdateSpoCalcState();
+    void RecomputeSPO();
     void UpdateSlotListBox();
     void UpdateSlotNumWarning();  // red background on tx_slot_num_ if duplicate
     void LoadSlotFields(int slot_idx);
@@ -85,8 +83,8 @@ private:
     wxSpinCtrl* tx_slot_num_     = nullptr;
     wxCheckBox* tx_master_       = nullptr;
     wxChoice*   tx_mslot_choice_ = nullptr;
-    wxTextCtrl* tx_spo_          = nullptr;
-    wxButton*   btn_spo_calc_    = nullptr;
+    wxTextCtrl* tx_prop_delay_   = nullptr;   // read-only: propagation delay (µs)
+    wxTextCtrl* tx_spo_          = nullptr;   // read-only: derived SPO (µs)
     wxTextCtrl* tx_delay_        = nullptr;
 
     // Delete site button

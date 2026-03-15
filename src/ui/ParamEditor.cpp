@@ -114,25 +114,22 @@ void ParamEditor::BuildTransmitterPage(wxWindow* page) {
     master_slot_values_.push_back(0);
     slot_gs->Add(tx_mslot_choice_, 1, wxEXPAND | wxBOTTOM, 4);
 
-    // SPO row: text field + estimate button
-    slot_gs->Add(new wxStaticText(page, wxID_ANY, wxString::FromUTF8(
-                std::string("SPO (") + bp::ui::MICROSEC + ")")),
-            0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
-    {
-        auto* row = new wxBoxSizer(wxHORIZONTAL);
-        tx_spo_ = new wxTextCtrl(page, wxID_ANY);
-        tx_spo_->SetToolTip(wxString::FromUTF8(
-            (std::string("System Phase Offset (") + bp::ui::MICROSEC + "): fine phase alignment.").c_str()));
-        btn_spo_calc_ = new wxButton(page, wxID_ANY, "Estimate",
-                                     wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
-        btn_spo_calc_->SetToolTip("Estimate SPO from geometry (free-space, initial planning value).");
-        row->Add(tx_spo_,       1, wxEXPAND | wxRIGHT, 4);
-        row->Add(btn_spo_calc_, 0, wxALIGN_CENTER_VERTICAL);
-        slot_gs->Add(row, 1, wxEXPAND | wxBOTTOM, 4);
-    }
-
     tx_delay_ = MakeField(page, (std::string("Station delay (") + bp::ui::MICROSEC + ")").c_str(), slot_gs);
-    tx_delay_->SetToolTip("Propagation delay of the reference signal from the master transmitter to this station.");
+    tx_delay_->SetToolTip("Equipment/cable delay at this station, in microseconds.");
+
+    // Propagation delay (read-only, computed from geometry)
+    tx_prop_delay_ = MakeField(page, (std::string("Prop. delay (") + bp::ui::MICROSEC + ")").c_str(), slot_gs);
+    tx_prop_delay_->SetEditable(false);
+    tx_prop_delay_->SetBackgroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_BTNFACE));
+    tx_prop_delay_->SetToolTip("Free-space propagation delay from this station to its master (computed from geometry).");
+
+    // SPO (read-only, derived from propagation delay + station delay + F1 frequency)
+    tx_spo_ = MakeField(page, (std::string("SPO (") + bp::ui::MICROSEC + ")").c_str(), slot_gs);
+    tx_spo_->SetEditable(false);
+    tx_spo_->SetBackgroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_BTNFACE));
+    tx_spo_->SetToolTip(wxString::FromUTF8(
+        (std::string("System Phase Offset (") + bp::ui::MICROSEC + "): derived from propagation delay, "
+         "station delay, and F1 frequency.").c_str()));
 
     slot_sizer->Add(slot_gs, 0, wxEXPAND | wxALL, 4);
     outer_sizer->Add(slot_sizer, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 6);
@@ -158,19 +155,19 @@ void ParamEditor::BuildTransmitterPage(wxWindow* page) {
     btn_add_slot_->Bind(wxEVT_BUTTON,   &ParamEditor::OnAddSlot,    this);
     btn_remove_slot_->Bind(wxEVT_BUTTON, &ParamEditor::OnRemoveSlot, this);
 
-    for (auto* tc : {tx_spo_, tx_delay_}) {
-        tc->Bind(wxEVT_TEXT, &ParamEditor::OnSlotField, this);
-    }
+    tx_delay_->Bind(wxEVT_TEXT, [this](wxCommandEvent&){
+        RecomputeSPO();
+        wxCommandEvent e; OnSlotField(e);
+    });
     tx_slot_num_->Bind(wxEVT_SPINCTRL, [this](wxSpinEvent&){
         wxCommandEvent e; OnSlotField(e); });
     tx_master_->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent&){
         UpdateMasterSlotState();
-        UpdateSpoCalcState();
+        RecomputeSPO();
         wxCommandEvent e; OnSlotField(e); });
     tx_mslot_choice_->Bind(wxEVT_CHOICE, [this](wxCommandEvent&){
-        UpdateSpoCalcState();
+        RecomputeSPO();
         wxCommandEvent e; OnSlotField(e); });
-    btn_spo_calc_->Bind(wxEVT_BUTTON, &ParamEditor::OnCalcSPO, this);
 
     tx_delete_->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
         if (current_site_id_ >= 0 && on_site_deleted)
@@ -272,7 +269,8 @@ void ParamEditor::LoadSite(int id, const TransmitterSite& site) {
         tx_slot_num_->SetValue(1);
         tx_master_->SetValue(false);
         tx_mslot_choice_->SetSelection(0);
-        tx_spo_->ChangeValue("0.000");
+        tx_prop_delay_->ChangeValue("");
+        tx_spo_->ChangeValue("");
         tx_delay_->ChangeValue("0.000");
     }
     btn_remove_slot_->Enable(!site.slots.empty());
@@ -368,7 +366,6 @@ void ParamEditor::LoadSlotFields(int slot_idx) {
     const auto& sc = current_site_.slots[slot_idx];
     tx_slot_num_->SetValue(sc.slot);
     tx_master_->SetValue(sc.is_master);
-    tx_spo_->ChangeValue(wxString::Format("%.3f", sc.spo_us));
     tx_delay_->ChangeValue(wxString::Format("%.3f", sc.station_delay_us));
 
     // Select master-slot entry
@@ -379,7 +376,7 @@ void ParamEditor::LoadSlotFields(int slot_idx) {
 
     updating_ = was_updating;
     UpdateMasterSlotState();
-    UpdateSpoCalcState();
+    RecomputeSPO();
     UpdateSlotNumWarning();
 }
 
@@ -392,8 +389,9 @@ void ParamEditor::SaveCurrentSlotFields() {
     int sel = tx_mslot_choice_->GetSelection();
     sc.master_slot = (sel >= 0 && sel < (int)master_slot_values_.size())
                      ? master_slot_values_[sel] : 0;
-    sc.spo_us           = wxAtof(tx_spo_->GetValue());
     sc.station_delay_us = wxAtof(tx_delay_->GetValue());
+    // SPO is derived — read back from the display field (set by RecomputeSPO)
+    sc.spo_us           = wxAtof(tx_spo_->GetValue());
 }
 
 void ParamEditor::RebuildMasterSlotChoices() {
@@ -450,11 +448,59 @@ void ParamEditor::UpdateMasterSlotState() {
     tx_mslot_choice_->Enable(!tx_master_->GetValue());
 }
 
-void ParamEditor::UpdateSpoCalcState() {
+void ParamEditor::RecomputeSPO() {
+    if (updating_) return;
+
     bool is_master = tx_master_->GetValue();
     int sel = tx_mslot_choice_->GetSelection();
     bool has_master = !is_master && sel > 0 && sel < (int)master_slot_values_.size();
-    btn_spo_calc_->Enable(has_master);
+
+    if (!has_master) {
+        tx_prop_delay_->ChangeValue(is_master ? "N/A (master)" : "");
+        tx_spo_->ChangeValue(is_master ? "0.000" : "");
+        return;
+    }
+
+    int master_slot = master_slot_values_[sel];
+
+    // Find master position
+    double master_lat = 0.0, master_lon = 0.0;
+    bool found = false;
+    for (const auto& s : site_list_) {
+        for (const auto& sc : s.slots) {
+            if (sc.slot == master_slot) {
+                master_lat = s.lat; master_lon = s.lon;
+                found = true; break;
+            }
+        }
+        if (found) break;
+    }
+    if (!found) {
+        tx_prop_delay_->ChangeValue("?");
+        tx_spo_->ChangeValue("?");
+        return;
+    }
+
+    double slave_lat = wxAtof(tx_lat_->GetValue());
+    double slave_lon = wxAtof(tx_lon_->GetValue());
+
+    const GeographicLib::Geodesic& geod = GeographicLib::Geodesic::WGS84();
+    double dist_m = 0.0;
+    geod.Inverse(slave_lat, slave_lon, master_lat, master_lon, dist_m);
+    dist_m = std::abs(dist_m);
+
+    constexpr double c = 299'792'458.0;
+    double prop_delay_us = dist_m / c * 1e6;
+
+    double station_delay_s = wxAtof(tx_delay_->GetValue()) * 1e-6;
+    double total_delay_s   = dist_m / c + station_delay_s;
+
+    double phase_lanes = std::fmod(total_delay_s * f1_hz_, 1.0);
+    if (phase_lanes > 0.5) phase_lanes -= 1.0;
+    double spo_us = -phase_lanes / f1_hz_ * 1e6;
+
+    tx_prop_delay_->ChangeValue(wxString::Format("%.3f", prop_delay_us));
+    tx_spo_->ChangeValue(wxString::Format("%.3f", spo_us));
 }
 
 // ---------------------------------------------------------------------------
@@ -468,6 +514,7 @@ void ParamEditor::OnSiteField(wxCommandEvent& /*evt*/) {
     current_site_.lon     = wxAtof(tx_lon_->GetValue());
     current_site_.power_w = wxAtof(tx_power_->GetValue());
     current_site_.height_m = wxAtof(tx_height_->GetValue());
+    RecomputeSPO();
     on_site_changed(current_site_id_, current_site_);
 }
 
@@ -540,48 +587,6 @@ void ParamEditor::OnRemoveSlot(wxCommandEvent& /*evt*/) {
     btn_remove_slot_->Enable(!current_site_.slots.empty());
     if (on_site_changed)
         on_site_changed(current_site_id_, current_site_);
-}
-
-void ParamEditor::OnCalcSPO(wxCommandEvent& /*evt*/) {
-    // Find the master transmitter in site_list_ by the chosen slot number.
-    int sel = tx_mslot_choice_->GetSelection();
-    if (sel <= 0 || sel >= (int)master_slot_values_.size()) return;
-    int master_slot = master_slot_values_[sel];
-
-    // Find master site/position
-    double master_lat = 0.0, master_lon = 0.0;
-    bool found = false;
-    for (const auto& s : site_list_) {
-        for (const auto& sc : s.slots) {
-            if (sc.slot == master_slot) {
-                master_lat = s.lat; master_lon = s.lon;
-                found = true; break;
-            }
-        }
-        if (found) break;
-    }
-    if (!found) return;
-
-    double slave_lat = wxAtof(tx_lat_->GetValue());
-    double slave_lon = wxAtof(tx_lon_->GetValue());
-
-    const GeographicLib::Geodesic& geod = GeographicLib::Geodesic::WGS84();
-    double dist_m = 0.0;
-    geod.Inverse(slave_lat, slave_lon, master_lat, master_lon, dist_m);
-    dist_m = std::abs(dist_m);
-
-    constexpr double c = 299'792'458.0;
-    double station_delay_s = wxAtof(tx_delay_->GetValue()) * 1e-6;
-    double total_delay_s   = dist_m / c + station_delay_s;
-
-    double phase_lanes = std::fmod(total_delay_s * f1_hz_, 1.0);
-    if (phase_lanes > 0.5) phase_lanes -= 1.0;
-    double spo_us = -phase_lanes / f1_hz_ * 1e6;
-
-    updating_ = true;
-    tx_spo_->ChangeValue(wxString::Format("%.3f", spo_us));
-    updating_ = false;
-    wxCommandEvent e; OnSlotField(e);
 }
 
 // ---------------------------------------------------------------------------
