@@ -42,6 +42,7 @@ private:
     void OnComputeProgress(wxCommandEvent& evt);
 
     void OnEditDeleteTx(wxCommandEvent& evt);
+    void OnEstimateAllSPO(wxCommandEvent& evt);
 
     // Map / scenario callbacks
     void OnMapClick(double lat, double lon);

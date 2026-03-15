@@ -22,7 +22,10 @@
 #include <wx/clipbrd.h>
 #include <wx/dataobj.h>
 #include <wx/file.h>
+#include <GeographicLib/Geodesic.hpp>
 #include <cstdlib>
+#include <cmath>
+#include <map>
 #include <stdexcept>
 
 namespace bp {
@@ -47,6 +50,7 @@ enum {
     ID_EXPORT_LAYERS_HTML,
     ID_IMPORT_MONITOR_LOG,
     ID_COMPUTE_PO,
+    ID_EDIT_ESTIMATE_ALL_SPO,
     SB_WGS84   = 0,
     SB_OSGB    = 1,
     SB_ML      = 2,
@@ -231,6 +235,9 @@ void MainFrame::BuildMenus() {
     auto* edit = new wxMenu;
     edit->Append(ID_EDIT_DELETE_TX, "&Delete Transmitter\tDelete",
                  "Delete the currently selected transmitter");
+    edit->AppendSeparator();
+    edit->Append(ID_EDIT_ESTIMATE_ALL_SPO, "Estimate All &SPOs",
+                 "Estimate SPO from geometry for all slave stations (free-space)");
     mb->Append(edit, "&Edit");
 
     auto* view = new wxMenu;
@@ -253,6 +260,7 @@ void MainFrame::BuildMenus() {
     Bind(wxEVT_MENU, [this](wxCommandEvent&){ OnExportAlmanac(almanac::FirmwareFormat::V7);  }, ID_EXPORT_ALMANAC_V7);
     Bind(wxEVT_MENU, [this](wxCommandEvent&){ OnExportAlmanac(almanac::FirmwareFormat::V16); }, ID_EXPORT_ALMANAC_V16);
     Bind(wxEVT_MENU, &MainFrame::OnEditDeleteTx,      this, ID_EDIT_DELETE_TX);
+    Bind(wxEVT_MENU, &MainFrame::OnEstimateAllSPO,    this, ID_EDIT_ESTIMATE_ALL_SPO);
     Bind(wxEVT_MENU, [this](wxCommandEvent&){ OnExportLayers("csv");    }, ID_EXPORT_LAYERS_CSV);
     Bind(wxEVT_MENU, [this](wxCommandEvent&){ OnExportLayers("png");    }, ID_EXPORT_LAYERS_PNG);
     Bind(wxEVT_MENU, [this](wxCommandEvent&){ OnExportLayers("geotiff"); }, ID_EXPORT_LAYERS_GEOTIFF);
@@ -989,6 +997,72 @@ void MainFrame::OnImportMonitorLog(wxCommandEvent& /*evt*/) {
         wxMessageBox(wxString::FromUTF8(e.what()), "Import Error",
                      wxICON_ERROR, this);
     }
+}
+
+void MainFrame::OnEstimateAllSPO(wxCommandEvent& /*evt*/) {
+    if (scenario_.transmitter_sites.empty()) {
+        wxMessageBox("Add transmitters to the scenario first.",
+                     "Estimate All SPOs", wxOK | wxICON_INFORMATION, this);
+        return;
+    }
+
+    // Build a lookup: slot number -> site position (for finding master positions)
+    struct SlotPos { double lat; double lon; };
+    std::map<int, SlotPos> slot_positions;
+    for (const auto& site : scenario_.transmitter_sites)
+        for (const auto& sc : site.slots)
+            slot_positions[sc.slot] = {site.lat, site.lon};
+
+    const GeographicLib::Geodesic& geod = GeographicLib::Geodesic::WGS84();
+    constexpr double c = 299'792'458.0;
+    double f1_hz = scenario_.frequencies.f1_hz;
+    int updated = 0;
+
+    for (auto& site : scenario_.transmitter_sites) {
+        for (auto& sc : site.slots) {
+            if (sc.is_master) continue;
+            if (sc.master_slot <= 0) continue;
+
+            auto it = slot_positions.find(sc.master_slot);
+            if (it == slot_positions.end()) continue;
+
+            double dist_m = 0.0;
+            geod.Inverse(site.lat, site.lon,
+                         it->second.lat, it->second.lon, dist_m);
+            dist_m = std::abs(dist_m);
+
+            double station_delay_s = sc.station_delay_us * 1e-6;
+            double total_delay_s   = dist_m / c + station_delay_s;
+
+            double phase_lanes = std::fmod(total_delay_s * f1_hz, 1.0);
+            if (phase_lanes > 0.5) phase_lanes -= 1.0;
+            double spo_us = -phase_lanes / f1_hz * 1e6;
+
+            sc.spo_us = spo_us;
+            ++updated;
+        }
+    }
+
+    if (updated == 0) {
+        wxMessageBox("No slave stations found to estimate SPO for.",
+                     "Estimate All SPOs", wxOK | wxICON_INFORMATION, this);
+        return;
+    }
+
+    // Refresh the parameter editor if a site is currently selected
+    if (selected_site_id_ >= 0 &&
+        selected_site_id_ < (int)scenario_.transmitter_sites.size()) {
+        param_editor_->LoadSite(selected_site_id_,
+                                scenario_.transmitter_sites[selected_site_id_]);
+    }
+
+    MarkDirty();
+    TriggerRecompute();
+
+    SetStatusText(
+        wxString::Format("Estimated SPO for %d slave slot(s) (free-space).",
+                         updated),
+        SB_STATUS);
 }
 
 void MainFrame::OnComputePatternOffsets(wxCommandEvent& /*evt*/) {
