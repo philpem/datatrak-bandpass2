@@ -44,8 +44,8 @@ import zipfile
 # container format.  The GitHub raw CDN is stable and publicly accessible.
 # ---------------------------------------------------------------------------
 OSTN15_NTV2_URL = (
-    "https://raw.githubusercontent.com/OrdnanceSurvey/os-transform"
-    "/main/OSTN15_NTv2_OSGBtoETRS.gsb"
+    "https://github.com/OrdnanceSurvey/os-transform"
+    "/raw/refs/heads/main/resources/OSTN15_NTv2_OSGBtoETRS.gsb"
 )
 
 # Legacy OS website URL (was removed from OS website, kept as documentation).
@@ -149,20 +149,26 @@ def _en_to_latlon(E: float, N: float):
 def _detect_ntv2_endian(data: bytes) -> str:
     """Return '>' or '<' based on the NUM_OREC value in the first record."""
     # First record: 8-byte key + 8-byte value.  KEY should be "NUM_OREC".
+    # NTv2 keys are always stored as plain ASCII regardless of endianness,
+    # so we detect endianness from the integer value, not the key orientation.
     key = data[0:8].rstrip(b'\x00').rstrip(b' ')
-    if key == b'NUM_OREC':
-        # Big-endian: key is human-readable in normal byte order
-        return '>'
-    # Little-endian: the key bytes are reversed
-    if key[::-1].rstrip(b'\x00').rstrip(b' ') == b'NUM_OREC':
-        return '<'
-    # Fall back: check the 4-byte integer value at bytes 8-11
-    be_val = struct.unpack_from('>I', data, 8)[0]
+    if key != b'NUM_OREC':
+        raise RuntimeError(
+            f"Expected NUM_OREC as first NTv2 key, got {data[0:8]!r}"
+        )
+    # NUM_OREC value should be 11 (standard) — check which byte order gives
+    # a sane small integer
     le_val = struct.unpack_from('<I', data, 8)[0]
-    if be_val == 11:
-        return '>'
+    be_val = struct.unpack_from('>I', data, 8)[0]
     if le_val == 11:
         return '<'
+    if be_val == 11:
+        return '>'
+    # Accept any small value as a hint
+    if 1 <= le_val <= 100:
+        return '<'
+    if 1 <= be_val <= 100:
+        return '>'
     raise RuntimeError(
         f"Cannot determine NTv2 endianness "
         f"(first 8 bytes: {data[0:8]!r}, values: BE={be_val} LE={le_val})"
@@ -208,19 +214,31 @@ def parse_ntv2(data: bytes, verbose: bool):
         return struct.unpack(endian + 'd', v)[0]
 
     # ---- overview header ----
-    num_file = 1
+    # Standard NTv2: NUM_OREC records in overview, NUM_SREC records per subgrid.
     num_orec = 11
-    while pos < min(num_orec * 16 + 16, len(data)):
+    num_srec = 11
+    num_file = 1
+    records_read = 0
+    while pos + 16 <= len(data) and records_read < 20:
         key, val = read_key_val()
+        records_read += 1
         if key == 'NUM_OREC':
             num_orec = as_int(val)
+        elif key == 'NUM_SREC':
+            num_srec = as_int(val)
         elif key == 'NUM_FILE':
             num_file = as_int(val)
-        elif key == 'END':
+        # Stop after reading exactly num_orec records
+        if records_read >= num_orec:
             break
 
+    # Ensure position is exactly at end of overview header
+    pos = num_orec * 16
+
     if verbose:
-        print(f"  NTv2: {num_file} subgrid(s)", flush=True)
+        print(f"  NTv2: {num_file} subgrid(s), "
+              f"overview={num_orec} records, subgrid_hdr={num_srec} records",
+              flush=True)
 
     se_grid: dict = {}
     sn_grid: dict = {}
@@ -231,9 +249,10 @@ def parse_ntv2(data: bytes, verbose: bool):
         gs_count = 0
         sub_name = ''
 
-        # Read sub-file header (up to 20 records to be safe)
-        for _ in range(20):
-            if pos >= len(data):
+        # Read exactly num_srec records for the subgrid header
+        sg_header_start = pos
+        for rec_i in range(num_srec):
+            if pos + 16 > len(data):
                 break
             key, val = read_key_val()
             if key == 'SUB_NAME':
@@ -252,7 +271,8 @@ def parse_ntv2(data: bytes, verbose: bool):
                 long_inc = as_double(val)
             elif key == 'GS_COUNT':
                 gs_count = as_int(val)
-                break  # GS_COUNT is the last header field
+        # Ensure position is exactly at end of subgrid header
+        pos = sg_header_start + num_srec * 16
 
         if lat_inc <= 0 or long_inc <= 0 or gs_count <= 0:
             if verbose:
@@ -324,11 +344,11 @@ def parse_ntv2(data: bytes, verbose: bool):
             print(f"  Parsed {nodes_parsed:,} NTv2 nodes -> {len(se_grid):,} grid cells",
                   flush=True)
 
-        # Consume END record between/after subgrids
-        while pos + 16 <= len(data):
-            key, _val = read_key_val()
-            if key == 'END':
-                break
+    # Consume optional END record at the very end of the file
+    if pos + 16 <= len(data):
+        key, _val = read_key_val()
+        if key != 'END' and verbose:
+            print(f"  Note: expected END record, got '{key}'", flush=True)
 
     return se_grid, sn_grid
 
@@ -554,8 +574,12 @@ def main():
 
     if verbose:
         print(
-            "Done.  Place the .dat file where BANDPASS II can find it,\n"
-            "then set the datum to OSTN15 in the Network Configuration panel."
+            "Done.  BANDPASS II searches for OSTN15.dat in this order:\n"
+            "  1. Next to the executable\n"
+            "  2. data/ subdirectory next to the executable\n"
+            "  3. User data directory (~/.local/share/bandpass2 on Linux)\n"
+            "  4. data/ in the parent of the executable directory (dev builds)\n"
+            "Copy the .dat file to one of these locations."
         )
 
 
