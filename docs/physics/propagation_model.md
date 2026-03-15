@@ -18,11 +18,16 @@ stages are finished.
 
 ## Stage 1 — Groundwave field strength (ITU-R P.368)
 
-**Module:** `engine/groundwave.cpp`
-**Key function:** `groundwave_field_dbuvm(freq_hz, dist_km, sigma, eps_r)`
+**Module:** `engine/groundwave.cpp`, `engine/grwave.cpp`
+**Key functions:** `groundwave_for_model()`, `computeGroundwave()`
 
-The groundwave field strength at distance *d* is computed from an empirical
-polynomial approximation to the ITU-R P.368-9 groundwave propagation curves:
+BANDPASS II provides three groundwave propagation models, selectable in the
+Network Configuration panel (View → Network Configuration):
+
+### Homogeneous (fast)
+
+Uses a single conductivity lookup at the path midpoint and applies the
+ITU-R P.368 empirical polynomial:
 
 ```
 A_db = 0.0438 × d_km^0.832 × (f / 100 kHz)^0.5 × (0.005 / σ)^0.3
@@ -33,14 +38,60 @@ where E_tx is the unattenuated field strength at 1 km (from transmitter power
 and antenna height), σ is ground conductivity [S/m], and the reference
 frequency is 100 kHz.
 
-**Limitations:**
-- Empirical fit; accuracy degrades at very short (< 10 km) and very long
-  (> 1000 km) ranges.
-- Uses midpoint conductivity only; the Millington mixed-path correction
-  (P2-02) is not yet implemented.
-- A full Sommerfeld/Wait/GRWAVE residue series would give better accuracy
-  at range extremes, but ASF dominates absolute positioning error at typical
-  Datatrak geometry (50–400 km), so this approximation is acceptable.
+Ignores land/sea transitions entirely.  Fastest option (~20x faster than
+Millington).  Useful for quick initial planning.
+
+### Millington mixed-path (default)
+
+Implements the Millington (1949) forward/backward averaging method for paths
+that cross conductivity boundaries (e.g. land/sea transitions):
+
+1. Sample *n* segments along the great-circle path TX→RX (n=20 for grid
+   computation, n=50 for single-point virtual receiver).
+2. Look up ground conductivity at each segment midpoint via ConductivityMap.
+3. Forward pass: compute field using segment conductivities in TX→RX order.
+4. Backward pass: compute field using segment conductivities in RX→TX order.
+5. Return the linear average: `20 log10(0.5 × (lin(E_fwd) + lin(E_back)))`.
+
+Each segment uses the same P.368 empirical polynomial as Homogeneous mode.
+This is the recommended default for most planning work.
+
+### GRWAVE (accurate)
+
+Uses the Millington mixed-path averaging (same forward/backward method as
+above), but replaces the empirical polynomial with the full Sommerfeld/Wait/
+Norton residue series for each segment evaluation:
+
+- **Flat-earth region** (short distances): Norton surface-wave formula with
+  Earth-curvature correction.
+- **Diffraction region** (long distances): Spherical-earth residue series
+  using Airy functions and the Faddeeva function.
+- **Transition distance**: d_test = 80 / cbrt(f_MHz) [SG3 Handbook Eq. 15].
+
+Implementation follows NTIA Report 99-368 (DeMinco 1999) and the ITU
+Handbook on Ground Wave Propagation (2014).  Vertical polarisation only;
+ground-level antennas (no height gain).
+
+GRWAVE is significantly slower (~100x per grid point) but provides better
+accuracy at range extremes (< 10 km and > 500 km) and for paths over
+varying ground conductivity.  The status bar shows "Groundwave (GRWAVE)"
+during computation and the progress bar is scaled to reflect the longer
+compute time.
+
+### Model comparison
+
+At typical Datatrak distances (100–300 km) over land, the polynomial fit
+and GRWAVE agree to within ~5–8 dB.  The difference is more pronounced:
+- At long range (> 300 km) where diffraction effects dominate
+- Over sea paths (high conductivity increases the residue series accuracy)
+- At frequencies away from the 100 kHz polynomial reference point
+
+In the TOML file, the model is stored in the `[propagation]` section:
+
+```toml
+[propagation]
+model = "millington"   # "homogeneous", "millington", or "grwave"
+```
 
 ---
 

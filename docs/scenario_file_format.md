@@ -38,6 +38,28 @@ non-standard network.
 Valid range: 30-300 kHz (full LF band).  Values outside this range are
 rejected on load.
 
+### `[propagation]`
+
+Groundwave propagation model selection.  This section is optional; the
+default is `"millington"`.
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `model` | string | `"millington"` | `"homogeneous"`, `"millington"`, or `"grwave"` |
+
+**Models:**
+
+- **`"homogeneous"`** — Single midpoint conductivity, P.368 empirical
+  polynomial.  Fastest; ignores land/sea transitions.
+- **`"millington"`** — Millington (1949) mixed-path averaging with P.368
+  polynomial per segment.  Good balance of speed and accuracy.  Default.
+- **`"grwave"`** — Millington averaging with full Sommerfeld/Wait/Norton
+  residue series (ITU-R P.368 GRWAVE) per segment.  Most accurate but
+  ~100x slower.
+
+The model can also be selected in the Network Configuration panel
+(View → Network Configuration).
+
 ### `[receiver]`
 
 | Field | Type | Default | Description |
@@ -50,12 +72,15 @@ rejected on load.
 | `vp_ms` | float | `299892718` | Velocity of propagation (m/s) |
 | `ellipsoid` | string | `"airy1830"` | `"airy1830"` (matches Mk4 Locator firmware) or `"wgs84"` |
 
-### `[[transmitters]]`
+### `[[transmitter_sites]]`
 
-Array of tables.  One block per transmitter.  Multi-slot stations (same
-physical site transmitting on two slots with different masters) appear as
-separate entries with the same coordinates.  There must be at least one
-master station.
+Array of tables.  One block per physical transmitter site (mast location).
+Each site has one or more `[[transmitter_sites.slots]]` sub-entries for its
+slot assignments.  Colocated transmitters (two slots at one mast) share a
+single site with two slot entries.  There must be at least one master slot
+across all sites.
+
+**Site fields:**
 
 | Field | Type | Default | Description |
 |---|---|---|---|
@@ -64,11 +89,20 @@ master station.
 | `lon` | float | required | WGS84 longitude (decimal degrees, negative = west) |
 | `power_w` | float | `40.0` | Transmitter power (watts) |
 | `height_m` | float | `50.0` | Antenna height (metres) |
+
+**Slot fields (`[[transmitter_sites.slots]]`):**
+
+| Field | Type | Default | Description |
+|---|---|---|---|
 | `slot` | int | required | Transmission slot number (1-8 standard, 1-24 interlaced) |
 | `is_master` | bool | `false` | `true` if this is a master station |
 | `master_slot` | int | `0` | Slot number of this station's master. `0` if this station is itself a master. |
 | `spo_us` | float | `0.0` | Synchronisation pulse offset (microseconds) |
 | `station_delay_us` | float | `0.0` | Station delay (microseconds) |
+
+**Backward compatibility:** The old flat `[[transmitters]]` format is still
+accepted on load.  Each old entry is migrated to a single-slot
+`[[transmitter_sites]]` entry.  Colocated entries are not auto-merged.
 
 ### `[[monitor_stations]]`
 
@@ -151,6 +185,9 @@ resolution_km = 2.0
 f1_khz = 146.4375
 f2_khz = 131.2500
 
+[propagation]
+model = "millington"
+
 [receiver]
 mode                 = "advanced"
 noise_floor_dbuvpm   = 14.0
@@ -161,30 +198,33 @@ vp_ms                = 299892718
 ellipsoid            = "airy1830"
 
 # Master station
-[[transmitters]]
-name             = "Huntingdon"
-lat              = 52.248652
-lon              = -0.345416
-power_w          = 29.5
-height_m         = 50.0
-slot             = 1
-is_master        = true
-master_slot      = 0
-spo_us           = 0.0
-station_delay_us = 0.0
+[[transmitter_sites]]
+name    = "Huntingdon"
+lat     = 52.248652
+lon     = -0.345416
+power_w = 29.5
+height_m = 50.0
+
+  [[transmitter_sites.slots]]
+  slot             = 1
+  is_master        = true
+  spo_us           = 0.0
+  station_delay_us = 0.0
 
 # Slave station
-[[transmitters]]
-name             = "Selsey"
-lat              = 50.762753
-lon              = -0.792227
-power_w          = 30.0
-height_m         = 50.0
-slot             = 2
-is_master        = false
-master_slot      = 1
-spo_us           = 0.0
-station_delay_us = 0.22
+[[transmitter_sites]]
+name    = "Selsey"
+lat     = 50.762753
+lon     = -0.792227
+power_w = 30.0
+height_m = 50.0
+
+  [[transmitter_sites.slots]]
+  slot             = 2
+  is_master        = false
+  master_slot      = 1
+  spo_us           = 0.0
+  station_delay_us = 0.22
 
 [conductivity]
 source = "builtin"
@@ -202,8 +242,8 @@ transform = "helmert"
 - All coordinates must be WGS84.  If converting from OSGB National Grid,
   use EPSG:27700 to EPSG:4326.  Provide at least 4 decimal places.
 - Multi-slot stations (same physical site, two slot assignments with different
-  masters) are represented as two `[[transmitters]]` entries with identical
-  coordinates but different `slot` and `master_slot` values.
+  masters) are represented as a single `[[transmitter_sites]]` entry with
+  two `[[transmitter_sites.slots]]` sub-entries sharing the site coordinates.
 - The `is_master` field and `master_slot` field must be consistent: a master
   has `is_master = true` and `master_slot = 0`; a slave has `is_master = false`
   and `master_slot` set to the slot number of its master.
