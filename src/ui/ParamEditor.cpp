@@ -1,6 +1,7 @@
 #include "ParamEditor.h"
 #include "UiConstants.h"
 #include <string>
+#include <wx/msgdlg.h>
 #include <wx/sizer.h>
 #include <wx/stattext.h>
 #include <wx/statbox.h>
