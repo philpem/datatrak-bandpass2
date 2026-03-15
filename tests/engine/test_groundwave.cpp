@@ -559,5 +559,72 @@ TEST_CASE("computeGroundwave: Millington vs GRWAVE produce different grid values
     CHECK(any_different);
 }
 
+// ---- GrwaveLUT ----
+
+TEST_CASE("GrwaveLUT: matches full computation within 0.5 dB over land") {
+    GrwaveLUT lut(146437.5);
+    GroundConstants gc_land { 0.005, 15.0 };
+    for (double d : {1.0, 10.0, 50.0, 100.0, 200.0, 350.0, 500.0}) {
+        double E_full = grwave_field_dbuvm(146437.5, d, gc_land, 40.0);
+        double E_lut  = lut.lookup(d, gc_land, 40.0);
+        CHECK(std::abs(E_full - E_lut) < 0.5);
+    }
+}
+
+TEST_CASE("GrwaveLUT: matches full computation within 0.5 dB over sea") {
+    GrwaveLUT lut(146437.5);
+    GroundConstants gc_sea { 4.0, 70.0 };
+    for (double d : {1.0, 10.0, 50.0, 100.0, 200.0, 350.0, 500.0}) {
+        double E_full = grwave_field_dbuvm(146437.5, d, gc_sea, 40.0);
+        double E_lut  = lut.lookup(d, gc_sea, 40.0);
+        CHECK(std::abs(E_full - E_lut) < 0.5);
+    }
+}
+
+TEST_CASE("GrwaveLUT: power scaling is correct") {
+    GrwaveLUT lut(146437.5);
+    GroundConstants gc { 0.005, 15.0 };
+    double E_40W  = lut.lookup(100.0, gc, 40.0);
+    double E_160W = lut.lookup(100.0, gc, 160.0);
+    // 4x power = +6 dB field strength (20*log10(sqrt(4)) = 6.02)
+    CHECK(E_160W - E_40W == Approx(6.02).margin(0.1));
+}
+
+TEST_CASE("GrwaveLUT: active() returns null when no scope") {
+    CHECK(GrwaveLUT::active() == nullptr);
+}
+
+TEST_CASE("GrwaveLUT: scope installs and uninstalls LUT") {
+    GrwaveLUT lut(146437.5);
+    CHECK(GrwaveLUT::active() == nullptr);
+    {
+        GrwaveLUT::Scope scope(lut);
+        CHECK(GrwaveLUT::active() == &lut);
+    }
+    CHECK(GrwaveLUT::active() == nullptr);
+}
+
+TEST_CASE("GrwaveLUT: grwave_field_dbuvm uses LUT when active") {
+    GrwaveLUT lut(146437.5);
+    GroundConstants gc { 0.005, 15.0 };
+
+    // Without LUT: full computation
+    double E_full = grwave_field_dbuvm(146437.5, 200.0, gc, 40.0);
+
+    // With LUT: should match closely
+    GrwaveLUT::Scope scope(lut);
+    double E_via_lut = grwave_field_dbuvm(146437.5, 200.0, gc, 40.0);
+    CHECK(std::abs(E_full - E_via_lut) < 0.5);
+}
+
+TEST_CASE("GrwaveLUT: different frequency builds different table") {
+    GrwaveLUT lut_lo(100000.0);
+    GrwaveLUT lut_hi(200000.0);
+    GroundConstants gc { 0.005, 15.0 };
+    double E_lo = lut_lo.lookup(200.0, gc, 40.0);
+    double E_hi = lut_hi.lookup(200.0, gc, 40.0);
+    CHECK(E_lo != Approx(E_hi).margin(0.01));
+}
+
 // ---- TOML round-trip for GRWAVE ----
 // (TOML tests are in tests/model/test_toml_io.cpp)
