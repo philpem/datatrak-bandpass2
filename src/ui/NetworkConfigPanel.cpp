@@ -508,29 +508,21 @@ void NetworkConfigPanel::UpdateTerrainLabel() {
     wxString msg;
     wxColour col = *wxBLACK;
     if (sel == 0) {
-        // Flat — always available, nothing to warn about
-        msg = "";
+        // Flat — always available
+    } else if (sel == 1) {
+        // SRTM — uses downloaded tiles; no user-settable path
+        msg = "Run srtm_download.py to fetch tiles if needed";
     } else {
+        // File — user sets the path; check it exists
         wxString path = terrain_file_->GetValue();
         if (path.empty()) {
-            msg = "No path set - using flat fallback";
+            msg = "No file set - using flat fallback";
             col = *wxRED;
-        } else if (sel == 1) {
-            // SRTM — expects a directory
-            if (!wxFileName::DirExists(path)) {
-                msg = "Directory not found - using flat fallback";
-                col = *wxRED;
-            } else {
-                msg = "Directory OK";
-            }
+        } else if (!wxFileName::FileExists(path)) {
+            msg = "File not found - using flat fallback";
+            col = *wxRED;
         } else {
-            // File
-            if (!wxFileName::FileExists(path)) {
-                msg = "File not found - using flat fallback";
-                col = *wxRED;
-            } else {
-                msg = "File OK";
-            }
+            msg = "File OK";
         }
     }
     terrain_status_label_->SetLabel(msg);
@@ -545,8 +537,14 @@ void NetworkConfigPanel::UpdateCondLabel() {
     wxColour col = *wxBLACK;
     if (sel == 0) {
         // Built-in — always available
-        msg = "";
+    } else if (sel == 1) {
+        // ITU P.832 — uses generated GeoTIFF; no user-settable path
+        msg = "Run itu_p832_import.py to generate data file if needed";
+    } else if (sel == 2) {
+        // BGS — uses downloaded GeoTIFF; no user-settable path
+        msg = "Run bgs_import.py to generate data file if needed";
     } else {
+        // File — user sets the path; check it exists
         wxString path = cond_file_->GetValue();
         if (path.empty()) {
             msg = "No file set - using built-in fallback";
