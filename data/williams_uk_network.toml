@@ -42,7 +42,6 @@
 [scenario]
 name        = "Williams (2004) UK Datatrak Network"
 created     = "2004-01-01"
-display_crs = "osgb_ng"
 [grid]
 lat_min       = 49.5
 lat_max       = 61.0

@@ -12,7 +12,6 @@ and converted to Hz on load.
 |---|---|---|
 | `name` | string | Human-readable scenario name |
 | `created` | string | Date string, e.g. `"2004-01-01"` |
-| `display_crs` | string | `"osgb_ng"` (OSGB National Grid) or `"wgs84"` |
 
 ### `[grid]`
 
@@ -136,7 +135,6 @@ calibration.
 [scenario]
 name        = "UK Datatrak baseline"
 created     = "2025-01-01"
-display_crs = "osgb_ng"
 
 [grid]
 lat_min       = 49.5

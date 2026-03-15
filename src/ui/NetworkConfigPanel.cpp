@@ -73,16 +73,6 @@ NetworkConfigPanel::NetworkConfigPanel(wxWindow* parent)
         auto* gs    = new wxFlexGridSizer(2, 4, 6);
         gs->AddGrowableCol(1);
 
-        // Display CRS
-        gs->Add(new wxStaticText(this, wxID_ANY, "Display CRS"),
-                0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
-        wxArrayString crs_opts;
-        crs_opts.Add("OSGB National Grid"); crs_opts.Add("WGS84");
-        display_crs_ = new wxChoice(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, crs_opts);
-        display_crs_->SetSelection(0);
-        display_crs_->Bind(wxEVT_CHOICE, &NetworkConfigPanel::OnOtherChanged, this);
-        gs->Add(display_crs_, 1, wxEXPAND | wxBOTTOM, 2);
-
         // Datum
         gs->Add(new wxStaticText(this, wxID_ANY, "Datum"),
                 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
@@ -233,7 +223,6 @@ void NetworkConfigPanel::SetScenario(Scenario* scenario) {
     f1_field_->ChangeValue(wxString::Format("%.4f", scenario_->frequencies.f1_hz / 1000.0));
     f2_field_->ChangeValue(wxString::Format("%.4f", scenario_->frequencies.f2_hz / 1000.0));
 
-    display_crs_->SetSelection(scenario_->display_crs == Scenario::DisplayCRS::WGS84 ? 1 : 0);
     datum_->SetSelection(scenario_->datum_transform == Scenario::DatumTransform::OSTN15 ? 1 : 0);
 
     lat_min_field_->ChangeValue(wxString::Format("%.4f", scenario_->grid.lat_min));
@@ -276,9 +265,6 @@ void NetworkConfigPanel::SaveToScenario() {
     if (f2 >= F_MIN_KHZ && f2 <= F_MAX_KHZ) scenario_->frequencies.f2_hz = f2 * 1000.0;
     scenario_->frequencies.recompute();
 
-    scenario_->display_crs = (display_crs_->GetSelection() == 1)
-                             ? Scenario::DisplayCRS::WGS84
-                             : Scenario::DisplayCRS::OSGB_NG;
     scenario_->datum_transform = (datum_->GetSelection() == 1) ? Scenario::DatumTransform::OSTN15
                                                                 : Scenario::DatumTransform::Helmert;
 

@@ -52,9 +52,6 @@ struct Scenario {
     std::string name    = "Untitled";
     std::string created;
 
-    enum class DisplayCRS { WGS84, OSGB_NG };
-    DisplayCRS display_crs = DisplayCRS::OSGB_NG;
-
     GridDef                     grid;
     Frequencies                 frequencies;
     ReceiverModel               receiver;

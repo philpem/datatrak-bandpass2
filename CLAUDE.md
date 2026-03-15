@@ -207,7 +207,6 @@ apply to the network as a whole rather than to individual stations:
 - Scenario name
 - F1 frequency (kHz) — floating-point field, 4 decimal places, step 0.0001
 - F2 frequency (kHz) — as above
-- Display CRS (OSGB National Grid / WGS84)
 - Datum transform (Helmert / OSTN15)
 - Grid bounds (lat/lon min/max) and resolution (km)
 - Terrain source (Flat / SRTM / File) with file picker
@@ -491,8 +490,7 @@ patterns until the transmitters are physically calibrated during commissioning.
 
 ## TOML scenario file format
 
-Internal storage is always WGS84. `display_crs` controls which coordinate
-system is shown in the UI.
+Internal storage is always WGS84.
 
 ### Transmitter sites and slots
 
@@ -538,7 +536,6 @@ height_m = 50.0
 [scenario]
 name         = "UK Datatrak baseline"
 created      = 2025-01-01
-display_crs  = "osgb_ng"    # wgs84 | osgb_ng
 
 [grid]
 lat_min      = 49.5
@@ -738,7 +735,7 @@ build → test → archive artifact.
 | P1-06 | ✓ | `coords/` module: WGS84↔OSGB36 (Helmert), National Grid E/N↔lat/lon, grid ref formatting, OSTN15 loader stub. Regression tests vs known OS benchmark points. |
 | P1-07 | ✓ | Transmitter placement UI: click map → add/drag transmitters, coordinate display in both systems, sync to Scenario |
 | P1-08 | ✓ | Parameter editor panel (`ParamEditor`): per-transmitter and per-receiver forms, validation, simple/advanced receiver mode toggle |
-| P1-08b | ✓ | Network Configuration panel (`NetworkConfigPanel`): scenario name, F1/F2 frequency fields, display CRS, datum, grid bounds/resolution, terrain source, conductivity source. 500 ms debounce → full recompute. |
+| P1-08b | ✓ | Network Configuration panel (`NetworkConfigPanel`): scenario name, F1/F2 frequency fields, datum, grid bounds/resolution, terrain source, conductivity source. 500 ms debounce → full recompute. |
 | P1-09 | ✓ | `ComputeManager` + worker thread: grid definition, message queue, cancellation flag, `wxQueueEvent` dispatch. Unit tests. |
 
 ### Phase 2 — Core propagation (partial)
