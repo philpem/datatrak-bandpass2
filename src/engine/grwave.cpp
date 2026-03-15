@@ -301,12 +301,13 @@ double residue_atten(double k, double d_km, double ae, double nu, cx q) {
 } // anonymous namespace
 
 // =========================================================================
-// Public API
+// Full GRWAVE computation (always runs the residue series — used for LUT
+// construction and when no LUT is active).
 // =========================================================================
-double grwave_field_dbuvm(double freq_hz,
-                           double dist_km,
-                           const GroundConstants& gc,
-                           double power_w)
+static double grwave_field_full(double freq_hz,
+                                 double dist_km,
+                                 const GroundConstants& gc,
+                                 double power_w)
 {
     if (dist_km <= 0.0 || power_w <= 0.0) return -200.0;
 
@@ -350,6 +351,110 @@ double grwave_field_dbuvm(double freq_hz,
     atten = std::clamp(atten, 0.0, 1.0);
     double atten_db = 20.0 * std::log10(std::max(atten, 1e-20));
     return E0_dbuvm + atten_db;
+}
+
+// =========================================================================
+// Public API — uses LUT when available, full computation otherwise
+// =========================================================================
+double grwave_field_dbuvm(double freq_hz,
+                           double dist_km,
+                           const GroundConstants& gc,
+                           double power_w)
+{
+    auto* lut = GrwaveLUT::active();
+    if (lut && lut->freq_hz() == freq_hz)
+        return lut->lookup(dist_km, gc, power_w);
+    return grwave_field_full(freq_hz, dist_km, gc, power_w);
+}
+
+// =========================================================================
+// GrwaveLUT implementation
+// =========================================================================
+
+thread_local const GrwaveLUT* GrwaveLUT::active_ = nullptr;
+
+const GrwaveLUT* GrwaveLUT::active() { return active_; }
+
+GrwaveLUT::Scope::Scope(const GrwaveLUT& lut) {
+    prev_ = active_;
+    active_ = &lut;
+}
+
+GrwaveLUT::Scope::~Scope() {
+    active_ = prev_;
+}
+
+GrwaveLUT::GrwaveLUT(double freq_hz)
+    : freq_hz_(freq_hz)
+{
+    dist_step_  = (LOG_DIST_MAX  - LOG_DIST_MIN)  / (N_DIST  - 1);
+    sigma_step_ = (LOG_SIGMA_MAX - LOG_SIGMA_MIN) / (N_SIGMA - 1);
+
+    // Precompute attenuation at each (dist, sigma) grid point.
+    // Use power_w = 1 kW so the free-space reference E0 at d=1 km is
+    // 300 mV/m = 109.54 dBuV/m.  Store atten_db = field - E0 so that
+    // lookup() can reconstruct any power level cheaply.
+    for (int di = 0; di < N_DIST; ++di) {
+        double log_d = LOG_DIST_MIN + di * dist_step_;
+        double d_km  = std::pow(10.0, log_d);
+
+        // E0 at this distance for 1 kW
+        double E0_uvm   = 300.0e3 / d_km;
+        double E0_dbuvm = 20.0 * std::log10(std::max(E0_uvm, 1e-20));
+
+        for (int si = 0; si < N_SIGMA; ++si) {
+            double log_s = LOG_SIGMA_MIN + si * sigma_step_;
+            double sigma = std::pow(10.0, log_s);
+
+            // eps_r: sigma >= 1 S/m is sea-like, else land-like.
+            // At LF the choice barely matters (sigma/(eps0*omega) >> eps_r).
+            double eps_r = (sigma >= 1.0) ? 70.0 : 15.0;
+            GroundConstants gc{ sigma, eps_r };
+
+            double field = grwave_field_full(freq_hz, d_km, gc, 1000.0);
+            atten_db_[di * N_SIGMA + si] = field - E0_dbuvm;
+        }
+    }
+}
+
+double GrwaveLUT::lookup(double dist_km, const GroundConstants& gc,
+                          double power_w) const
+{
+    if (dist_km <= 0.0 || power_w <= 0.0) return -200.0;
+
+    // Free-space reference for the actual power and distance
+    double P_kW = power_w / 1000.0;
+    double E0_uvm   = 300.0e3 * std::sqrt(P_kW) / dist_km;
+    double E0_dbuvm = 20.0 * std::log10(std::max(E0_uvm, 1e-20));
+
+    // Locate in log-space and bilinearly interpolate
+    double log_d = std::log10(std::max(dist_km, 0.1));
+    double log_s = std::log10(std::max(gc.sigma, 5e-4));
+
+    double fd = (log_d - LOG_DIST_MIN) / dist_step_;
+    double fs = (log_s - LOG_SIGMA_MIN) / sigma_step_;
+
+    // Clamp to table bounds
+    fd = std::clamp(fd, 0.0, (double)(N_DIST  - 1));
+    fs = std::clamp(fs, 0.0, (double)(N_SIGMA - 1));
+
+    int di0 = std::min((int)fd, N_DIST  - 2);
+    int si0 = std::min((int)fs, N_SIGMA - 2);
+    double td = fd - di0;
+    double ts = fs - si0;
+
+    // Bilinear interpolation
+    double v00 = atten_db_[di0       * N_SIGMA + si0    ];
+    double v10 = atten_db_[(di0 + 1) * N_SIGMA + si0    ];
+    double v01 = atten_db_[di0       * N_SIGMA + si0 + 1];
+    double v11 = atten_db_[(di0 + 1) * N_SIGMA + si0 + 1];
+
+    double atten = v00 * (1.0 - td) * (1.0 - ts)
+                 + v10 * td         * (1.0 - ts)
+                 + v01 * (1.0 - td) * ts
+                 + v11 * td         * ts;
+
+    return E0_dbuvm + atten;
 }
 
 } // namespace bp
