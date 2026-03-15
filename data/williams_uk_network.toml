@@ -33,11 +33,11 @@
 #   Williams notes SPO values are "known" (§I.2, p213) but does not list them.
 #
 # Multi-slot stations:  Asserby (slots 6, 16) and Southport (slots 7, 13)
-#   each appear as two entries with identical coordinates but different
-#   slot/master_slot (Williams Appendix K, pp221-222).
+#   each transmit on two slots from one physical mast. They are represented
+#   here as single [[transmitter_sites]] with two [[transmitter_sites.slots]]
+#   entries. (Williams Appendix K, pp221-222)
 #
-#
-# 15 transmitter entries for 13 physical stations.
+# 13 transmitter sites for 13 physical stations; 15 slots total.
 # =============================================================================
 [scenario]
 name        = "Williams (2004) UK Datatrak Network"
@@ -61,53 +61,63 @@ min_stations         = 4
 vp_ms                = 299892718
 ellipsoid            = "airy1830"
 # =============================================================================
-# Transmitters
+# Transmitter sites
 # =============================================================================
+
 # --- Huntingdon (MASTER) ---
 # OSGB: 513054E, 262453N
 # Power: f1=36W, f2=23W measured (Table 4.3, p39); avg=29.5W
 # Delay: not measured (master); using 0.0
-[[transmitters]]
-name             = "Huntingdon"
-lat              = 52.248652
-lon              = -0.345416
-power_w          = 29.5
-height_m         = 50.0
-slot             = 1
-is_master        = true
-master_slot      = 0
-spo_us           = 0.0
-station_delay_us = 0.0
+[[transmitter_sites]]
+name     = "Huntingdon"
+lat      = 52.248652
+lon      = -0.345416
+power_w  = 29.5
+height_m = 50.0
+
+  [[transmitter_sites.slots]]
+  slot             = 1
+  is_master        = true
+  master_slot      = 0
+  spo_us           = 0.0
+  station_delay_us = 0.0
+
 # --- Selsey ---
 # OSGB: 485278E, 96602N
 # Power: Datatrak nominal f1=40W, f2=20W (§4.6, p38); avg=30.0W
 # Delay: not measured; using average 0.22 μs (§11.3.1.2, p161)
-[[transmitters]]
-name             = "Selsey"
-lat              = 50.762753
-lon              = -0.792227
-power_w          = 30.0
-height_m         = 50.0
-slot             = 2
-is_master        = false
-master_slot      = 1
-spo_us           = 0.0
-station_delay_us = 0.22
+[[transmitter_sites]]
+name     = "Selsey"
+lat      = 50.762753
+lon      = -0.792227
+power_w  = 30.0
+height_m = 50.0
+
+  [[transmitter_sites.slots]]
+  slot             = 2
+  is_master        = false
+  master_slot      = 1
+  spo_us           = 0.0
+  station_delay_us = 0.22
+
 # --- Kent ---
 # OSGB: 602669E, 126836N
 # Power: Datatrak nominal f1=40W, f2=20W (§4.6, p38); avg=30.0W
 # Delay: not measured; using average 0.22 μs
-[[transmitters]]
-name             = "Kent"
-lat              = 51.005200
-lon              = 0.887391
-power_w          = 30.0
-height_m         = 50.0
-slot             = 3
-is_master        = false
-master_slot      = 1
-spo_us           = 0.0
-station_delay_us = 0.22
+[[transmitter_sites]]
+name     = "Kent"
+lat      = 51.005200
+lon      = 0.887391
+power_w  = 30.0
+height_m = 50.0
+
+  [[transmitter_sites.slots]]
+  slot             = 3
+  is_master        = false
+  master_slot      = 1
+  spo_us           = 0.0
+  station_delay_us = 0.22
+
 # --- Stratford-upon-Avon (also "Kineton") ---
 # OSGB: 433823E, 249974N
 # Also referred to as "Kineton" in DTM-170 §7.4; radiates almanac information.
@@ -119,152 +129,161 @@ station_delay_us = 0.22
 #    system." (§4.6, p39)
 # Delay: measured (Table 11.2, p162): f1+=0.12, f1-=0.11, f2+=0.17,
 #   f2-=0.14 μs; avg=0.135 μs
-[[transmitters]]
-name             = "Stratford-upon-Avon"
-lat              = 52.147024
-lon              = -1.507124
-power_w          = 64.0
-height_m         = 50.0
-slot             = 4
-is_master        = false
-master_slot      = 1
-spo_us           = 0.0
-station_delay_us = 0.135
+[[transmitter_sites]]
+name     = "Stratford-upon-Avon"
+lat      = 52.147024
+lon      = -1.507124
+power_w  = 64.0
+height_m = 50.0
+
+  [[transmitter_sites.slots]]
+  slot             = 4
+  is_master        = false
+  master_slot      = 1
+  spo_us           = 0.0
+  station_delay_us = 0.135
+
 # --- Lowestoft ---
 # OSGB: 641033E, 304123N
 # Power: Datatrak nominal f1=40W, f2=20W (§4.6, p38); avg=30.0W
 #   Confirmed at nominal in field strength verification (Table 4.4, p42)
 # Delay: not measured; using average 0.22 μs
-[[transmitters]]
-name             = "Lowestoft"
-lat              = 52.581448
-lon              = 1.556345
-power_w          = 30.0
-height_m         = 50.0
-slot             = 5
-is_master        = false
-master_slot      = 1
-spo_us           = 0.0
-station_delay_us = 0.22
-# --- Asserby (Skegness), Slot 6 ---
+[[transmitter_sites]]
+name     = "Lowestoft"
+lat      = 52.581448
+lon      = 1.556345
+power_w  = 30.0
+height_m = 50.0
+
+  [[transmitter_sites.slots]]
+  slot             = 5
+  is_master        = false
+  master_slot      = 1
+  spo_us           = 0.0
+  station_delay_us = 0.22
+
+# --- Asserby (Skegness) ---
 # OSGB: 548892E, 377459N
 # Power: Datatrak nominal f1=40W, f2=20W (§4.6, p38); avg=30.0W
 #   Confirmed at nominal in field strength verification (Table 4.4, p42;
 #   listed as "Skegness")
 # Delay: measured (Table 11.2, p162): f1+=0.05, f1-=0.03, f2+=0.08,
 #   f2-=0.05 μs; avg=0.053 μs
-# Note: Multi-slot station. Slot 6 (standard, master: Stratford).
-[[transmitters]]
-name             = "Asserby"
-lat              = 53.273217
-lon              = 0.231368
-power_w          = 30.0
-height_m         = 50.0
-slot             = 6
-is_master        = false
-master_slot      = 4
-spo_us           = 0.0
-station_delay_us = 0.053
-# --- Asserby (Skegness), Slot 16 ---
-# Same physical station as above.
-# Slot 16 (interlaced, master: Cumbria).
+# Multi-slot: slot 6 (standard, master: Stratford) and
+#             slot 16 (interlaced, master: Cumbria).
 # "two stations in the UK transmit on two slots (Asserby and Southport),
 #  each with a different master" (Appendix K, p221)
-[[transmitters]]
-name             = "Asserby"
-lat              = 53.273217
-lon              = 0.231368
-power_w          = 30.0
-height_m         = 50.0
-slot             = 16
-is_master        = false
-master_slot      = 10
-spo_us           = 0.0
-station_delay_us = 0.053
-# --- Southport, Slot 7 ---
+[[transmitter_sites]]
+name     = "Asserby"
+lat      = 53.273217
+lon      = 0.231368
+power_w  = 30.0
+height_m = 50.0
+
+  [[transmitter_sites.slots]]
+  slot             = 6
+  is_master        = false
+  master_slot      = 4
+  spo_us           = 0.0
+  station_delay_us = 0.053
+
+  [[transmitter_sites.slots]]
+  slot             = 16
+  is_master        = false
+  master_slot      = 10
+  spo_us           = 0.0
+  station_delay_us = 0.053
+
+# --- Southport ---
 # OSGB: 335235E, 414251N
 # Power: f1=40W, f2=22W measured (Table 4.3, p39); avg=31.0W
 # Delay: measured (Table 11.2, p162): f1+=0.23, f1-=0.22, f2+=0.18,
 #   f2-=0.17 μs; avg=0.200 μs
-# Note: Multi-slot station. Slot 7 (standard, master: Huntingdon).
-[[transmitters]]
-name             = "Southport"
-lat              = 53.620775
-lon              = -2.980613
-power_w          = 31.0
-height_m         = 50.0
-slot             = 7
-is_master        = false
-master_slot      = 1
-spo_us           = 0.0
-station_delay_us = 0.200
-# --- Southport, Slot 13 ---
-# Same physical station as above.
-# Slot 13 (interlaced, master: Cumbria).
+# Multi-slot: slot 7 (standard, master: Huntingdon) and
+#             slot 13 (interlaced, master: Cumbria).
 # "The Southport transmitter transmits on slots 7 (master: Huntingdon
 #  station) and 13 (master: Cumbria station)." (Appendix K, p222)
-[[transmitters]]
-name             = "Southport"
-lat              = 53.620775
-lon              = -2.980613
-power_w          = 31.0
-height_m         = 50.0
-slot             = 13
-is_master        = false
-master_slot      = 10
-spo_us           = 0.0
-station_delay_us = 0.200
+[[transmitter_sites]]
+name     = "Southport"
+lat      = 53.620775
+lon      = -2.980613
+power_w  = 31.0
+height_m = 50.0
+
+  [[transmitter_sites.slots]]
+  slot             = 7
+  is_master        = false
+  master_slot      = 1
+  spo_us           = 0.0
+  station_delay_us = 0.200
+
+  [[transmitter_sites.slots]]
+  slot             = 13
+  is_master        = false
+  master_slot      = 10
+  spo_us           = 0.0
+  station_delay_us = 0.200
+
 # --- Cowbridge ---
 # OSGB: 296017E, 172581N
 # Power: Datatrak nominal f1=40W, f2=20W (§4.6, p38); avg=30.0W
 #   Confirmed at nominal in field strength verification (Table 4.4, p42)
 # Delay: measured (Table 11.2, p162): f1+=0.40, f1-=0.39, f2+=0.63,
 #   f2-=0.63 μs; avg=0.513 μs
-[[transmitters]]
-name             = "Cowbridge"
-lat              = 51.442644
-lon              = -3.497546
-power_w          = 30.0
-height_m         = 50.0
-slot             = 8
-is_master        = false
-master_slot      = 4
-spo_us           = 0.0
-station_delay_us = 0.513
+[[transmitter_sites]]
+name     = "Cowbridge"
+lat      = 51.442644
+lon      = -3.497546
+power_w  = 30.0
+height_m = 50.0
+
+  [[transmitter_sites.slots]]
+  slot             = 8
+  is_master        = false
+  master_slot      = 4
+  spo_us           = 0.0
+  station_delay_us = 0.513
+
 # --- Cumbria ---
 # OSGB: 323915E, 552588N
 # Power: Datatrak nominal f1=40W, f2=20W (§4.6, p38); avg=30.0W
 # Delay: measured (Table 11.2, p162): f1+=0.24, f1-=0.20, f2+=0.29,
 #   f2-=0.23 μs; avg=0.240 μs
 # Note: Williams and Table 11.2 refer to this station as "Carlisle".
-[[transmitters]]
-name             = "Cumbria"
-lat              = 54.862266
-lon              = -3.186876
-power_w          = 30.0
-height_m         = 50.0
-slot             = 10
-is_master        = false
-master_slot      = 7
-spo_us           = 0.0
-station_delay_us = 0.240
+[[transmitter_sites]]
+name     = "Cumbria"
+lat      = 54.862266
+lon      = -3.186876
+power_w  = 30.0
+height_m = 50.0
+
+  [[transmitter_sites.slots]]
+  slot             = 10
+  is_master        = false
+  master_slot      = 7
+  spo_us           = 0.0
+  station_delay_us = 0.240
+
 # --- Greenock ---
 # OSGB: 221905E, 675080N
 # Power: Datatrak nominal f1=40W, f2=20W (§4.6, p38); avg=30.0W
 # Delay: not measured; using average 0.22 μs
 # Note: Williams Table K.1 assigns slot 12; Locator firmware (#251RX,
 #   #217RX, #3675RX) all assign slot 11. Using firmware value.
-[[transmitters]]
-name             = "Greenock"
-lat              = 55.935688
-lon              = -4.852757
-power_w          = 30.0
-height_m         = 50.0
-slot             = 11
-is_master        = false
-master_slot      = 10
-spo_us           = 0.0
-station_delay_us = 0.22
+[[transmitter_sites]]
+name     = "Greenock"
+lat      = 55.935688
+lon      = -4.852757
+power_w  = 30.0
+height_m = 50.0
+
+  [[transmitter_sites.slots]]
+  slot             = 11
+  is_master        = false
+  master_slot      = 10
+  spo_us           = 0.0
+  station_delay_us = 0.22
+
 # --- Alnwick ---
 # OSGB: 418951E, 606769N
 # Power: Datatrak nominal f1=40W, f2=20W (§4.6, p38); avg=30.0W
@@ -273,48 +292,57 @@ station_delay_us = 0.22
 #   firmware (#251RX, #217RX, #3675RX) all assign slot 12. Using firmware
 #   value. Locator almanac data from all three units agrees on these
 #   assignments; Williams appears to have the slots swapped.
-[[transmitters]]
-name             = "Alnwick"
-lat              = 55.354577
-lon              = -1.702661
-power_w          = 30.0
-height_m         = 50.0
-slot             = 12
-is_master        = false
-master_slot      = 10
-spo_us           = 0.0
-station_delay_us = 0.22
+[[transmitter_sites]]
+name     = "Alnwick"
+lat      = 55.354577
+lon      = -1.702661
+power_w  = 30.0
+height_m = 50.0
+
+  [[transmitter_sites.slots]]
+  slot             = 12
+  is_master        = false
+  master_slot      = 10
+  spo_us           = 0.0
+  station_delay_us = 0.22
+
 # --- Kingsbridge ---
 # OSGB: 276825E, 37095N
 # Power: Datatrak nominal f1=40W, f2=20W (§4.6, p38); avg=30.0W
 # Delay: not measured; using average 0.22 μs
-[[transmitters]]
-name             = "Kingsbridge"
-lat              = 50.221003
-lon              = -3.727984
-power_w          = 30.0
-height_m         = 50.0
-slot             = 14
-is_master        = false
-master_slot      = 4
-spo_us           = 0.0
-station_delay_us = 0.22
+[[transmitter_sites]]
+name     = "Kingsbridge"
+lat      = 50.221003
+lon      = -3.727984
+power_w  = 30.0
+height_m = 50.0
+
+  [[transmitter_sites.slots]]
+  slot             = 14
+  is_master        = false
+  master_slot      = 4
+  spo_us           = 0.0
+  station_delay_us = 0.22
+
 # --- Stonehaven ---
 # OSGB: 378398E, 772013N
 # Power: Datatrak nominal f1=40W, f2=20W (§4.6, p38); avg=30.0W
 # Delay: not measured; using average 0.22 μs
 # Note: Northernmost UK Datatrak station.
-[[transmitters]]
-name             = "Stonehaven"
-lat              = 56.839071
-lon              = -2.355684
-power_w          = 30.0
-height_m         = 50.0
-slot             = 15
-is_master        = false
-master_slot      = 10
-spo_us           = 0.0
-station_delay_us = 0.22
+[[transmitter_sites]]
+name     = "Stonehaven"
+lat      = 56.839071
+lon      = -2.355684
+power_w  = 30.0
+height_m = 50.0
+
+  [[transmitter_sites.slots]]
+  slot             = 15
+  is_master        = false
+  master_slot      = 10
+  spo_us           = 0.0
+  station_delay_us = 0.22
+
 # =============================================================================
 # Optional sections
 # =============================================================================
