@@ -167,8 +167,10 @@ Scenario load(const std::filesystem::path& path) {
     // [terrain]
     if (auto t = tbl["terrain"].as_table()) {
         std::string src = str((*t)["source"], "flat");
-        if      (src == "srtm")      s.terrain_source = Scenario::TerrainSource::SRTM;
-        else if (src.size() > 1 && src[0] == '/')  {
+        if (src == "srtm") {
+            s.terrain_source = Scenario::TerrainSource::SRTM;
+            s.terrain_file   = str((*t)["tile_dir"], "");
+        } else if (src.size() > 1 && src[0] == '/')  {
             s.terrain_source = Scenario::TerrainSource::File;
             s.terrain_file   = src;
         } else {
@@ -286,9 +288,16 @@ void save(const Scenario& s, const std::filesystem::path& path) {
     tbl.insert("conductivity", toml::table{{"source", cond_src}});
 
     std::string terr_src = "flat";
-    if      (s.terrain_source == Scenario::TerrainSource::SRTM) terr_src = "srtm";
-    else if (s.terrain_source == Scenario::TerrainSource::File) terr_src = s.terrain_file;
-    tbl.insert("terrain", toml::table{{"source", terr_src}});
+    if (s.terrain_source == Scenario::TerrainSource::SRTM) {
+        terr_src = "srtm";
+        toml::table terr_tbl{{"source", terr_src}};
+        if (!s.terrain_file.empty())
+            terr_tbl.insert("tile_dir", s.terrain_file);
+        tbl.insert("terrain", std::move(terr_tbl));
+    } else {
+        if (s.terrain_source == Scenario::TerrainSource::File) terr_src = s.terrain_file;
+        tbl.insert("terrain", toml::table{{"source", terr_src}});
+    }
 
     // Propagation model
     std::string prop_mdl = (s.propagation_model == Scenario::PropagationModel::GRWAVE)

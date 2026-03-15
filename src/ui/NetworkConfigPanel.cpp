@@ -312,8 +312,10 @@ void NetworkConfigPanel::SaveToScenario() {
     // Terrain
     int terr_sel = terrain_src_->GetSelection();
     if (terr_sel == 0)      scenario_->terrain_source = Scenario::TerrainSource::Flat;
-    else if (terr_sel == 1) scenario_->terrain_source = Scenario::TerrainSource::SRTM;
-    else {
+    else if (terr_sel == 1) {
+        scenario_->terrain_source = Scenario::TerrainSource::SRTM;
+        scenario_->terrain_file = terrain_file_->GetValue().ToStdString();
+    } else {
         scenario_->terrain_source = Scenario::TerrainSource::File;
         scenario_->terrain_file = terrain_file_->GetValue().ToStdString();
     }
@@ -412,15 +414,27 @@ void NetworkConfigPanel::OnCondSrcChanged(wxCommandEvent& /*evt*/) {
 }
 
 void NetworkConfigPanel::OnTerrainBrowse(wxCommandEvent& /*evt*/) {
-    wxFileDialog dlg(this, "Select terrain data file", "", "",
-                     "GeoTIFF (*.tif;*.tiff)|*.tif;*.tiff|"
-                     "HGT (*.hgt)|*.hgt|"
-                     "All files (*)|*",
-                     wxFD_OPEN | wxFD_FILE_MUST_EXIST);
-    if (dlg.ShowModal() == wxID_OK) {
-        terrain_file_->ChangeValue(dlg.GetPath());
-        UpdateTerrainLabel();
-        debounce_.StartOnce(500);
+    if (terrain_src_->GetSelection() == 1) {
+        // SRTM mode — pick a directory of .hgt tiles
+        wxDirDialog dlg(this, "Select SRTM tile directory", "",
+                        wxDD_DEFAULT_STYLE | wxDD_DIR_MUST_EXIST);
+        if (dlg.ShowModal() == wxID_OK) {
+            terrain_file_->ChangeValue(dlg.GetPath());
+            UpdateTerrainLabel();
+            debounce_.StartOnce(500);
+        }
+    } else {
+        // File mode — pick a GeoTIFF
+        wxFileDialog dlg(this, "Select terrain data file", "", "",
+                         "GeoTIFF (*.tif;*.tiff)|*.tif;*.tiff|"
+                         "HGT (*.hgt)|*.hgt|"
+                         "All files (*)|*",
+                         wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+        if (dlg.ShowModal() == wxID_OK) {
+            terrain_file_->ChangeValue(dlg.GetPath());
+            UpdateTerrainLabel();
+            debounce_.StartOnce(500);
+        }
     }
 }
 
@@ -443,9 +457,10 @@ void NetworkConfigPanel::OnFilePath(wxCommandEvent& /*evt*/) {
 }
 
 void NetworkConfigPanel::UpdateTerrainFileState() {
-    bool file_mode = (terrain_src_->GetSelection() == 2);
-    terrain_file_->Enable(file_mode);
-    terrain_browse_->Enable(file_mode);
+    int sel = terrain_src_->GetSelection();
+    bool need_path = (sel == 1 || sel == 2);  // SRTM directory or File
+    terrain_file_->Enable(need_path);
+    terrain_browse_->Enable(need_path);
 }
 
 void NetworkConfigPanel::UpdateCondFileState() {
@@ -540,8 +555,17 @@ void NetworkConfigPanel::UpdateTerrainLabel() {
     if (sel == 0) {
         // Flat — always available
     } else if (sel == 1) {
-        // SRTM — uses downloaded tiles; no user-settable path
-        msg = "Run srtm_download.py to fetch tiles if needed";
+        // SRTM — directory of .hgt tiles from srtm_download.py --no-merge
+        wxString path = terrain_file_->GetValue();
+        if (path.empty()) {
+            msg = "Set path to SRTM tile directory (from srtm_download.py --no-merge)";
+            col = *wxRED;
+        } else if (!wxFileName::DirExists(path)) {
+            msg = "Directory not found - using flat fallback";
+            col = *wxRED;
+        } else {
+            msg = "SRTM tile directory OK";
+        }
     } else {
         // File — user sets the path; check it exists
         wxString path = terrain_file_->GetValue();

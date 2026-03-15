@@ -182,7 +182,10 @@ double GdalTerrainMap::height_at(double lat, double lon) const {
 std::unique_ptr<TerrainMap> make_terrain_map(const Scenario& scenario) {
     using TS = Scenario::TerrainSource;
 
-    if (scenario.terrain_source == TS::Flat || scenario.terrain_file.empty())
+    if (scenario.terrain_source == TS::Flat)
+        return std::make_unique<FlatTerrainMap>();
+
+    if (scenario.terrain_file.empty())
         return std::make_unique<FlatTerrainMap>();
 
     bool srtm_dir = (scenario.terrain_source == TS::SRTM);
