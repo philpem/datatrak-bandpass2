@@ -180,8 +180,9 @@ Scenario load(const std::filesystem::path& path) {
     // [propagation]
     if (auto p = tbl["propagation"].as_table()) {
         std::string mdl = str((*p)["model"], "millington");
-        s.propagation_model = (mdl == "homogeneous") ? Scenario::PropagationModel::Homogeneous
-                                                      : Scenario::PropagationModel::Millington;
+        if      (mdl == "homogeneous") s.propagation_model = Scenario::PropagationModel::Homogeneous;
+        else if (mdl == "grwave")      s.propagation_model = Scenario::PropagationModel::GRWAVE;
+        else                           s.propagation_model = Scenario::PropagationModel::Millington;
     }
 
     return s;
@@ -290,7 +291,9 @@ void save(const Scenario& s, const std::filesystem::path& path) {
     tbl.insert("terrain", toml::table{{"source", terr_src}});
 
     // Propagation model
-    std::string prop_mdl = (s.propagation_model == Scenario::PropagationModel::Homogeneous)
+    std::string prop_mdl = (s.propagation_model == Scenario::PropagationModel::GRWAVE)
+                           ? "grwave"
+                           : (s.propagation_model == Scenario::PropagationModel::Homogeneous)
                            ? "homogeneous" : "millington";
     tbl.insert("propagation", toml::table{{"model", prop_mdl}});
 

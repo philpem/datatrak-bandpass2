@@ -5,6 +5,7 @@ set(BP_SOURCES
     coords/NationalGrid.cpp
     engine/grid.cpp
     engine/groundwave.cpp
+    engine/grwave.cpp
     engine/skywave.cpp
     engine/noise.cpp
     engine/snr.cpp

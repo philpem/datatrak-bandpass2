@@ -251,6 +251,16 @@ TEST_CASE("Propagation model round-trip: Homogeneous", "[toml_io]") {
     std::filesystem::remove(path);
 }
 
+TEST_CASE("Propagation model round-trip: GRWAVE", "[toml_io]") {
+    Scenario s;
+    s.propagation_model = Scenario::PropagationModel::GRWAVE;
+    auto path = std::filesystem::temp_directory_path() / "bp2_prop_grw.toml";
+    toml_io::save(s, path);
+    auto s2 = toml_io::load(path);
+    REQUIRE(s2.propagation_model == Scenario::PropagationModel::GRWAVE);
+    std::filesystem::remove(path);
+}
+
 TEST_CASE("Missing [propagation] section defaults to Millington", "[toml_io]") {
     auto path = std::filesystem::temp_directory_path() / "bp2_no_prop.toml";
     {

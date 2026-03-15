@@ -52,6 +52,7 @@ bp_add_test(test_compute_manager
 bp_add_test(test_groundwave
     engine/test_groundwave.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/groundwave.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/grwave.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/conductivity.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/terrain.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/noise.cpp
@@ -67,6 +68,7 @@ bp_add_test(test_snr_whdop
     ${CMAKE_SOURCE_DIR}/src/engine/snr.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/whdop.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/groundwave.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/grwave.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/conductivity.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/terrain.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/noise.cpp
@@ -81,6 +83,7 @@ bp_add_test(test_asf
     ${CMAKE_SOURCE_DIR}/src/engine/asf.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/monteath.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/groundwave.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/grwave.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/conductivity.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/terrain.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/noise.cpp
@@ -99,6 +102,7 @@ bp_add_test(test_almanac_export
     ${CMAKE_SOURCE_DIR}/src/almanac/ZonePatterns.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/monteath.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/groundwave.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/grwave.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/conductivity.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/terrain.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/noise.cpp
@@ -132,6 +136,7 @@ bp_add_test(test_zone_patterns
     ${CMAKE_SOURCE_DIR}/src/almanac/AlmanacExport.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/monteath.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/groundwave.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/grwave.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/conductivity.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/terrain.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/noise.cpp
