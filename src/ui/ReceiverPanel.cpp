@@ -55,10 +55,21 @@ ReceiverPanel::ReceiverPanel(wxWindow* parent)
     sizer->Add(bottom_row, 0, wxALL, 6);
 
     SetSizer(sizer);
+
+    // Initially disabled until a receiver is placed
+    list_->Enable(false);
+    units_choice_->Enable(false);
+    sort_choice_->Enable(false);
+    export_btn_->Enable(false);
 }
 
 void ReceiverPanel::SetResults(const std::vector<SlotPhaseResult>& results) {
     results_ = results;
+    bool has_data = !results_.empty();
+    list_->Enable(has_data);
+    units_choice_->Enable(has_data);
+    sort_choice_->Enable(has_data);
+    export_btn_->Enable(has_data);
     RefreshTable();
 }
 
@@ -136,6 +147,10 @@ void ReceiverPanel::Clear() {
     results_.clear();
     list_->DeleteAllItems();
     pos_label_->SetLabel("No receiver placed");
+    list_->Enable(false);
+    units_choice_->Enable(false);
+    sort_choice_->Enable(false);
+    export_btn_->Enable(false);
 }
 
 void ReceiverPanel::OnUnitsChanged(wxCommandEvent& /*evt*/) {

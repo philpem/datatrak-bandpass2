@@ -39,10 +39,15 @@ public:
     std::function<void(int site_id)>                         on_site_deleted;
     std::function<void(const ReceiverModel&)>                on_receiver_changed;
     std::function<void(bool locked)>                         on_rx_lock_changed;
+    std::function<void(int site_id)>                         on_site_selected;
 
 private:
     void BuildTransmitterPage(wxWindow* page);
     void BuildReceiverPage(wxWindow* page);
+
+    // Transmitter site dropdown selection change
+    void OnSiteDropdown(wxCommandEvent& evt);
+    void UpdateTxFieldsEnabled();
 
     // Site-level field change
     void OnSiteField(wxCommandEvent& evt);
@@ -68,6 +73,9 @@ private:
     wxNotebook* notebook_ = nullptr;
 
     // ── Transmitter tab ──────────────────────────────────────────────────────
+    // Site selector dropdown
+    wxChoice*   tx_site_choice_ = nullptr;
+
     // Site properties
     wxTextCtrl* tx_name_   = nullptr;
     wxTextCtrl* tx_lat_    = nullptr;
