@@ -134,6 +134,17 @@ MainFrame::MainFrame()
     param_editor_->on_site_deleted = [this](int id) {
         DeleteSite(id);
     };
+    param_editor_->on_site_selected = [this](int id) {
+        if (id >= 0 && id < (int)scenario_.transmitter_sites.size()) {
+            selected_site_id_ = id;
+            param_editor_->LoadSite(id, scenario_.transmitter_sites[id]);
+            map_panel_->SelectTransmitterMarker(id);
+        } else {
+            selected_site_id_ = -1;
+            param_editor_->ClearSelection();
+            map_panel_->SelectTransmitterMarker(-1);
+        }
+    };
 
     layer_panel_->on_select = [this](const std::string& layer) {
         // Clear whichever layer is currently displayed (including _log variants)

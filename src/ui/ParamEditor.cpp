@@ -46,6 +46,18 @@ ParamEditor::ParamEditor(wxWindow* parent)
 void ParamEditor::BuildTransmitterPage(wxWindow* page) {
     auto* outer_sizer = new wxBoxSizer(wxVERTICAL);
 
+    // ── Site selector dropdown ──────────────────────────────────────────────
+    {
+        auto* row = new wxBoxSizer(wxHORIZONTAL);
+        row->Add(new wxStaticText(page, wxID_ANY, "Transmitter:"),
+                 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 6);
+        tx_site_choice_ = new wxChoice(page, wxID_ANY);
+        tx_site_choice_->Append("(No transmitter selected)");
+        tx_site_choice_->SetSelection(0);
+        row->Add(tx_site_choice_, 1, wxEXPAND);
+        outer_sizer->Add(row, 0, wxEXPAND | wxALL, 6);
+    }
+
     // ── Site properties ────────────────────────────────────────────────────
     auto* site_box    = new wxStaticBox(page, wxID_ANY, "Site");
     auto* site_sizer  = new wxStaticBoxSizer(site_box, wxVERTICAL);
@@ -176,6 +188,11 @@ void ParamEditor::BuildTransmitterPage(wxWindow* page) {
         if (current_site_id_ >= 0 && on_site_deleted)
             on_site_deleted(current_site_id_);
     });
+
+    tx_site_choice_->Bind(wxEVT_CHOICE, &ParamEditor::OnSiteDropdown, this);
+
+    // Initially disable all transmitter fields (no site selected)
+    UpdateTxFieldsEnabled();
 }
 
 void ParamEditor::BuildReceiverPage(wxWindow* page) {
@@ -276,7 +293,13 @@ void ParamEditor::LoadSite(int id, const TransmitterSite& site) {
         tx_delay_->ChangeValue("0.000");
     }
     btn_remove_slot_->Enable(!site.slots.empty());
+
+    // Select this site in the dropdown (index = id + 1, since 0 = "no selection")
+    if (id + 1 < (int)tx_site_choice_->GetCount())
+        tx_site_choice_->SetSelection(id + 1);
+
     updating_ = false;
+    UpdateTxFieldsEnabled();
 }
 
 void ParamEditor::LoadReceiver(const ReceiverModel& rx) {
@@ -302,9 +325,18 @@ void ParamEditor::ClearSelection() {
     tx_name_->ChangeValue("");
     tx_lat_->ChangeValue("");
     tx_lon_->ChangeValue("");
+    tx_power_->ChangeValue("");
+    tx_height_->ChangeValue("");
+    tx_locked_->SetValue(false);
     tx_slot_list_->Clear();
-    tx_delete_->Enable(false);
+    tx_slot_num_->SetValue(1);
+    tx_master_->SetValue(false);
+    tx_mslot_choice_->SetSelection(0);
+    tx_spo_->ChangeValue("");
+    tx_delay_->ChangeValue("");
+    tx_site_choice_->SetSelection(0);
     updating_ = false;
+    UpdateTxFieldsEnabled();
 }
 
 // ---------------------------------------------------------------------------
@@ -313,8 +345,31 @@ void ParamEditor::ClearSelection() {
 
 void ParamEditor::SetSiteList(const std::vector<TransmitterSite>& sites) {
     site_list_ = sites;
-    if (current_site_id_ < 0) return;
+
+    // Rebuild site selector dropdown
     bool was_updating = updating_;
+    updating_ = true;
+    tx_site_choice_->Clear();
+    tx_site_choice_->Append("(No transmitter selected)");
+    for (const auto& s : site_list_) {
+        wxString label = wxString::FromUTF8(s.name);
+        if (!s.slots.empty()) {
+            label += wxString::Format(" [Slot %d", s.slots[0].slot);
+            for (size_t j = 1; j < s.slots.size(); ++j)
+                label += wxString::Format(",%d", s.slots[j].slot);
+            label += "]";
+        }
+        tx_site_choice_->Append(label);
+    }
+    // Restore selection: site IDs are vector indices, dropdown index = site_id + 1
+    if (current_site_id_ >= 0 && current_site_id_ < (int)site_list_.size())
+        tx_site_choice_->SetSelection(current_site_id_ + 1);
+    else
+        tx_site_choice_->SetSelection(0);
+    updating_ = was_updating;
+
+    if (current_site_id_ < 0) return;
+    was_updating = updating_;
     updating_ = true;
     int prev_sel = 0;
     int cur = tx_mslot_choice_->GetSelection();
@@ -455,6 +510,46 @@ void ParamEditor::UpdateSpoCalcState() {
     int sel = tx_mslot_choice_->GetSelection();
     bool has_master = !is_master && sel > 0 && sel < (int)master_slot_values_.size();
     btn_spo_calc_->Enable(has_master);
+}
+
+// ---------------------------------------------------------------------------
+// Transmitter site dropdown
+// ---------------------------------------------------------------------------
+
+void ParamEditor::OnSiteDropdown(wxCommandEvent& /*evt*/) {
+    if (updating_) return;
+    int sel = tx_site_choice_->GetSelection();
+    // Index 0 is "(No transmitter selected)", real sites start at index 1
+    if (sel <= 0 || sel > (int)site_list_.size()) {
+        // Deselected — clear fields and disable
+        ClearSelection();
+        if (on_site_selected)
+            on_site_selected(-1);
+    } else {
+        int site_id = sel - 1;
+        if (on_site_selected)
+            on_site_selected(site_id);
+    }
+}
+
+void ParamEditor::UpdateTxFieldsEnabled() {
+    bool enabled = (current_site_id_ >= 0);
+    tx_name_->Enable(enabled);
+    tx_lat_->Enable(enabled);
+    tx_lon_->Enable(enabled);
+    tx_power_->Enable(enabled);
+    tx_height_->Enable(enabled);
+    tx_locked_->Enable(enabled);
+    tx_slot_list_->Enable(enabled);
+    btn_add_slot_->Enable(enabled);
+    btn_remove_slot_->Enable(enabled && !current_site_.slots.empty());
+    tx_slot_num_->Enable(enabled);
+    tx_master_->Enable(enabled);
+    tx_mslot_choice_->Enable(enabled && !tx_master_->GetValue());
+    tx_spo_->Enable(enabled);
+    btn_spo_calc_->Enable(enabled);
+    tx_delay_->Enable(enabled);
+    tx_delete_->Enable(enabled);
 }
 
 // ---------------------------------------------------------------------------
