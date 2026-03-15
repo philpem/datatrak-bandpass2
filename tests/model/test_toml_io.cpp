@@ -272,6 +272,43 @@ TEST_CASE("Missing [propagation] section defaults to Millington", "[toml_io]") {
     std::filesystem::remove(path);
 }
 
+TEST_CASE("precompute_airy_cache defaults to true", "[toml_io]") {
+    auto path = std::filesystem::temp_directory_path() / "bp2_airy_default.toml";
+    {
+        std::ofstream f(path);
+        f << "[scenario]\nname = \"test\"\n";
+    }
+    auto s = toml_io::load(path);
+    REQUIRE(s.precompute_airy_cache == true);
+    std::filesystem::remove(path);
+}
+
+TEST_CASE("precompute_airy_cache round-trip when false", "[toml_io]") {
+    Scenario s;
+    s.precompute_airy_cache = false;
+    auto path = std::filesystem::temp_directory_path() / "bp2_airy_false.toml";
+    toml_io::save(s, path);
+    auto s2 = toml_io::load(path);
+    REQUIRE(s2.precompute_airy_cache == false);
+    std::filesystem::remove(path);
+}
+
+TEST_CASE("precompute_airy_cache not written when true (default)", "[toml_io]") {
+    Scenario s;
+    s.precompute_airy_cache = true;
+    auto path = std::filesystem::temp_directory_path() / "bp2_airy_true.toml";
+    toml_io::save(s, path);
+    // The key should not appear in the file when it's the default value
+    std::ifstream f(path);
+    std::string content((std::istreambuf_iterator<char>(f)),
+                         std::istreambuf_iterator<char>());
+    REQUIRE(content.find("precompute_airy_cache") == std::string::npos);
+    // But loading it back should still give true
+    auto s2 = toml_io::load(path);
+    REQUIRE(s2.precompute_airy_cache == true);
+    std::filesystem::remove(path);
+}
+
 TEST_CASE("Invalid TOML throws runtime_error", "[toml_io]") {
     auto path = std::filesystem::temp_directory_path() / "bp2_bad.toml";
     {

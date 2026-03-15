@@ -241,28 +241,38 @@ void computeASF(GridData& data, const Scenario& scenario,
     // These are needed both for building StationGeometry and inside the VL
     // fix iteration — caching avoids redundant GeographicLib Inverse() calls.
     // Layout: airy_dist[ti * n + i], airy_az[ti * n + i].
+    //
+    // When precompute_airy_cache is false, skip the bulk allocation (~16 bytes
+    // per TX-RX pair) and compute on-the-fly in the per-point loop instead.
+    // This trades speed for lower memory usage on large grids.
     // -----------------------------------------------------------------------
     size_t ntx = flat_txs.size();
-    std::vector<double> airy_dist(ntx * n);
-    std::vector<double> airy_az(ntx * n);
+    const bool use_airy_cache = scenario.precompute_airy_cache;
+    std::vector<double> airy_dist_cache;
+    std::vector<double> airy_az_cache;
 
-    for (size_t ti = 0; ti < ntx; ++ti) {
-        if (cancel.load()) return;
-        const auto& tx = flat_txs[ti];
-        if (tx.power_w <= 0.0) {
-            // Fill with sentinel values; will be skipped by power_w check below
-            for (size_t i = 0; i < n; ++i) {
-                airy_dist[ti * n + i] = 0.0;
-                airy_az[ti * n + i] = 0.0;
+    if (use_airy_cache) {
+        airy_dist_cache.resize(ntx * n);
+        airy_az_cache.resize(ntx * n);
+
+        for (size_t ti = 0; ti < ntx; ++ti) {
+            if (cancel.load()) return;
+            const auto& tx = flat_txs[ti];
+            if (tx.power_w <= 0.0) {
+                // Fill with sentinel values; will be skipped by power_w check below
+                for (size_t i = 0; i < n; ++i) {
+                    airy_dist_cache[ti * n + i] = 0.0;
+                    airy_az_cache[ti * n + i] = 0.0;
+                }
+                continue;
             }
-            continue;
-        }
-        for (size_t i = 0; i < n; ++i) {
-            double az = 0.0;
-            double d = airy_inverse(pts[i].lat, pts[i].lon,
-                                    tx.lat, tx.lon, az);
-            airy_dist[ti * n + i] = d;
-            airy_az[ti * n + i] = az;
+            for (size_t i = 0; i < n; ++i) {
+                double az = 0.0;
+                double d = airy_inverse(pts[i].lat, pts[i].lon,
+                                        tx.lat, tx.lon, az);
+                airy_dist_cache[ti * n + i] = d;
+                airy_az_cache[ti * n + i] = az;
+            }
         }
     }
 
@@ -274,14 +284,21 @@ void computeASF(GridData& data, const Scenario& scenario,
         std::vector<StationGeometry> stations;
         std::vector<double>          asf_m_vals;     // ASF in metres per station
         std::vector<size_t>          tx_idx_map;     // station k → flat_txs[idx]
+        std::vector<double>          raw_dist_m;     // exact Airy dist (no-cache path)
 
         for (size_t ti = 0; ti < flat_txs.size(); ++ti) {
             const auto& tx = flat_txs[ti];
             if (tx.power_w <= 0.0) continue;
 
-            // Azimuth and distance from pre-computed Airy cache
-            double az_deg = airy_az[ti * n + i];
-            double dist_m = airy_dist[ti * n + i];
+            // Azimuth and distance: from cache or computed on-the-fly
+            double az_deg, dist_m;
+            if (use_airy_cache) {
+                az_deg = airy_az_cache[ti * n + i];
+                dist_m = airy_dist_cache[ti * n + i];
+            } else {
+                dist_m = airy_inverse(pts[i].lat, pts[i].lon,
+                                      tx.lat, tx.lon, az_deg);
+            }
             double dist_km = std::max(dist_m / 1000.0, 0.1);
 
             // Groundwave SNR: reuse cached Stage 1 result when available,
@@ -311,6 +328,8 @@ void computeASF(GridData& data, const Scenario& scenario,
 
             stations.push_back(sg);
             tx_idx_map.push_back(ti);
+            if (!use_airy_cache)
+                raw_dist_m.push_back(dist_m);
 
             // Monteath ASF for this path at F1 (P4-01).
             // The VL absolute accuracy computation uses F1 ASF only; F2 paths
@@ -343,11 +362,17 @@ void computeASF(GridData& data, const Scenario& scenario,
             it_asf->second.values[i] = asf_mean_ml;
         asf_grid[i] = asf_mean_ml;
 
-        // Build per-station Airy distance cache for VL fix.
-        // Maps from station index (in stations[]) to pre-computed Airy distance.
+        // Build per-station Airy distance vector for VL fix.
+        // When the bulk cache is active, extract from it; otherwise the
+        // distances were already computed above and stored in StationGeometry,
+        // so recompute from dist_km (which came from the on-the-fly call).
         std::vector<double> station_dist_cache(stations.size());
-        for (size_t k = 0; k < stations.size(); ++k) {
-            station_dist_cache[k] = airy_dist[tx_idx_map[k] * n + i];
+        if (use_airy_cache) {
+            for (size_t k = 0; k < stations.size(); ++k)
+                station_dist_cache[k] = airy_dist_cache[tx_idx_map[k] * n + i];
+        } else {
+            for (size_t k = 0; k < stations.size(); ++k)
+                station_dist_cache[k] = raw_dist_m[k];
         }
 
         // Absolute accuracy from iterated WLS VL (P4-02)

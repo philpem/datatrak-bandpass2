@@ -4,6 +4,7 @@
 #include <wx/sizer.h>
 #include <wx/stattext.h>
 #include <wx/statbox.h>
+#include <wx/checkbox.h>
 #include <wx/filedlg.h>
 #include <wx/filename.h>
 #include <cmath>
@@ -169,6 +170,13 @@ NetworkConfigPanel::NetworkConfigPanel(wxWindow* parent)
         prop_model_->SetSelection(1);  // Millington default
         prop_model_->Bind(wxEVT_CHOICE, &NetworkConfigPanel::OnOtherChanged, this);
         gs->Add(prop_model_, 1, wxEXPAND | wxBOTTOM, 2);
+
+        gs->Add(new wxStaticText(this, wxID_ANY, ""), 0);
+        airy_cache_cb_ = new wxCheckBox(this, wxID_ANY,
+                                         "Pre-compute Airy distance cache (faster, more memory)");
+        airy_cache_cb_->SetValue(true);
+        airy_cache_cb_->Bind(wxEVT_CHECKBOX, &NetworkConfigPanel::OnOtherChanged, this);
+        gs->Add(airy_cache_cb_, 1, wxEXPAND | wxBOTTOM, 2);
 
         bsiz->Add(gs, 0, wxEXPAND | wxALL, 4);
         outer->Add(bsiz, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 6);
@@ -426,6 +434,7 @@ void NetworkConfigPanel::SetScenario(Scenario* scenario) {
     prop_model_->SetSelection(
         scenario_->propagation_model == Scenario::PropagationModel::GRWAVE ? 2 :
         scenario_->propagation_model == Scenario::PropagationModel::Millington ? 1 : 0);
+    airy_cache_cb_->SetValue(scenario_->precompute_airy_cache);
 
     lat_min_field_->ChangeValue(wxString::Format("%.4f", scenario_->grid.lat_min));
     lat_max_field_->ChangeValue(wxString::Format("%.4f", scenario_->grid.lat_max));
@@ -496,6 +505,7 @@ void NetworkConfigPanel::SaveToScenario() {
     scenario_->propagation_model = (prop_sel == 2) ? Scenario::PropagationModel::GRWAVE :
                                     (prop_sel == 1) ? Scenario::PropagationModel::Millington
                                                     : Scenario::PropagationModel::Homogeneous;
+    scenario_->precompute_airy_cache = airy_cache_cb_->GetValue();
 
     double lat_min = wxAtof(lat_min_field_->GetValue());
     double lat_max = wxAtof(lat_max_field_->GetValue());
