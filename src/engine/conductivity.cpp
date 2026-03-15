@@ -1,5 +1,4 @@
 #include "conductivity.h"
-#include "model/DataPaths.h"
 #include <gdal_priv.h>
 #include <ogr_spatialref.h>
 #include <stdexcept>
@@ -169,8 +168,7 @@ std::unique_ptr<ConductivityMap> make_conductivity_map(const Scenario& scenario)
     }
 
     try {
-        return std::make_unique<GdalConductivityMap>(
-            resolve_data_path(scenario.conductivity_file));
+        return std::make_unique<GdalConductivityMap>(scenario.conductivity_file);
     } catch (...) {
         // Fall back to built-in if file cannot be opened
         return std::make_unique<BuiltInConductivityMap>();
