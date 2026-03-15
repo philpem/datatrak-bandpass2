@@ -114,6 +114,10 @@ calibration.
 | | `"bgs"` | British Geological Survey conductivity data |
 | | `/path/to/file.tif` | GeoTIFF conductivity raster (absolute path) |
 
+Both conductivity and terrain source can be set in the Network Configuration
+panel or in the TOML file.  See [Obtaining data files](#obtaining-data-files)
+below for instructions on preparing the data.
+
 ### `[terrain]`
 
 | Field | Value | Description |
@@ -206,3 +210,66 @@ transform = "helmert"
 - Slot numbers can exceed 8 for interlaced-mode networks (up to 24).
 - Pattern strings use the format `"slave_slot,master_slot"`, e.g. `"6,4"`
   means slave station on slot 6 with master on slot 4.
+
+## Obtaining data files
+
+### Ground conductivity (ITU-R P.832)
+
+The built-in conductivity map uses a simple land/sea heuristic.  For more
+accurate modelling, import the ITU-R P.832 world ground conductivity dataset:
+
+1. Obtain the ITU-R P.832-4 data.  It is distributed as a pair of ASCII grid
+   files (`ESRT.txt` for conductivity, `EPRT.txt` for permittivity) or as a
+   CSV export.  The data can also be obtained from the `itur` R package.
+
+2. Run the import tool to convert it to a GeoTIFF:
+
+   ```
+   python3 tools/itu_p832_import.py --input /path/to/itu-p832/ --out conductivity.tif
+   ```
+
+   The input may be a directory containing `ESRT.txt` and `EPRT.txt`, a ZIP
+   file containing those files, or a CSV with `lon,lat,sigma,eps_r` columns.
+
+3. In the Network Configuration panel, set Conductivity Source to "File" and
+   browse to the output GeoTIFF.  Alternatively, set `conductivity.source` in
+   the TOML file to the absolute path of the GeoTIFF.
+
+### Terrain (SRTM)
+
+Terrain data improves the Monteath ASF computation (slope correction along the
+propagation path).  For flat terrain or initial planning, the "Flat" setting is
+adequate.
+
+1. Run the download tool for your area of interest:
+
+   ```
+   python3 tools/srtm_download.py --bbox 49.5 -8.0 61.0 2.5 --out terrain_uk.tif
+   ```
+
+   This downloads SRTM3 tiles (3 arc-second, ~90 m resolution) from CGIAR-CSI
+   (no login required) and merges them into a single GeoTIFF.
+
+   For NASA Earthdata tiles (requires free registration):
+
+   ```
+   export EARTHDATA_TOKEN=<your-bearer-token>
+   python3 tools/srtm_download.py --bbox 49.5 -8.0 61.0 2.5 --source nasa --out terrain_uk.tif
+   ```
+
+2. In the Network Configuration panel, set Terrain Source to "File" and browse
+   to the output GeoTIFF.  Alternatively, set `terrain.source` in the TOML file
+   to the absolute path of the GeoTIFF.
+
+### OSTN15 datum grid
+
+The OSTN15 datum transform provides sub-metre accuracy for WGS84 to OSGB36
+conversion.  It is optional -- Helmert (+-5 m) is used as a fallback.
+
+```
+python3 tools/ostn15_download.py
+```
+
+This downloads the OS OSTN15 shift grid and converts it to the binary format
+expected by BANDPASS II.  The datum transform setting is in the Network
+Configuration panel.
