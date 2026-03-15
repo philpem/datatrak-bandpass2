@@ -1,5 +1,4 @@
 #include "terrain.h"
-#include "model/DataPaths.h"
 #include <GeographicLib/Geodesic.hpp>
 #include <GeographicLib/GeodesicLine.hpp>
 #include <stdexcept>
@@ -68,7 +67,7 @@ struct GdalTerrainMap::Impl {
         for (auto& kv : tile_cache) GDALClose(kv.second);
     }
 
-    // Build SRTM filename for given 1°×1° tile (lower-left corner)
+    // Build SRTM filename for given 1x1 degree tile (lower-left corner)
     static std::string srtm_filename(int lat_floor, int lon_floor) {
         char buf[32];
         std::snprintf(buf, sizeof(buf), "%c%02d%c%03d.hgt",
@@ -108,7 +107,7 @@ static double bilinear_read(GDALDataset* ds, const double* inv,
         yi = std::max(0, std::min(ry-1, yi));
         float v = 0.f;
         if (rb->RasterIO(GF_Read, xi, yi, 1, 1, &v, 1, 1, GDT_Float32, 0, 0) != CE_None)
-            return 0.0;  // read error → treat as sea level
+            return 0.0;  // read error -> treat as sea level
         if (ok && std::abs((double)v - nodata) < 0.5) return 0.0;
         return (double)v;
     };
@@ -149,7 +148,7 @@ double GdalTerrainMap::height_at(double lat, double lon) const {
         return bilinear_read(impl_->ds, impl_->inv, impl_->rx, impl_->ry, lon, lat);
     }
 
-    // SRTM directory mode: find the correct 1°×1° tile
+    // SRTM directory mode: find the correct 1x1 degree tile
     int lat_fl = (int)std::floor(lat);
     int lon_fl = (int)std::floor(lon);
     std::string fname = Impl::srtm_filename(lat_fl, lon_fl);
@@ -165,7 +164,7 @@ double GdalTerrainMap::height_at(double lat, double lon) const {
     GDALDataset* td = it->second;
     if (!td) return 0.0;
 
-    // HGT: 1201×1201 or 3601×3601 samples; compute geo transform on the fly
+    // HGT: 1201x1201 or 3601x3601 samples; compute geo transform on the fly
     int nx = td->GetRasterXSize();
     int ny = td->GetRasterYSize();
     double step = 1.0 / (nx - 1);
@@ -189,12 +188,10 @@ std::unique_ptr<TerrainMap> make_terrain_map(const Scenario& scenario) {
     if (scenario.terrain_file.empty())
         return std::make_unique<FlatTerrainMap>();
 
-    bool srtm_dir = (scenario.terrain_source == TS::SRTM);
-    std::string resolved = srtm_dir
-        ? resolve_data_dir(scenario.terrain_file)
-        : resolve_data_path(scenario.terrain_file);
+    // Auto-detect: if path is a directory, use SRTM tile mode
+    bool is_dir = std::filesystem::is_directory(scenario.terrain_file);
     try {
-        return std::make_unique<GdalTerrainMap>(resolved, srtm_dir);
+        return std::make_unique<GdalTerrainMap>(scenario.terrain_file, is_dir);
     } catch (...) {
         return std::make_unique<FlatTerrainMap>();
     }

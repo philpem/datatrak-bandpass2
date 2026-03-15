@@ -31,6 +31,7 @@ endfunction()
 bp_add_test(test_toml_io
     model/test_toml_io.cpp
     ${CMAKE_SOURCE_DIR}/src/model/toml_io.cpp
+    ${CMAKE_SOURCE_DIR}/src/model/DataPaths.cpp
 )
 
 # Coordinate tests

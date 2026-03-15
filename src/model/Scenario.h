@@ -90,9 +90,9 @@ struct Scenario {
     ConductivitySource conductivity_source = ConductivitySource::BuiltIn;
     std::string        conductivity_file;
 
-    enum class TerrainSource { Flat, SRTM, File };
+    enum class TerrainSource { Flat, File };
     TerrainSource terrain_source = TerrainSource::Flat;
-    std::string   terrain_file;
+    std::string   terrain_file;  // GeoTIFF path or directory of .hgt tiles
 
 
     // Groundwave propagation model selection.

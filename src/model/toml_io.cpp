@@ -156,27 +156,33 @@ Scenario load(const std::filesystem::path& path) {
     if (auto c = tbl["conductivity"].as_table()) {
         std::string src = str((*c)["source"], "builtin");
         if      (src == "builtin")  s.conductivity_source = Scenario::ConductivitySource::BuiltIn;
-        else if (src == "itu_p832") s.conductivity_source = Scenario::ConductivitySource::ItuP832;
-        else if (src == "bgs")      s.conductivity_source = Scenario::ConductivitySource::BGS;
-        else {
+        else if (src == "itu_p832") {
+            s.conductivity_source = Scenario::ConductivitySource::ItuP832;
+            s.conductivity_file   = resolve_data_path("conductivity_p832.tif");
+        } else if (src == "bgs") {
+            s.conductivity_source = Scenario::ConductivitySource::BGS;
+            s.conductivity_file   = resolve_data_path("conductivity_bgs.tif");
+        } else {
             // Anything else is a file path (absolute or relative)
             s.conductivity_source = Scenario::ConductivitySource::File;
-            s.conductivity_file   = src;
+            s.conductivity_file   = resolve_data_path(src);
         }
     }
 
     // [terrain]
     if (auto t = tbl["terrain"].as_table()) {
         std::string src = str((*t)["source"], "flat");
-        if (src == "srtm") {
-            s.terrain_source = Scenario::TerrainSource::SRTM;
-            s.terrain_file   = str((*t)["tile_dir"], "");
-        } else if (src == "flat") {
+        if (src == "flat") {
             s.terrain_source = Scenario::TerrainSource::Flat;
-        } else {
-            // Anything else is a file path (absolute or relative)
+        } else if (src == "srtm") {
+            // Legacy SRTM mode — read tile_dir and resolve it
             s.terrain_source = Scenario::TerrainSource::File;
-            s.terrain_file   = src;
+            std::string tile_dir = str((*t)["tile_dir"], "");
+            s.terrain_file = tile_dir.empty() ? "" : resolve_data_dir(tile_dir);
+        } else {
+            // File path (absolute or relative)
+            s.terrain_source = Scenario::TerrainSource::File;
+            s.terrain_file   = resolve_data_path(src);
         }
     }
 
@@ -291,17 +297,9 @@ void save(const Scenario& s, const std::filesystem::path& path) {
     tbl.insert("conductivity", toml::table{{"source", cond_src}});
 
     std::string terr_src = "flat";
-    if (s.terrain_source == Scenario::TerrainSource::SRTM) {
-        terr_src = "srtm";
-        toml::table terr_tbl{{"source", terr_src}};
-        if (!s.terrain_file.empty())
-            terr_tbl.insert("tile_dir", make_relative_data_path(s.terrain_file));
-        tbl.insert("terrain", std::move(terr_tbl));
-    } else {
-        if (s.terrain_source == Scenario::TerrainSource::File)
-            terr_src = make_relative_data_path(s.terrain_file);
-        tbl.insert("terrain", toml::table{{"source", terr_src}});
-    }
+    if (s.terrain_source == Scenario::TerrainSource::File)
+        terr_src = make_relative_data_path(s.terrain_file);
+    tbl.insert("terrain", toml::table{{"source", terr_src}});
 
     // Propagation model
     std::string prop_mdl = (s.propagation_model == Scenario::PropagationModel::GRWAVE)

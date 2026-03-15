@@ -5,9 +5,9 @@
 #include <wx/stattext.h>
 #include <wx/statbox.h>
 #include <wx/filedlg.h>
-#include <wx/dirdlg.h>
 #include <wx/filename.h>
 #include <cmath>
+#include <filesystem>
 
 namespace bp {
 
@@ -150,7 +150,7 @@ NetworkConfigPanel::NetworkConfigPanel(wxWindow* parent)
         gs->Add(new wxStaticText(this, wxID_ANY, "Source"),
                 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
         wxArrayString terr_opts;
-        terr_opts.Add("Flat"); terr_opts.Add("SRTM"); terr_opts.Add("File");
+        terr_opts.Add("Flat"); terr_opts.Add("File");
         terrain_src_ = new wxChoice(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, terr_opts);
         terrain_src_->SetSelection(0);
         terrain_src_->Bind(wxEVT_CHOICE, &NetworkConfigPanel::OnTerrainSrcChanged, this);
@@ -254,27 +254,20 @@ void NetworkConfigPanel::SetScenario(Scenario* scenario) {
     lon_max_field_->ChangeValue(wxString::Format("%.4f", scenario_->grid.lon_max));
     res_field_->ChangeValue(wxString::Format("%.1f", scenario_->grid.resolution_km));
 
-    // Terrain — resolve relative paths for display
-    int terr_sel = 0;
-    if (scenario_->terrain_source == Scenario::TerrainSource::SRTM)  terr_sel = 1;
-    else if (scenario_->terrain_source == Scenario::TerrainSource::File) terr_sel = 2;
+    // Terrain
+    int terr_sel = (scenario_->terrain_source == Scenario::TerrainSource::File) ? 1 : 0;
     terrain_src_->SetSelection(terr_sel);
-    {
-        std::string display_path = (terr_sel == 1)
-            ? resolve_data_dir(scenario_->terrain_file)
-            : resolve_data_path(scenario_->terrain_file);
-        terrain_file_->ChangeValue(display_path);
-    }
+    terrain_file_->ChangeValue(scenario_->terrain_file);
     UpdateTerrainFileState();
     UpdateTerrainLabel();
 
-    // Conductivity — resolve relative paths for display
+    // Conductivity
     int cond_sel = 0;
     if (scenario_->conductivity_source == Scenario::ConductivitySource::ItuP832) cond_sel = 1;
     else if (scenario_->conductivity_source == Scenario::ConductivitySource::BGS) cond_sel = 2;
     else if (scenario_->conductivity_source == Scenario::ConductivitySource::File) cond_sel = 3;
     cond_src_->SetSelection(cond_sel);
-    cond_file_->ChangeValue(resolve_data_path(scenario_->conductivity_file));
+    cond_file_->ChangeValue(scenario_->conductivity_file);
     UpdateCondFileState();
     UpdateCondLabel();
 
@@ -318,12 +311,8 @@ void NetworkConfigPanel::SaveToScenario() {
 
     // Terrain — store path relativized for portability
     int terr_sel = terrain_src_->GetSelection();
-    if (terr_sel == 0)      scenario_->terrain_source = Scenario::TerrainSource::Flat;
-    else if (terr_sel == 1) {
-        scenario_->terrain_source = Scenario::TerrainSource::SRTM;
-        scenario_->terrain_file = make_relative_data_path(
-            terrain_file_->GetValue().ToStdString());
-    } else {
+    if (terr_sel == 0)  scenario_->terrain_source = Scenario::TerrainSource::Flat;
+    else {
         scenario_->terrain_source = Scenario::TerrainSource::File;
         scenario_->terrain_file = make_relative_data_path(
             terrain_file_->GetValue().ToStdString());
@@ -332,9 +321,13 @@ void NetworkConfigPanel::SaveToScenario() {
     // Conductivity — store path relativized for portability
     int cond_sel = cond_src_->GetSelection();
     if (cond_sel == 0)      scenario_->conductivity_source = Scenario::ConductivitySource::BuiltIn;
-    else if (cond_sel == 1) scenario_->conductivity_source = Scenario::ConductivitySource::ItuP832;
-    else if (cond_sel == 2) scenario_->conductivity_source = Scenario::ConductivitySource::BGS;
-    else {
+    else if (cond_sel == 1) {
+        scenario_->conductivity_source = Scenario::ConductivitySource::ItuP832;
+        scenario_->conductivity_file = resolve_data_path("conductivity_p832.tif");
+    } else if (cond_sel == 2) {
+        scenario_->conductivity_source = Scenario::ConductivitySource::BGS;
+        scenario_->conductivity_file = resolve_data_path("conductivity_bgs.tif");
+    } else {
         scenario_->conductivity_source = Scenario::ConductivitySource::File;
         scenario_->conductivity_file = make_relative_data_path(
             cond_file_->GetValue().ToStdString());
@@ -424,27 +417,15 @@ void NetworkConfigPanel::OnCondSrcChanged(wxCommandEvent& /*evt*/) {
 }
 
 void NetworkConfigPanel::OnTerrainBrowse(wxCommandEvent& /*evt*/) {
-    if (terrain_src_->GetSelection() == 1) {
-        // SRTM mode — pick a directory of .hgt tiles
-        wxDirDialog dlg(this, "Select SRTM tile directory", "",
-                        wxDD_DEFAULT_STYLE | wxDD_DIR_MUST_EXIST);
-        if (dlg.ShowModal() == wxID_OK) {
-            terrain_file_->ChangeValue(dlg.GetPath());
-            UpdateTerrainLabel();
-            debounce_.StartOnce(500);
-        }
-    } else {
-        // File mode — pick a GeoTIFF
-        wxFileDialog dlg(this, "Select terrain data file", "", "",
-                         "GeoTIFF (*.tif;*.tiff)|*.tif;*.tiff|"
-                         "HGT (*.hgt)|*.hgt|"
-                         "All files (*)|*",
-                         wxFD_OPEN | wxFD_FILE_MUST_EXIST);
-        if (dlg.ShowModal() == wxID_OK) {
-            terrain_file_->ChangeValue(dlg.GetPath());
-            UpdateTerrainLabel();
-            debounce_.StartOnce(500);
-        }
+    wxFileDialog dlg(this, "Select terrain data file", "", "",
+                     "GeoTIFF (*.tif;*.tiff)|*.tif;*.tiff|"
+                     "HGT (*.hgt)|*.hgt|"
+                     "All files (*)|*",
+                     wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+    if (dlg.ShowModal() == wxID_OK) {
+        terrain_file_->ChangeValue(dlg.GetPath());
+        UpdateTerrainLabel();
+        debounce_.StartOnce(500);
     }
 }
 
@@ -467,10 +448,9 @@ void NetworkConfigPanel::OnFilePath(wxCommandEvent& /*evt*/) {
 }
 
 void NetworkConfigPanel::UpdateTerrainFileState() {
-    int sel = terrain_src_->GetSelection();
-    bool need_path = (sel == 1 || sel == 2);  // SRTM directory or File
-    terrain_file_->Enable(need_path);
-    terrain_browse_->Enable(need_path);
+    bool file_mode = (terrain_src_->GetSelection() == 1);  // File
+    terrain_file_->Enable(file_mode);
+    terrain_browse_->Enable(file_mode);
 }
 
 void NetworkConfigPanel::UpdateCondFileState() {
@@ -564,27 +544,17 @@ void NetworkConfigPanel::UpdateTerrainLabel() {
     wxColour col = *wxBLACK;
     if (sel == 0) {
         // Flat — always available
-    } else if (sel == 1) {
-        // SRTM — directory of .hgt tiles from srtm_download.py --no-merge
-        wxString path = terrain_file_->GetValue();
-        if (path.empty()) {
-            msg = "Set path to SRTM tile directory (from srtm_download.py --no-merge)";
-            col = *wxRED;
-        } else if (!wxFileName::DirExists(path)) {
-            msg = "Directory not found - using flat fallback";
-            col = *wxRED;
-        } else {
-            msg = "SRTM tile directory OK";
-        }
     } else {
-        // File — user sets the path; check it exists
+        // File — GeoTIFF or directory of .hgt tiles (auto-detected)
         wxString path = terrain_file_->GetValue();
         if (path.empty()) {
-            msg = "No file set - using flat fallback";
+            msg = "Set path to terrain GeoTIFF or SRTM tile directory";
             col = *wxRED;
-        } else if (!wxFileName::FileExists(path)) {
-            msg = "File not found - using flat fallback";
+        } else if (!wxFileName::FileExists(path) && !wxFileName::DirExists(path)) {
+            msg = "Not found - using flat fallback";
             col = *wxRED;
+        } else if (wxFileName::DirExists(path)) {
+            msg = "SRTM tile directory OK";
         } else {
             msg = "File OK";
         }
@@ -602,11 +572,27 @@ void NetworkConfigPanel::UpdateCondLabel() {
     if (sel == 0) {
         // Built-in — always available
     } else if (sel == 1) {
-        // ITU P.832 — uses generated GeoTIFF; no user-settable path
-        msg = "Run itu_p832_import.py to generate data file if needed";
+        // ITU P.832 — well-known filename in data dirs
+        {
+            std::string resolved = resolve_data_path("conductivity_p832.tif");
+            if (std::filesystem::exists(resolved)) {
+                msg = "conductivity_p832.tif OK";
+            } else {
+                msg = "conductivity_p832.tif not found - run itu_p832_import.py";
+                col = *wxRED;
+            }
+        }
     } else if (sel == 2) {
-        // BGS — uses downloaded GeoTIFF; no user-settable path
-        msg = "Run bgs_import.py to generate data file if needed";
+        // BGS — well-known filename in data dirs
+        {
+            std::string resolved = resolve_data_path("conductivity_bgs.tif");
+            if (std::filesystem::exists(resolved)) {
+                msg = "conductivity_bgs.tif OK";
+            } else {
+                msg = "conductivity_bgs.tif not found - run bgs_import.py";
+                col = *wxRED;
+            }
+        }
     } else {
         // File — user sets the path; check it exists
         wxString path = cond_file_->GetValue();

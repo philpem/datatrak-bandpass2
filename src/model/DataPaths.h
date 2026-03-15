@@ -7,7 +7,11 @@ namespace bp {
 // ---------------------------------------------------------------------------
 // DataPaths — resolve data file/directory paths across standard locations
 //
-// Search order (mirrors OSTN15 logic in main.cpp):
+// Call init_data_search_dirs() once at startup (from main.cpp, where wx is
+// available) to populate the search list.  All subsequent resolve/relativize
+// calls are pure C++ with no wx dependency.
+//
+// Search order (set up by init_data_search_dirs):
 //   1. Executable directory
 //   2. data/ subdirectory next to executable
 //   3. Platform user-data directory (~/.local/share/bandpass2 on Linux,
@@ -21,9 +25,12 @@ namespace bp {
 // expands a relative name back to an absolute path at load time.
 // ---------------------------------------------------------------------------
 
-/// Return the ordered list of directories to search for data files.
-/// Each entry is an absolute directory path.
-std::vector<std::string> data_search_dirs();
+/// Set the ordered list of directories to search for data files.
+/// Must be called once at startup before any resolve calls.
+void init_data_search_dirs(std::vector<std::string> dirs);
+
+/// Return the current search directories (empty if init not yet called).
+const std::vector<std::string>& data_search_dirs();
 
 /// If `path` is already absolute and exists, return it unchanged.
 /// Otherwise treat it as a relative filename/path and search the standard
