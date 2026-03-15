@@ -158,45 +158,54 @@ ComputeResult ComputeManager::RunPipeline(const Scenario& scenario,
     }
 
     // Stage 1 – Groundwave (ITU P.368)
+    // GRWAVE residue series is ~100x slower per grid point than the polynomial,
+    // so give it a much larger share of the progress bar to avoid appearing stuck.
+    const bool is_grwave = scenario.propagation_model == Scenario::PropagationModel::GRWAVE;
     const char* gw_label =
-        scenario.propagation_model == Scenario::PropagationModel::GRWAVE      ? "Groundwave (GRWAVE)" :
-        scenario.propagation_model == Scenario::PropagationModel::Homogeneous ? "Groundwave (Homogeneous)" :
-                                                                                "Groundwave (Millington)";
-    PostProgress(gw_label, 5);
-    computeGroundwave(*data, scenario, cancel, [this, gw_label](int pct) {
-        PostProgress(gw_label, 5 + pct * 15 / 100);
+        is_grwave                                                                ? "Groundwave (GRWAVE)" :
+        scenario.propagation_model == Scenario::PropagationModel::Homogeneous    ? "Groundwave (Homogeneous)" :
+                                                                                   "Groundwave (Millington)";
+    const int gw_start = 5;
+    const int gw_end   = is_grwave ? 60 : 20;
+    PostProgress(gw_label, gw_start);
+    computeGroundwave(*data, scenario, cancel, [this, gw_label, gw_start, gw_end](int pct) {
+        PostProgress(gw_label, gw_start + pct * (gw_end - gw_start) / 100);
     });
     if (cancel.load()) return result;
-    PostProgress(gw_label, 20);
+    PostProgress(gw_label, gw_end);
 
     // Stage 2 – Skywave (ITU P.684)
-    PostProgress("Skywave (P.684)", 20);
+    const int sky_end = is_grwave ? 65 : 35;
+    PostProgress("Skywave (P.684)", gw_end);
     computeSkywave(*data, scenario, cancel);
     if (cancel.load()) return result;
-    PostProgress("Skywave (P.684)", 35);
+    PostProgress("Skywave (P.684)", sky_end);
 
     // Stage 3 – Atmospheric noise (ITU P.372)
-    PostProgress("Noise (P.372)", 35);
+    const int noise_end = is_grwave ? 70 : 45;
+    PostProgress("Noise (P.372)", sky_end);
     computeAtmNoise(*data, scenario, cancel);
     if (cancel.load()) return result;
-    PostProgress("Noise (P.372)", 45);
+    PostProgress("Noise (P.372)", noise_end);
 
     // Stages 4–6 – SNR / GDR / SGR
-    PostProgress("SNR / GDR", 45);
+    const int snr_end = is_grwave ? 75 : 60;
+    PostProgress("SNR / GDR", noise_end);
     computeSNR(*data, scenario, cancel);
     if (cancel.load()) return result;
-    PostProgress("SNR / GDR", 60);
+    PostProgress("SNR / GDR", snr_end);
 
     // Stages 7–9 – WHDOP and repeatable accuracy
-    PostProgress("WHDOP / repeatable", 60);
+    const int whdop_end = is_grwave ? 80 : 75;
+    PostProgress("WHDOP / repeatable", snr_end);
     computeWHDOP(*data, scenario, cancel);
     if (cancel.load()) return result;
-    PostProgress("WHDOP / repeatable", 75);
+    PostProgress("WHDOP / repeatable", whdop_end);
 
     // Stages 10–11 – ASF, absolute accuracy, confidence
-    PostProgress("ASF / accuracy", 75);
-    computeASF(*data, scenario, cancel, [this](int pct) {
-        PostProgress("ASF / accuracy", 75 + pct * 20 / 100);
+    PostProgress("ASF / accuracy", whdop_end);
+    computeASF(*data, scenario, cancel, [this, whdop_end](int pct) {
+        PostProgress("ASF / accuracy", whdop_end + pct * (95 - whdop_end) / 100);
     });
     if (cancel.load()) return result;
     PostProgress("ASF / accuracy", 95);
