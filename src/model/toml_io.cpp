@@ -193,6 +193,8 @@ Scenario load(const std::filesystem::path& path) {
         if      (mdl == "homogeneous") s.propagation_model = Scenario::PropagationModel::Homogeneous;
         else if (mdl == "grwave")      s.propagation_model = Scenario::PropagationModel::GRWAVE;
         else                           s.propagation_model = Scenario::PropagationModel::Millington;
+        if (auto v = (*p)["precompute_airy_cache"].value<bool>())
+            s.precompute_airy_cache = *v;
     }
 
     return s;
@@ -306,7 +308,10 @@ void save(const Scenario& s, const std::filesystem::path& path) {
                            ? "grwave"
                            : (s.propagation_model == Scenario::PropagationModel::Homogeneous)
                            ? "homogeneous" : "millington";
-    tbl.insert("propagation", toml::table{{"model", prop_mdl}});
+    auto prop_tbl = toml::table{{"model", prop_mdl}};
+    if (!s.precompute_airy_cache)
+        prop_tbl.insert("precompute_airy_cache", false);
+    tbl.insert("propagation", prop_tbl);
 
     std::ofstream f(path);
     if (!f) throw std::runtime_error("Cannot open file for writing: " + path.string());

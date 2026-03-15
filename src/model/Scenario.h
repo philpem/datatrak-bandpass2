@@ -102,6 +102,11 @@ struct Scenario {
     //                   residue series (most accurate, slowest).
     enum class PropagationModel { Homogeneous, Millington, GRWAVE };
     PropagationModel propagation_model = PropagationModel::Millington;
+
+    // When true (default), computeASF() pre-computes an ntx*n Airy distance
+    // table (~16 bytes per TX-RX pair) to avoid redundant geodesic calls.
+    // Disable to trade speed for lower memory usage on large grids.
+    bool precompute_airy_cache = true;
 };
 
 } // namespace bp

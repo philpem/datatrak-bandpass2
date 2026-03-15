@@ -7,6 +7,7 @@
 #include <wx/choice.h>
 #include <wx/stattext.h>
 #include <wx/button.h>
+#include <wx/checkbox.h>
 #include <wx/timer.h>
 #include "../model/Scenario.h"
 
@@ -100,6 +101,7 @@ private:
 
     // Propagation model
     wxChoice*     prop_model_      = nullptr;
+    wxCheckBox*   airy_cache_cb_   = nullptr;
 
     wxTimer      debounce_;
     Scenario*    scenario_  = nullptr;
