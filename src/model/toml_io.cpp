@@ -1,4 +1,5 @@
 #include "toml_io.h"
+#include "DataPaths.h"
 #include <toml++/toml.hpp>
 #include <fstream>
 #include <sstream>
@@ -154,13 +155,13 @@ Scenario load(const std::filesystem::path& path) {
     // [conductivity]
     if (auto c = tbl["conductivity"].as_table()) {
         std::string src = str((*c)["source"], "builtin");
-        if      (src == "itu_p832") s.conductivity_source = Scenario::ConductivitySource::ItuP832;
+        if      (src == "builtin")  s.conductivity_source = Scenario::ConductivitySource::BuiltIn;
+        else if (src == "itu_p832") s.conductivity_source = Scenario::ConductivitySource::ItuP832;
         else if (src == "bgs")      s.conductivity_source = Scenario::ConductivitySource::BGS;
-        else if (src.size() > 1 && src[0] == '/') {
+        else {
+            // Anything else is a file path (absolute or relative)
             s.conductivity_source = Scenario::ConductivitySource::File;
             s.conductivity_file   = src;
-        } else {
-            s.conductivity_source = Scenario::ConductivitySource::BuiltIn;
         }
     }
 
@@ -170,11 +171,12 @@ Scenario load(const std::filesystem::path& path) {
         if (src == "srtm") {
             s.terrain_source = Scenario::TerrainSource::SRTM;
             s.terrain_file   = str((*t)["tile_dir"], "");
-        } else if (src.size() > 1 && src[0] == '/')  {
+        } else if (src == "flat") {
+            s.terrain_source = Scenario::TerrainSource::Flat;
+        } else {
+            // Anything else is a file path (absolute or relative)
             s.terrain_source = Scenario::TerrainSource::File;
             s.terrain_file   = src;
-        } else {
-            s.terrain_source = Scenario::TerrainSource::Flat;
         }
     }
 
@@ -280,11 +282,12 @@ void save(const Scenario& s, const std::filesystem::path& path) {
     }
     tbl.insert("pattern_offsets", po_arr);
 
-    // Conductivity / terrain
+    // Conductivity / terrain — relativize paths for portability
     std::string cond_src = "builtin";
     if      (s.conductivity_source == Scenario::ConductivitySource::ItuP832) cond_src = "itu_p832";
     else if (s.conductivity_source == Scenario::ConductivitySource::BGS)     cond_src = "bgs";
-    else if (s.conductivity_source == Scenario::ConductivitySource::File)    cond_src = s.conductivity_file;
+    else if (s.conductivity_source == Scenario::ConductivitySource::File)
+        cond_src = make_relative_data_path(s.conductivity_file);
     tbl.insert("conductivity", toml::table{{"source", cond_src}});
 
     std::string terr_src = "flat";
@@ -292,10 +295,11 @@ void save(const Scenario& s, const std::filesystem::path& path) {
         terr_src = "srtm";
         toml::table terr_tbl{{"source", terr_src}};
         if (!s.terrain_file.empty())
-            terr_tbl.insert("tile_dir", s.terrain_file);
+            terr_tbl.insert("tile_dir", make_relative_data_path(s.terrain_file));
         tbl.insert("terrain", std::move(terr_tbl));
     } else {
-        if (s.terrain_source == Scenario::TerrainSource::File) terr_src = s.terrain_file;
+        if (s.terrain_source == Scenario::TerrainSource::File)
+            terr_src = make_relative_data_path(s.terrain_file);
         tbl.insert("terrain", toml::table{{"source", terr_src}});
     }
 
