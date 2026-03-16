@@ -58,4 +58,43 @@ private:
 // Returns a BuiltInConductivityMap if the file source cannot be opened.
 std::unique_ptr<ConductivityMap> make_conductivity_map(const Scenario& scenario);
 
+// ---------------------------------------------------------------------------
+// CachedConductivityMap — wraps any ConductivityMap with an in-memory tile
+// cache that pre-reads a rectangular region at a fixed resolution.
+//
+// Lookups within the cached region use fast bilinear interpolation from the
+// in-memory grid (~1 ns per call).  Lookups outside the region fall through
+// to the underlying map.
+//
+// Typical usage: wrap the GdalConductivityMap covering the scenario grid bounds
+// extended by 2 degrees (to cover Millington/Monteath segment midpoints that
+// may lie outside the grid).
+//
+// Memory: ~16 bytes per cell × (lat_steps × lon_steps).  At 0.01° resolution
+// over a 15°×12° area: 1500 × 1200 = 1.8M cells = ~29 MB.  At 0.02° res:
+// ~7 MB.
+// ---------------------------------------------------------------------------
+class CachedConductivityMap : public ConductivityMap {
+public:
+    // Preloads the region [lat_min, lat_max] × [lon_min, lon_max] from `source`
+    // at the given resolution (degrees).
+    CachedConductivityMap(std::unique_ptr<ConductivityMap> source,
+                          double lat_min, double lat_max,
+                          double lon_min, double lon_max,
+                          double resolution_deg = 0.02);
+
+    GroundConstants lookup(double lat, double lon) const override;
+
+private:
+    std::unique_ptr<ConductivityMap> source_;
+    double lat_min_, lon_min_;
+    double inv_res_;           // 1.0 / resolution_deg
+    int    cols_, rows_;
+    std::vector<GroundConstants> grid_;  // row-major, row 0 = lat_min
+};
+
+// Factory: creates a CachedConductivityMap wrapping the scenario's source,
+// pre-reading the grid bounds extended by 2° in each direction.
+std::unique_ptr<ConductivityMap> make_cached_conductivity_map(const Scenario& scenario);
+
 } // namespace bp

@@ -686,5 +686,32 @@ TEST_CASE("GrwaveLUT: progress callback is called") {
     CHECK(call_count > 0);
 }
 
+// ---- CachedConductivityMap ----
+
+TEST_CASE("CachedConductivityMap: matches source within interpolation tolerance") {
+    auto source = std::make_unique<BuiltInConductivityMap>();
+    // Cache a region covering UK
+    CachedConductivityMap cached(std::move(source), 49.0, 62.0, -11.0, 3.0, 0.02);
+
+    // Land point (London area)
+    auto gc1 = cached.lookup(51.5, -0.1);
+    CHECK(gc1.sigma == Approx(0.005).margin(0.001));
+    CHECK(gc1.eps_r == Approx(15.0).margin(1.0));
+
+    // Sea point (North Atlantic)
+    auto gc2 = cached.lookup(56.0, -15.0);
+    CHECK(gc2.sigma == Approx(4.0).margin(0.1));
+    CHECK(gc2.eps_r == Approx(70.0).margin(1.0));
+}
+
+TEST_CASE("CachedConductivityMap: falls through outside cached region") {
+    auto source = std::make_unique<BuiltInConductivityMap>();
+    CachedConductivityMap cached(std::move(source), 50.0, 55.0, -5.0, 0.0, 0.1);
+
+    // Way outside — should still return a valid result via fallthrough
+    auto gc = cached.lookup(30.0, 10.0);
+    CHECK(gc.sigma > 0.0);
+}
+
 // ---- TOML round-trip for GRWAVE ----
 // (TOML tests are in tests/model/test_toml_io.cpp)
