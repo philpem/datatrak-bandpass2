@@ -9,6 +9,7 @@
 #include <gdal.h>
 #include <filesystem>
 #include <unordered_map>
+#include <mutex>
 
 namespace bp {
 
@@ -61,6 +62,7 @@ struct GdalTerrainMap::Impl {
     bool srtm_dir = false;
     std::string dir_path;
     mutable std::unordered_map<std::string, GDALDataset*> tile_cache;
+    mutable std::mutex mtx;  // GDAL is not thread-safe for same dataset
 
     ~Impl() {
         if (ds) GDALClose(ds);
@@ -143,6 +145,8 @@ GdalTerrainMap::GdalTerrainMap(const std::string& path, bool srtm_directory)
 GdalTerrainMap::~GdalTerrainMap() = default;
 
 double GdalTerrainMap::height_at(double lat, double lon) const {
+    std::lock_guard<std::mutex> lock(impl_->mtx);
+
     if (!impl_->srtm_dir) {
         if (!impl_->ds) return 0.0;
         return bilinear_read(impl_->ds, impl_->inv, impl_->rx, impl_->ry, lon, lat);

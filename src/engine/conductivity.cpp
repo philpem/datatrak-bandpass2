@@ -3,6 +3,7 @@
 #include <ogr_spatialref.h>
 #include <stdexcept>
 #include <cmath>
+#include <mutex>
 
 namespace bp {
 
@@ -68,6 +69,7 @@ struct GdalConductivityMap::Impl {
     int          raster_x = 0;
     int          raster_y = 0;
     bool         has_eps  = false; // second band available?
+    mutable std::mutex mtx;        // GDAL is not thread-safe for same dataset
 
     // Read a single bilinearly-interpolated value from the given band (1-based).
     // Returns nodata_val if the position is outside the raster extent.
@@ -141,6 +143,8 @@ GdalConductivityMap::GdalConductivityMap(const std::string& path)
 GdalConductivityMap::~GdalConductivityMap() = default;
 
 GroundConstants GdalConductivityMap::lookup(double lat, double lon) const {
+    std::lock_guard<std::mutex> lock(impl_->mtx);
+
     // Convert WGS84 lon/lat → pixel coordinates using inverted GeoTransform
     double px = impl_->inv[0] + impl_->inv[1]*lon + impl_->inv[2]*lat;
     double py = impl_->inv[3] + impl_->inv[4]*lon + impl_->inv[5]*lat;
@@ -205,9 +209,11 @@ GroundConstants CachedConductivityMap::lookup(double lat, double lon) const {
     double fr = (lat - lat_min_) * inv_res_;
     double fc = (lon - lon_min_) * inv_res_;
 
-    // Fall through to source if outside cached region
-    if (fr < 0.0 || fc < 0.0 || fr >= rows_ - 1 || fc >= cols_ - 1)
-        return source_->lookup(lat, lon);
+    // Clamp to cache bounds — avoids falling through to raw GDAL which is
+    // not thread-safe.  The cache already extends 2° beyond the grid, so
+    // edge values are a safe approximation for the rare out-of-bounds lookup.
+    fr = std::max(0.0, std::min(fr, (double)(rows_ - 1) - 1e-9));
+    fc = std::max(0.0, std::min(fc, (double)(cols_ - 1) - 1e-9));
 
     int r0 = (int)fr;
     int c0 = (int)fc;
