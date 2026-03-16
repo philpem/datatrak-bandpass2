@@ -195,7 +195,7 @@ NetworkConfigPanel::NetworkConfigPanel(wxWindow* parent)
         lat_min_field_->Bind(wxEVT_KILL_FOCUS, &NetworkConfigPanel::OnFieldKillFocus, this);
 
         lat_max_field_ = MakeField(this, "Lat max", gs);
-        lat_max_field_->SetValue("61.0");
+        lat_max_field_->SetValue("59.0");
         lat_max_field_->Bind(wxEVT_TEXT,       &NetworkConfigPanel::OnBoundsChanged,  this);
         lat_max_field_->Bind(wxEVT_KILL_FOCUS, &NetworkConfigPanel::OnFieldKillFocus, this);
 
