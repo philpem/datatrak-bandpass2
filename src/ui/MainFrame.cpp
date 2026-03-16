@@ -289,13 +289,13 @@ void MainFrame::BuildToolbar() {
                 wxBitmapBundle::FromSVG(rx_car_svg, wxSize(28, 17)),
                 "Click map to place the receiver", wxITEM_CHECK);
     tb->AddSeparator();
+    tb->AddTool(ID_TOOL_ONESHOT, "Compute",
+                wxArtProvider::GetBitmap(wxART_GO_FORWARD, wxART_TOOLBAR),
+                "Run one computation now; turns off Auto-compute");
     tb->AddTool(ID_TOOL_COMPUTE, "Auto-compute",
                 wxArtProvider::GetBitmap(wxART_EXECUTABLE_FILE, wxART_TOOLBAR),
                 "Enable/disable automatic recomputation on parameter changes", wxITEM_CHECK);
     tb->ToggleTool(ID_TOOL_COMPUTE, true);
-    tb->AddTool(ID_TOOL_ONESHOT, "One-shot",
-                wxArtProvider::GetBitmap(wxART_GO_FORWARD, wxART_TOOLBAR),
-                "Run one computation now; turns off Auto-compute");
     tb->Realize();
     Bind(wxEVT_TOOL, &MainFrame::OnToolPlaceTx,  this, ID_TOOL_PLACE_TX);
     Bind(wxEVT_TOOL, &MainFrame::OnToolPlaceRx,  this, ID_TOOL_PLACE_RX);
