@@ -239,6 +239,25 @@ double homogeneous_field_dbuvm(double freq_hz,
 }
 
 // ---------------------------------------------------------------------------
+// Homogeneous-path with pre-computed distance — avoids redundant Inverse().
+// ---------------------------------------------------------------------------
+double homogeneous_field_dbuvm(double freq_hz,
+                                double lat_tx, double lon_tx,
+                                double lat_rx, double lon_rx,
+                                const ConductivityMap& cond,
+                                double power_w,
+                                double precomputed_dist_km)
+{
+    if (power_w <= 0.0) return -200.0;
+    if (precomputed_dist_km < 0.1) return -200.0;
+
+    double mid_lat = 0.5 * (lat_tx + lat_rx);
+    double mid_lon = 0.5 * (lon_tx + lon_rx);
+    GroundConstants gc = cond.lookup(mid_lat, mid_lon);
+    return groundwave_field_dbuvm(freq_hz, precomputed_dist_km, gc, power_w);
+}
+
+// ---------------------------------------------------------------------------
 // Model dispatch
 // ---------------------------------------------------------------------------
 double groundwave_for_model(double freq_hz,
@@ -306,6 +325,12 @@ void computeGroundwave(GridData&               data,
 
         std::vector<double> vals(n);
 
+        // Use cached WGS84 distances if available (for homogeneous mode)
+        auto dit = data.wgs84_dist_km.find(tx.slot);
+        bool has_dist = (dit != data.wgs84_dist_km.end()
+                         && dit->second.size() == n);
+        const std::vector<double>* cached_km = has_dist ? &dit->second : nullptr;
+
         // Capture active GRWAVE LUTs so spawned threads can install their own scopes.
         const GrwaveLUT* lut_f1 = GrwaveLUT::find_active(scenario.frequencies.f1_hz);
         const GrwaveLUT* lut_f2 = GrwaveLUT::find_active(scenario.frequencies.f2_hz);
@@ -321,11 +346,23 @@ void computeGroundwave(GridData&               data,
 
             for (size_t i = begin; i < end; ++i) {
                 if (cancel.load()) return;
-                double e = groundwave_for_model(
-                    scenario.frequencies.f1_hz,
-                    tx.lat, tx.lon, pts[i].lat, pts[i].lon,
-                    *cond_map, tx.power_w,
-                    scenario.propagation_model, 20);
+                double e;
+                // For homogeneous mode with cached distances, skip the
+                // redundant geodesic Inverse() call.
+                if (cached_km &&
+                    scenario.propagation_model == Scenario::PropagationModel::Homogeneous) {
+                    e = homogeneous_field_dbuvm(
+                        scenario.frequencies.f1_hz,
+                        tx.lat, tx.lon, pts[i].lat, pts[i].lon,
+                        *cond_map, tx.power_w,
+                        (*cached_km)[i]);
+                } else {
+                    e = groundwave_for_model(
+                        scenario.frequencies.f1_hz,
+                        tx.lat, tx.lon, pts[i].lat, pts[i].lon,
+                        *cond_map, tx.power_w,
+                        scenario.propagation_model, 20);
+                }
                 vals[i] = e;
 
                 done_atomic.fetch_add(1, std::memory_order_relaxed);

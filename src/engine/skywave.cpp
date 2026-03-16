@@ -1,4 +1,5 @@
 #include "skywave.h"
+#include "parallel.h"
 #include <GeographicLib/Geodesic.hpp>
 #include <cmath>
 #include <algorithm>
@@ -57,15 +58,35 @@ void computeSkywave(GridData& data, const Scenario& scenario,
     for (const auto& tx : scenario.flatTransmitters()) {
         if (cancel.load()) return;
         if (tx.power_w <= 0.0) continue;
+
+        // Use cached distances if available (computed in distance cache stage)
+        auto dit = data.wgs84_dist_km.find(tx.slot);
+        bool has_cache = (dit != data.wgs84_dist_km.end()
+                          && dit->second.size() == n);
+        const std::vector<double>* cached_km = has_cache ? &dit->second : nullptr;
+
+        // Per-TX values computed in parallel, then accumulated into rss
+        std::vector<double> vals(n);
+        parallel_for(n, cancel, [&](size_t begin, size_t end) {
+            for (size_t i = begin; i < end; ++i) {
+                double dist_km;
+                if (cached_km) {
+                    dist_km = (*cached_km)[i];
+                } else {
+                    double dist_m = 0.0;
+                    geod.Inverse(tx.lat, tx.lon, pts[i].lat, pts[i].lon, dist_m);
+                    dist_km = dist_m / 1000.0;
+                }
+                vals[i] = skywave_field_dbuvm(scenario.frequencies.f1_hz,
+                                              dist_km, tx.power_w,
+                                              tx.lat, pts[i].lat);
+            }
+        });
+        if (cancel.load()) return;
+
         for (size_t i = 0; i < n; ++i) {
-            double dist_m = 0.0;
-            geod.Inverse(tx.lat, tx.lon, pts[i].lat, pts[i].lon, dist_m);
-            double e = skywave_field_dbuvm(scenario.frequencies.f1_hz,
-                                           dist_m / 1000.0,
-                                           tx.power_w,
-                                           tx.lat, pts[i].lat);
-            if (e > -199.0) {
-                double lin = std::pow(10.0, e / 20.0);
+            if (vals[i] > -199.0) {
+                double lin = std::pow(10.0, vals[i] / 20.0);
                 rss[i] += lin * lin;
             }
         }
