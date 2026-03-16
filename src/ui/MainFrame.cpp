@@ -97,6 +97,7 @@ MainFrame::MainFrame()
     net_config_->SetScenario(&scenario_);
     net_config_->on_changed = [this](const Scenario&){
         param_editor_->SetFrequency(scenario_.frequencies.f1_hz);
+        param_editor_->SetVelocity(scenario_.receiver.vp_ms);
         SyncGridBounds();
         MarkDirty();
         TriggerRecompute();
@@ -194,6 +195,7 @@ MainFrame::MainFrame()
 
     // Populate parameter editor with defaults
     param_editor_->SetFrequency(scenario_.frequencies.f1_hz);
+    param_editor_->SetVelocity(scenario_.receiver.vp_ms);
     param_editor_->SetSiteList(scenario_.transmitter_sites);
     param_editor_->LoadReceiver(scenario_.receiver);
 
@@ -641,6 +643,7 @@ void MainFrame::OnFileNew(wxCommandEvent& /*evt*/) {
     ClearMapTransmitters(old_count);
     net_config_->SetScenario(&scenario_);
     param_editor_->SetFrequency(scenario_.frequencies.f1_hz);
+    param_editor_->SetVelocity(scenario_.receiver.vp_ms);
     param_editor_->SetSiteList(scenario_.transmitter_sites);
     param_editor_->LoadReceiver(scenario_.receiver);
     SyncGridBounds();
@@ -676,6 +679,7 @@ void MainFrame::OnFileOpen(wxCommandEvent& /*evt*/) {
 
     net_config_->SetScenario(&scenario_);
     param_editor_->SetFrequency(scenario_.frequencies.f1_hz);
+    param_editor_->SetVelocity(scenario_.receiver.vp_ms);
     param_editor_->SetSiteList(scenario_.transmitter_sites);
     param_editor_->LoadReceiver(scenario_.receiver);
     param_editor_->ClearSelection();

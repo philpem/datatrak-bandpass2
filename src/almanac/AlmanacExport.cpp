@@ -19,11 +19,11 @@ namespace almanac {
 // Header block: generation parameters + frequency warnings
 // ---------------------------------------------------------------------------
 static std::string make_header(const Scenario& scenario, FirmwareFormat fmt) {
-    const double c = 299'792'458.0;
-    double f1_khz  = scenario.frequencies.f1_hz / 1000.0;
-    double f2_khz  = scenario.frequencies.f2_hz / 1000.0;
-    double lw1     = c / scenario.frequencies.f1_hz;  // lane width (m)
-    double lw2     = c / scenario.frequencies.f2_hz;
+    const double vp = scenario.receiver.vp_ms;  // receiver firmware velocity
+    double f1_khz   = scenario.frequencies.f1_hz / 1000.0;
+    double f2_khz   = scenario.frequencies.f2_hz / 1000.0;
+    double lw1      = vp / scenario.frequencies.f1_hz;  // lane width as receiver sees it (m)
+    double lw2      = vp / scenario.frequencies.f2_hz;
 
     bool non_standard = (std::abs(f1_khz - 146.4375) > 0.001 ||
                          std::abs(f2_khz - 131.2500)  > 0.001);

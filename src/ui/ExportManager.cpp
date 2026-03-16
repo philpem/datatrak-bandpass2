@@ -209,11 +209,11 @@ std::string ExportManager::export_html(const GridData& data,
     std::ofstream f(path);
     if (!f) return "Cannot open file for writing: " + path;
 
-    const double c = 299'792'458.0;
-    double f1_khz = scenario.frequencies.f1_hz / 1000.0;
-    double f2_khz = scenario.frequencies.f2_hz / 1000.0;
-    double lw1_m  = c / scenario.frequencies.f1_hz;
-    double lw2_m  = c / scenario.frequencies.f2_hz;
+    const double vp = scenario.receiver.vp_ms;  // receiver firmware velocity
+    double f1_khz  = scenario.frequencies.f1_hz / 1000.0;
+    double f2_khz  = scenario.frequencies.f2_hz / 1000.0;
+    double lw1_m   = vp / scenario.frequencies.f1_hz;
+    double lw2_m   = vp / scenario.frequencies.f2_hz;
 
     // Layer descriptions
     static const std::pair<const char*, const char*> LAYER_DESC[] = {
