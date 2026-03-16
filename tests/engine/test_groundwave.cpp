@@ -713,5 +713,38 @@ TEST_CASE("CachedConductivityMap: falls through outside cached region") {
     CHECK(gc.sigma > 0.0);
 }
 
+// ---- parallel_for ----
+
+#include "engine/parallel.h"
+
+TEST_CASE("parallel_for: fills array correctly") {
+    std::vector<double> arr(1000, 0.0);
+    std::atomic<bool> cancel{false};
+    bp::parallel_for(arr.size(), cancel, [&](size_t begin, size_t end) {
+        for (size_t i = begin; i < end; ++i)
+            arr[i] = (double)i * 2.0;
+    });
+    for (size_t i = 0; i < arr.size(); ++i)
+        CHECK(arr[i] == (double)i * 2.0);
+}
+
+TEST_CASE("parallel_for: cancel stops work") {
+    std::atomic<bool> cancel{true};
+    std::atomic<int> count{0};
+    bp::parallel_for(1000, cancel, [&](size_t, size_t) {
+        count.fetch_add(1);
+    });
+    CHECK(count.load() == 0);
+}
+
+TEST_CASE("parallel_for: zero count is no-op") {
+    std::atomic<bool> cancel{false};
+    std::atomic<int> count{0};
+    bp::parallel_for(0, cancel, [&](size_t, size_t) {
+        count.fetch_add(1);
+    });
+    CHECK(count.load() == 0);
+}
+
 // ---- TOML round-trip for GRWAVE ----
 // (TOML tests are in tests/model/test_toml_io.cpp)

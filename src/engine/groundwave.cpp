@@ -1,6 +1,7 @@
 #include "groundwave.h"
 #include "grwave.h"
 #include "conductivity.h"
+#include "parallel.h"
 #include <GeographicLib/Geodesic.hpp>
 #include <GeographicLib/GeodesicLine.hpp>
 #include <cmath>
@@ -304,25 +305,46 @@ void computeGroundwave(GridData&               data,
         }
 
         std::vector<double> vals(n);
-        for (size_t i = 0; i < n; ++i) {
-            if (cancel.load()) return;
-            // Groundwave field strength using selected propagation model.
-            double e = groundwave_for_model(
-                scenario.frequencies.f1_hz,
-                tx.lat, tx.lon, pts[i].lat, pts[i].lon,
-                *cond_map, tx.power_w,
-                scenario.propagation_model, 20);
-            vals[i] = e;
-            double lin = std::pow(10.0, e / 20.0);
-            rss_total[i] += lin * lin;
 
-            ++done;
-            if (progress_fn) {
-                int pct = (int)(done * 100 / total_work);
-                if (pct != last_pct) {
-                    progress_fn(pct);
-                    last_pct = pct;
-                }
+        // Capture active GRWAVE LUTs so spawned threads can install their own scopes.
+        const GrwaveLUT* lut_f1 = GrwaveLUT::find_active(scenario.frequencies.f1_hz);
+        const GrwaveLUT* lut_f2 = GrwaveLUT::find_active(scenario.frequencies.f2_hz);
+
+        std::atomic<size_t> done_atomic{0};
+        parallel_for(n, cancel, [&](size_t begin, size_t end) {
+            // Install GRWAVE LUT scopes on this thread (no-op if null).
+            std::unique_ptr<GrwaveLUT::Scope> scope_f1, scope_f2;
+            if (lut_f1)
+                scope_f1 = std::make_unique<GrwaveLUT::Scope>(*lut_f1);
+            if (lut_f2 && lut_f2 != lut_f1)
+                scope_f2 = std::make_unique<GrwaveLUT::Scope>(*lut_f2);
+
+            for (size_t i = begin; i < end; ++i) {
+                if (cancel.load()) return;
+                double e = groundwave_for_model(
+                    scenario.frequencies.f1_hz,
+                    tx.lat, tx.lon, pts[i].lat, pts[i].lon,
+                    *cond_map, tx.power_w,
+                    scenario.propagation_model, 20);
+                vals[i] = e;
+
+                done_atomic.fetch_add(1, std::memory_order_relaxed);
+            }
+        });
+        if (cancel.load()) return;
+
+        // Accumulate RSS (sequential — single thread)
+        for (size_t i = 0; i < n; ++i) {
+            double lin = std::pow(10.0, vals[i] / 20.0);
+            rss_total[i] += lin * lin;
+        }
+        done += n;
+
+        if (progress_fn) {
+            int pct = (int)(done * 100 / total_work);
+            if (pct != last_pct) {
+                progress_fn(pct);
+                last_pct = pct;
             }
         }
 

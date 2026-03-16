@@ -2,6 +2,7 @@
 #include "groundwave.h"
 #include "conductivity.h"
 #include "noise.h"
+#include "parallel.h"
 #include <GeographicLib/Geodesic.hpp>
 #include <cmath>
 #include <algorithm>
@@ -142,71 +143,82 @@ void computeWHDOP(GridData& data, const Scenario& scenario,
         if (!c.ok) { tx_cache.push_back(std::move(c)); continue; }
         if (cancel.load()) return;
 
-        for (size_t i = 0; i < n; ++i) {
-            double dist_m = 0.0;
-            geod.Inverse(tx.lat, tx.lon, pts[i].lat, pts[i].lon, dist_m);
-            double dist_km = std::max(dist_m / 1000.0, 0.1);
-            GroundConstants gc = cond_map->lookup(
-                0.5 * (tx.lat + pts[i].lat),
-                0.5 * (tx.lon + pts[i].lon));
-            double e_gw = groundwave_field_dbuvm(
-                scenario.frequencies.f1_hz, dist_km, gc, tx.power_w);
-            c.gw[i]  = e_gw;
-            c.snr[i] = compute_snr_db(e_gw, atm_noise_val, veh_noise);
-        }
+        // Parallel over grid points for this transmitter
+        double* gw_ptr  = c.gw.data();
+        double* snr_ptr = c.snr.data();
+        double tx_lat = tx.lat, tx_lon = tx.lon, tx_pw = tx.power_w;
+        double freq = scenario.frequencies.f1_hz;
+        parallel_for(n, cancel, [&](size_t begin, size_t end) {
+            for (size_t i = begin; i < end; ++i) {
+                double dist_m = 0.0;
+                GeographicLib::Geodesic::WGS84().Inverse(
+                    tx_lat, tx_lon, pts[i].lat, pts[i].lon, dist_m);
+                double dist_km = std::max(dist_m / 1000.0, 0.1);
+                GroundConstants gc = cond_map->lookup(
+                    0.5 * (tx_lat + pts[i].lat),
+                    0.5 * (tx_lon + pts[i].lon));
+                double e_gw = groundwave_field_dbuvm(freq, dist_km, gc, tx_pw);
+                gw_ptr[i]  = e_gw;
+                snr_ptr[i] = compute_snr_db(e_gw, atm_noise_val, veh_noise);
+            }
+        });
         tx_cache.push_back(std::move(c));
     }
 
     if (cancel.load()) return;
 
     // Per grid point: build station geometry, compute WHDOP and repeatable
-    for (size_t i = 0; i < n; ++i) {
-        if (cancel.load()) return;
+    double* whdop_vals = (it_whdop != data.layers.end()) ? it_whdop->second.values.data() : nullptr;
+    double* rep_vals   = (it_rep   != data.layers.end()) ? it_rep->second.values.data()   : nullptr;
+    int min_st = scenario.receiver.min_stations;
+    double max_rng = scenario.receiver.max_range_km;
 
-        std::vector<StationGeometry> stations;
-        stations.reserve(tx_cache.size());
+    parallel_for(n, cancel, [&](size_t begin, size_t end) {
+        for (size_t i = begin; i < end; ++i) {
+            if (cancel.load()) return;
 
-        for (size_t ti = 0; ti < tx_cache.size(); ++ti) {
-            const auto& tc = tx_cache[ti];
-            if (!tc.ok) continue;
+            std::vector<StationGeometry> stations;
+            stations.reserve(tx_cache.size());
 
-            StationGeometry sg;
-            sg.slot   = tc.slot;
-            sg.lat_tx = tc.lat_tx;
-            sg.lon_tx = tc.lon_tx;
-            sg.snr_db = tc.snr[i];
-            sg.usable = (sg.snr_db > 0.0);
+            for (size_t ti = 0; ti < tx_cache.size(); ++ti) {
+                const auto& tc = tx_cache[ti];
+                if (!tc.ok) continue;
 
-            double dist_m = 0.0, az1 = 0.0, az2 = 0.0;
-            geod.Inverse(pts[i].lat, pts[i].lon, tc.lat_tx, tc.lon_tx,
-                         dist_m, az1, az2);
-            sg.dist_km     = dist_m / 1000.0;
-            sg.azimuth_deg = az1;
-            sg.sigma_phi_ml = phase_uncertainty_ml(sg.snr_db, scenario.frequencies);
-            stations.push_back(sg);
-        }
+                StationGeometry sg;
+                sg.slot   = tc.slot;
+                sg.lat_tx = tc.lat_tx;
+                sg.lon_tx = tc.lon_tx;
+                sg.snr_db = tc.snr[i];
+                sg.usable = (sg.snr_db > 0.0);
 
-        std::vector<int> selected;
-        double whdop = compute_whdop(stations,
-                                      scenario.receiver.min_stations,
-                                      scenario.receiver.max_range_km,
-                                      selected);
+                double dist_m = 0.0, az1 = 0.0, az2 = 0.0;
+                GeographicLib::Geodesic::WGS84().Inverse(
+                    pts[i].lat, pts[i].lon, tc.lat_tx, tc.lon_tx,
+                    dist_m, az1, az2);
+                sg.dist_km     = dist_m / 1000.0;
+                sg.azimuth_deg = az1;
+                sg.sigma_phi_ml = phase_uncertainty_ml(sg.snr_db, scenario.frequencies);
+                stations.push_back(sg);
+            }
 
-        if (it_whdop != data.layers.end())
-            it_whdop->second.values[i] = whdop;
+            std::vector<int> selected;
+            double whdop = compute_whdop(stations, min_st, max_rng, selected);
 
-        // Repeatable accuracy: sigma_r = mean(sigma_phi) * WHDOP  [ml]
-        if (it_rep != data.layers.end()) {
-            if (selected.empty() || std::isnan(whdop)) {
-                it_rep->second.values[i] = std::numeric_limits<double>::quiet_NaN();
-            } else {
-                double sigma_sum = 0.0;
-                for (int idx : selected) sigma_sum += stations[idx].sigma_phi_ml;
-                double sigma_mean = sigma_sum / selected.size();
-                it_rep->second.values[i] = sigma_mean * whdop;
+            if (whdop_vals)
+                whdop_vals[i] = whdop;
+
+            if (rep_vals) {
+                if (selected.empty() || std::isnan(whdop)) {
+                    rep_vals[i] = std::numeric_limits<double>::quiet_NaN();
+                } else {
+                    double sigma_sum = 0.0;
+                    for (int idx : selected) sigma_sum += stations[idx].sigma_phi_ml;
+                    double sigma_mean = sigma_sum / selected.size();
+                    rep_vals[i] = sigma_mean * whdop;
+                }
             }
         }
-    }
+    });
 }
 
 } // namespace bp
