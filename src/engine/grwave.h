@@ -1,6 +1,7 @@
 #pragma once
 #include "groundwave.h"
 #include <array>
+#include <functional>
 #include <memory>
 
 namespace bp {
@@ -36,31 +37,45 @@ double grwave_field_dbuvm(double freq_hz,
 // by sigma only, using eps_r=15 (land) for sigma < 1 S/m and eps_r=70 (sea)
 // for sigma >= 1 S/m.
 //
-// Memory:  N_DIST * N_SIGMA * 8 bytes = 200 * 50 * 8 = 80 KB.
+// Memory:  N_DIST * N_SIGMA * 8 bytes = 200 * 50 * 8 = 80 KB per table.
 // Build:   ~10k calls to grwave_field_dbuvm (one-time, ~1 s on modern CPU).
 // Lookup:  bilinear interpolation in log(dist) x log(sigma) space.
+//
+// Multiple LUTs (e.g. F1 + F2) can be active simultaneously on the same
+// thread.  Scopes form a linked list; grwave_field_dbuvm() walks the chain
+// to find the matching frequency.
 // ---------------------------------------------------------------------------
 class GrwaveLUT {
 public:
-    explicit GrwaveLUT(double freq_hz);
+    // Build the LUT for the given frequency.
+    // progress_fn, if provided, is called with a value 0-100 during build.
+    explicit GrwaveLUT(double freq_hz,
+                       const std::function<void(int)>& progress_fn = {});
 
     // Interpolated field strength [dBuV/m] matching grwave_field_dbuvm().
     double lookup(double dist_km, const GroundConstants& gc, double power_w) const;
 
     double freq_hz() const { return freq_hz_; }
 
-    // Thread-local active LUT.  When non-null, grwave_field_dbuvm() uses it.
-    static const GrwaveLUT* active();
+    // Thread-local active LUT chain.  grwave_field_dbuvm() walks this to
+    // find a LUT matching the requested frequency.
+    static const GrwaveLUT* find_active(double freq_hz);
 
-    // RAII scope guard: installs this LUT as active for the current thread.
+    // RAII scope guard: pushes this LUT onto the active chain for the
+    // current thread.  Multiple scopes can be nested (e.g. F1 + F2).
     struct Scope {
         explicit Scope(const GrwaveLUT& lut);
         ~Scope();
         Scope(const Scope&) = delete;
         Scope& operator=(const Scope&) = delete;
     private:
-        const GrwaveLUT* prev_;
+        const GrwaveLUT& lut_;
+        const Scope* prev_;
+        friend class GrwaveLUT;
     };
+
+    // Legacy single-LUT query (returns first in chain, or null).
+    static const GrwaveLUT* active();
 
 private:
     static constexpr int N_DIST  = 200;
@@ -78,7 +93,7 @@ private:
     // atten_db_[di * N_SIGMA + si]
     std::array<double, N_DIST * N_SIGMA> atten_db_;
 
-    static thread_local const GrwaveLUT* active_;
+    static thread_local const Scope* active_scope_;
 };
 
 } // namespace bp

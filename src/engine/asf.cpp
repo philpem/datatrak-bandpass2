@@ -1,6 +1,7 @@
 #include "asf.h"
 #include "monteath.h"
 #include "groundwave.h"
+#include "grwave.h"
 #include "skywave.h"
 #include "noise.h"
 #include "snr.h"
@@ -556,6 +557,20 @@ std::vector<SlotPhaseResult> computeAtPoint(
     // Build conductivity and terrain maps from scenario
     auto cond_map    = make_conductivity_map(scenario);
     auto terrain_map = make_terrain_map(scenario);
+
+    // Build GRWAVE LUTs for fast lookup if using the GRWAVE propagation model.
+    // computeAtPoint() is called independently (not from the pipeline), so
+    // it needs its own LUTs.
+    std::unique_ptr<GrwaveLUT> pt_lut_f1, pt_lut_f2;
+    std::unique_ptr<GrwaveLUT::Scope> pt_scope_f1, pt_scope_f2;
+    if (scenario.propagation_model == Scenario::PropagationModel::GRWAVE) {
+        pt_lut_f1 = std::make_unique<GrwaveLUT>(scenario.frequencies.f1_hz);
+        pt_scope_f1 = std::make_unique<GrwaveLUT::Scope>(*pt_lut_f1);
+        if (scenario.frequencies.f1_hz != scenario.frequencies.f2_hz) {
+            pt_lut_f2 = std::make_unique<GrwaveLUT>(scenario.frequencies.f2_hz);
+            pt_scope_f2 = std::make_unique<GrwaveLUT::Scope>(*pt_lut_f2);
+        }
+    }
 
     std::vector<SlotPhaseResult> results;
 
