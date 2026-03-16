@@ -82,7 +82,14 @@ void ComputeManager::WorkerLoop() {
         // before the new computation begins.
         cancel_flag_.store(false);
 
-        ComputeResult result = RunPipeline(*req.scenario, cancel_flag_);
+        ComputeResult result;
+        try {
+            result = RunPipeline(*req.scenario, cancel_flag_);
+        } catch (const std::exception& ex) {
+            result.error = std::string("Internal error: ") + ex.what();
+        } catch (...) {
+            result.error = "Internal error: unknown exception in pipeline";
+        }
         result.request_id = req.request_id;
 
         if (!cancel_flag_.load() && result_sink_) {
