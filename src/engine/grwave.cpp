@@ -361,8 +361,8 @@ double grwave_field_dbuvm(double freq_hz,
                            const GroundConstants& gc,
                            double power_w)
 {
-    auto* lut = GrwaveLUT::active();
-    if (lut && lut->freq_hz() == freq_hz)
+    auto* lut = GrwaveLUT::find_active(freq_hz);
+    if (lut)
         return lut->lookup(dist_km, gc, power_w);
     return grwave_field_full(freq_hz, dist_km, gc, power_w);
 }
@@ -371,20 +371,30 @@ double grwave_field_dbuvm(double freq_hz,
 // GrwaveLUT implementation
 // =========================================================================
 
-thread_local const GrwaveLUT* GrwaveLUT::active_ = nullptr;
+thread_local const GrwaveLUT::Scope* GrwaveLUT::active_scope_ = nullptr;
 
-const GrwaveLUT* GrwaveLUT::active() { return active_; }
+const GrwaveLUT* GrwaveLUT::find_active(double freq_hz) {
+    for (auto* s = active_scope_; s; s = s->prev_)
+        if (s->lut_.freq_hz() == freq_hz)
+            return &s->lut_;
+    return nullptr;
+}
 
-GrwaveLUT::Scope::Scope(const GrwaveLUT& lut) {
-    prev_ = active_;
-    active_ = &lut;
+const GrwaveLUT* GrwaveLUT::active() {
+    return active_scope_ ? &active_scope_->lut_ : nullptr;
+}
+
+GrwaveLUT::Scope::Scope(const GrwaveLUT& lut)
+    : lut_(lut), prev_(active_scope_)
+{
+    active_scope_ = this;
 }
 
 GrwaveLUT::Scope::~Scope() {
-    active_ = prev_;
+    active_scope_ = prev_;
 }
 
-GrwaveLUT::GrwaveLUT(double freq_hz)
+GrwaveLUT::GrwaveLUT(double freq_hz, const std::function<void(int)>& progress_fn)
     : freq_hz_(freq_hz)
 {
     dist_step_  = (LOG_DIST_MAX  - LOG_DIST_MIN)  / (N_DIST  - 1);
@@ -394,6 +404,7 @@ GrwaveLUT::GrwaveLUT(double freq_hz)
     // Use power_w = 1 kW so the free-space reference E0 at d=1 km is
     // 300 mV/m = 109.54 dBuV/m.  Store atten_db = field - E0 so that
     // lookup() can reconstruct any power level cheaply.
+    int last_pct = -1;
     for (int di = 0; di < N_DIST; ++di) {
         double log_d = LOG_DIST_MIN + di * dist_step_;
         double d_km  = std::pow(10.0, log_d);
@@ -413,6 +424,14 @@ GrwaveLUT::GrwaveLUT(double freq_hz)
 
             double field = grwave_field_full(freq_hz, d_km, gc, 1000.0);
             atten_db_[di * N_SIGMA + si] = field - E0_dbuvm;
+        }
+
+        if (progress_fn) {
+            int pct = (di + 1) * 100 / N_DIST;
+            if (pct != last_pct) {
+                progress_fn(pct);
+                last_pct = pct;
+            }
         }
     }
 }

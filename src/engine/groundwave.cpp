@@ -283,17 +283,9 @@ void computeGroundwave(GridData&               data,
     // Build conductivity map from scenario settings (P2-03)
     auto cond_map = make_conductivity_map(scenario);
 
-    // Build GRWAVE lookup table if using the GRWAVE propagation model.
-    // The LUT precomputes attenuation for 200 distances x 50 conductivities
-    // (~80 KB), replacing ~10k+ residue series evaluations with bilinear
-    // interpolation.  The Scope guard installs the LUT as thread-local active
-    // so grwave_field_dbuvm() picks it up transparently.
-    std::unique_ptr<GrwaveLUT> grwave_lut;
-    std::unique_ptr<GrwaveLUT::Scope> grwave_scope;
-    if (scenario.propagation_model == Scenario::PropagationModel::GRWAVE) {
-        grwave_lut = std::make_unique<GrwaveLUT>(scenario.frequencies.f1_hz);
-        grwave_scope = std::make_unique<GrwaveLUT::Scope>(*grwave_lut);
-    }
+    // GRWAVE LUT scopes (if any) are managed by RunPipeline() so they stay
+    // alive across all pipeline stages.  grwave_field_dbuvm() checks the
+    // thread-local chain transparently.
 
     std::vector<double> rss_total(n, 0.0);
 

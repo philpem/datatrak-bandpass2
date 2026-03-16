@@ -626,5 +626,65 @@ TEST_CASE("GrwaveLUT: different frequency builds different table") {
     CHECK(E_lo != Approx(E_hi).margin(0.01));
 }
 
+TEST_CASE("GrwaveLUT: multi-LUT scope chain finds correct frequency") {
+    GrwaveLUT lut_f1(146437.5);
+    GrwaveLUT lut_f2(131250.0);
+
+    // Both scopes active — find_active picks the right one
+    GrwaveLUT::Scope scope_f1(lut_f1);
+    GrwaveLUT::Scope scope_f2(lut_f2);
+
+    CHECK(GrwaveLUT::find_active(146437.5) == &lut_f1);
+    CHECK(GrwaveLUT::find_active(131250.0) == &lut_f2);
+    CHECK(GrwaveLUT::find_active(100000.0) == nullptr);  // not in chain
+
+    // Legacy active() returns the most recent (f2)
+    CHECK(GrwaveLUT::active() == &lut_f2);
+}
+
+TEST_CASE("GrwaveLUT: scope chain pops correctly") {
+    GrwaveLUT lut_f1(146437.5);
+    GrwaveLUT lut_f2(131250.0);
+
+    GrwaveLUT::Scope scope_f1(lut_f1);
+    {
+        GrwaveLUT::Scope scope_f2(lut_f2);
+        CHECK(GrwaveLUT::find_active(131250.0) == &lut_f2);
+    }
+    // f2 scope destroyed — only f1 remains
+    CHECK(GrwaveLUT::find_active(131250.0) == nullptr);
+    CHECK(GrwaveLUT::find_active(146437.5) == &lut_f1);
+}
+
+TEST_CASE("GrwaveLUT: grwave_field_dbuvm dispatches to correct LUT in chain") {
+    GrwaveLUT lut_f1(146437.5);
+    GrwaveLUT lut_f2(131250.0);
+    GroundConstants gc { 0.005, 15.0 };
+
+    // Full computation reference values
+    double E_f1_full = grwave_field_dbuvm(146437.5, 200.0, gc, 40.0);
+    double E_f2_full = grwave_field_dbuvm(131250.0, 200.0, gc, 40.0);
+
+    GrwaveLUT::Scope scope_f1(lut_f1);
+    GrwaveLUT::Scope scope_f2(lut_f2);
+
+    double E_f1_lut = grwave_field_dbuvm(146437.5, 200.0, gc, 40.0);
+    double E_f2_lut = grwave_field_dbuvm(131250.0, 200.0, gc, 40.0);
+
+    CHECK(std::abs(E_f1_full - E_f1_lut) < 0.5);
+    CHECK(std::abs(E_f2_full - E_f2_lut) < 0.5);
+}
+
+TEST_CASE("GrwaveLUT: progress callback is called") {
+    int max_pct = 0;
+    int call_count = 0;
+    GrwaveLUT lut(146437.5, [&](int pct) {
+        max_pct = std::max(max_pct, pct);
+        ++call_count;
+    });
+    CHECK(max_pct == 100);
+    CHECK(call_count > 0);
+}
+
 // ---- TOML round-trip for GRWAVE ----
 // (TOML tests are in tests/model/test_toml_io.cpp)

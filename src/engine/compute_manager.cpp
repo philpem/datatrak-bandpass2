@@ -1,5 +1,6 @@
 #include "compute_manager.h"
 #include "groundwave.h"
+#include "grwave.h"
 #include <cmath>
 #include "skywave.h"
 #include "noise.h"
@@ -161,11 +162,39 @@ ComputeResult ComputeManager::RunPipeline(const Scenario& scenario,
     // GRWAVE residue series is ~100x slower per grid point than the polynomial,
     // so give it a much larger share of the progress bar to avoid appearing stuck.
     const bool is_grwave = scenario.propagation_model == Scenario::PropagationModel::GRWAVE;
+
+    // Build GRWAVE lookup tables if using the GRWAVE propagation model.
+    // Built here (not in computeGroundwave) so the LUTs stay alive across all
+    // pipeline stages — computeASF() may also call grwave_field_dbuvm() on
+    // cache misses.  One LUT per distinct frequency (~80 KB each).
+    std::unique_ptr<GrwaveLUT> grwave_lut_f1, grwave_lut_f2;
+    std::unique_ptr<GrwaveLUT::Scope> grwave_scope_f1, grwave_scope_f2;
+    if (is_grwave) {
+        bool two_freqs = (scenario.frequencies.f1_hz != scenario.frequencies.f2_hz);
+        PostProgress("Building GRWAVE LUT (F1)", 5);
+        auto f1_progress = [this, two_freqs](int pct) {
+            int mapped = two_freqs ? (5 + pct * 5 / 100) : (5 + pct * 10 / 100);
+            PostProgress("Building GRWAVE LUT (F1)", mapped);
+        };
+        grwave_lut_f1 = std::make_unique<GrwaveLUT>(scenario.frequencies.f1_hz, f1_progress);
+        grwave_scope_f1 = std::make_unique<GrwaveLUT::Scope>(*grwave_lut_f1);
+
+        if (two_freqs) {
+            PostProgress("Building GRWAVE LUT (F2)", 10);
+            auto f2_progress = [this](int pct) {
+                PostProgress("Building GRWAVE LUT (F2)", 10 + pct * 5 / 100);
+            };
+            grwave_lut_f2 = std::make_unique<GrwaveLUT>(scenario.frequencies.f2_hz, f2_progress);
+            grwave_scope_f2 = std::make_unique<GrwaveLUT::Scope>(*grwave_lut_f2);
+        }
+        if (cancel.load()) return result;
+    }
+
     const char* gw_label =
         is_grwave                                                                ? "Groundwave (GRWAVE)" :
         scenario.propagation_model == Scenario::PropagationModel::Homogeneous    ? "Groundwave (Homogeneous)" :
                                                                                    "Groundwave (Millington)";
-    const int gw_start = 5;
+    const int gw_start = is_grwave ? 15 : 5;
     const int gw_end   = is_grwave ? 60 : 20;
     PostProgress(gw_label, gw_start);
     computeGroundwave(*data, scenario, cancel, [this, gw_label, gw_start, gw_end](int pct) {
