@@ -26,7 +26,7 @@ sudo apt-get install -y \
     libwxgtk3.2-dev libwxgtk-webview3.2-dev \
     libsqlite3-dev libcurl4-gnutls-dev \
     libgeographiclib-dev nlohmann-json3-dev \
-    catch2
+    libgdal-dev catch2
 
 git clone https://github.com/philpem/datatrak-bandpass2.git
 cd datatrak-bandpass2
