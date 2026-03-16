@@ -204,8 +204,10 @@ void computeASF(GridData& data, const Scenario& scenario,
     for (const auto& po : scenario.pattern_offsets)
         po_lookup[po.pattern] = &po;
 
-    const double c          = 299'792'458.0;
-    const double lane_m_f1  = c / scenario.frequencies.f1_hz;
+    // Receiver firmware velocity — used for ml↔m conversion in the VL fix.
+    // The VL mimics the receiver, which converts phase to range using vp_ms.
+    const double vp         = scenario.receiver.vp_ms;
+    const double lane_m_f1  = vp / scenario.frequencies.f1_hz;
     const double veh_noise  = vehicle_noise_dbuvm(scenario.receiver.vehicle_noise_dbuvpm);
     const double atm_noise_v = atm_noise_dbuvm(scenario.frequencies.f1_hz);
 
@@ -536,7 +538,8 @@ std::vector<SlotPhaseResult> computeAtPoint(
     double lat_rx, double lon_rx,
     const Scenario& scenario)
 {
-    const double c     = 299'792'458.0;
+    const double c     = 299'792'458.0;       // vacuum — for propagation delay physics
+    const double vp    = scenario.receiver.vp_ms;  // receiver firmware velocity
     const double atm_n = atm_noise_dbuvm(scenario.frequencies.f1_hz);
     const double veh_n = vehicle_noise_dbuvm(scenario.receiver.vehicle_noise_dbuvpm);
 
@@ -595,8 +598,9 @@ std::vector<SlotPhaseResult> computeAtPoint(
         double tau_f1 = tau_free + asf_s_f1 + spo_s + delay_s;
         double tau_f2 = tau_free + asf_s_f2 + spo_s + delay_s;
 
-        // Pseudorange (m) — for display purposes, show free-space + ASF
-        double pr_m = (tau_free + asf_s_f1) * c;
+        // Pseudorange (m) — as the receiver firmware would compute it:
+        // total_phase × (vp_ms / freq) = total_delay × vp_ms
+        double pr_m = (tau_free + asf_s_f1) * vp;
 
         // Fractional phase and lane number
         // lane_phase(tau, freq): returns {lane_number, frac_phase [0,1)}

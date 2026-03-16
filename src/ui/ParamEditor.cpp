@@ -665,9 +665,8 @@ void ParamEditor::OnCalcSPO(wxCommandEvent& /*evt*/) {
     geod.Inverse(slave_lat, slave_lon, master_lat, master_lon, dist_m);
     dist_m = std::abs(dist_m);
 
-    constexpr double c = 299'792'458.0;
     double station_delay_s = wxAtof(tx_delay_->GetValue()) * 1e-6;
-    double total_delay_s   = dist_m / c + station_delay_s;
+    double total_delay_s   = dist_m / vp_ms_ + station_delay_s;
 
     double phase_lanes = std::fmod(total_delay_s * f1_hz_, 1.0);
     if (phase_lanes > 0.5) phase_lanes -= 1.0;

@@ -33,6 +33,9 @@ public:
     // uses the correct carrier.  Defaults to Datatrak standard 146.4375 kHz.
     void SetFrequency(double f1_hz) { f1_hz_ = f1_hz; }
 
+    // Keep the receiver propagation velocity in sync for SPO calculation.
+    void SetVelocity(double vp_ms) { vp_ms_ = vp_ms; }
+
     // Callbacks wired by MainFrame
     std::function<void(int site_id, const TransmitterSite&)> on_site_changed;
     std::function<void(int site_id, bool locked)>            on_site_lock_changed;
@@ -110,6 +113,7 @@ private:
     TransmitterSite  current_site_;            // working copy
     bool             updating_          = false;
     double           f1_hz_             = 146437.5;
+    double           vp_ms_             = 299'300'000.0;
 
     // ── Receiver tab ────────────────────────────────────────────────────────
     wxChoice*   rx_mode_      = nullptr;
