@@ -175,4 +175,70 @@ std::unique_ptr<ConductivityMap> make_conductivity_map(const Scenario& scenario)
     }
 }
 
+// ---------------------------------------------------------------------------
+// CachedConductivityMap
+// ---------------------------------------------------------------------------
+CachedConductivityMap::CachedConductivityMap(
+    std::unique_ptr<ConductivityMap> source,
+    double lat_min, double lat_max,
+    double lon_min, double lon_max,
+    double resolution_deg)
+    : source_(std::move(source))
+    , lat_min_(lat_min)
+    , lon_min_(lon_min)
+    , inv_res_(1.0 / resolution_deg)
+{
+    rows_ = std::max(1, (int)std::ceil((lat_max - lat_min) * inv_res_) + 1);
+    cols_ = std::max(1, (int)std::ceil((lon_max - lon_min) * inv_res_) + 1);
+    grid_.resize((size_t)rows_ * cols_);
+
+    for (int r = 0; r < rows_; ++r) {
+        double lat = lat_min + r / inv_res_;
+        for (int c = 0; c < cols_; ++c) {
+            double lon = lon_min + c / inv_res_;
+            grid_[(size_t)r * cols_ + c] = source_->lookup(lat, lon);
+        }
+    }
+}
+
+GroundConstants CachedConductivityMap::lookup(double lat, double lon) const {
+    double fr = (lat - lat_min_) * inv_res_;
+    double fc = (lon - lon_min_) * inv_res_;
+
+    // Fall through to source if outside cached region
+    if (fr < 0.0 || fc < 0.0 || fr >= rows_ - 1 || fc >= cols_ - 1)
+        return source_->lookup(lat, lon);
+
+    int r0 = (int)fr;
+    int c0 = (int)fc;
+    double tr = fr - r0;
+    double tc = fc - c0;
+
+    // Bilinear interpolation
+    const auto& v00 = grid_[(size_t)r0       * cols_ + c0    ];
+    const auto& v10 = grid_[(size_t)r0       * cols_ + c0 + 1];
+    const auto& v01 = grid_[(size_t)(r0 + 1) * cols_ + c0    ];
+    const auto& v11 = grid_[(size_t)(r0 + 1) * cols_ + c0 + 1];
+
+    GroundConstants result;
+    result.sigma = v00.sigma * (1-tr)*(1-tc) + v10.sigma * (1-tr)*tc
+                 + v01.sigma * tr*(1-tc)     + v11.sigma * tr*tc;
+    result.eps_r = v00.eps_r * (1-tr)*(1-tc) + v10.eps_r * (1-tr)*tc
+                 + v01.eps_r * tr*(1-tc)     + v11.eps_r * tr*tc;
+    return result;
+}
+
+std::unique_ptr<ConductivityMap> make_cached_conductivity_map(const Scenario& scenario) {
+    auto base = make_conductivity_map(scenario);
+
+    // Extend grid bounds by 2° to cover Millington/Monteath segment midpoints
+    double lat_min = scenario.grid.lat_min - 2.0;
+    double lat_max = scenario.grid.lat_max + 2.0;
+    double lon_min = scenario.grid.lon_min - 2.0;
+    double lon_max = scenario.grid.lon_max + 2.0;
+
+    return std::make_unique<CachedConductivityMap>(
+        std::move(base), lat_min, lat_max, lon_min, lon_max, 0.02);
+}
+
 } // namespace bp

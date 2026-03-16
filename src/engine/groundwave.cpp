@@ -281,7 +281,7 @@ void computeGroundwave(GridData&               data,
     size_t n = pts.size();
 
     // Build conductivity map from scenario settings (P2-03)
-    auto cond_map = make_conductivity_map(scenario);
+    auto cond_map = make_cached_conductivity_map(scenario);
 
     // GRWAVE LUT scopes (if any) are managed by RunPipeline() so they stay
     // alive across all pipeline stages.  grwave_field_dbuvm() checks the

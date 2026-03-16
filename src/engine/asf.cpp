@@ -193,7 +193,7 @@ void computeASF(GridData& data, const Scenario& scenario,
     if (n == 0) return;
 
     // Build conductivity and terrain maps from scenario (P4-01 / conductivity fix)
-    auto cond_map    = make_conductivity_map(scenario);
+    auto cond_map    = make_cached_conductivity_map(scenario);
     auto terrain_map = make_terrain_map(scenario);
 
     // Build pattern-offset lookup: "slave_slot,master_slot" → PatternOffset*
@@ -555,7 +555,7 @@ std::vector<SlotPhaseResult> computeAtPoint(
     const double veh_n = vehicle_noise_dbuvm(scenario.receiver.vehicle_noise_dbuvpm);
 
     // Build conductivity and terrain maps from scenario
-    auto cond_map    = make_conductivity_map(scenario);
+    auto cond_map    = make_cached_conductivity_map(scenario);
     auto terrain_map = make_terrain_map(scenario);
 
     // Build GRWAVE LUTs for fast lookup if using the GRWAVE propagation model.
