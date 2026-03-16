@@ -1,6 +1,7 @@
 #include "asf.h"
 #include "monteath.h"
 #include "groundwave.h"
+#include "parallel.h"
 #include "grwave.h"
 #include "skywave.h"
 #include "noise.h"
@@ -279,165 +280,150 @@ void computeASF(GridData& data, const Scenario& scenario,
 
     if (cancel.load()) return;
 
-    for (size_t i = 0; i < n; ++i) {
-        if (cancel.load()) return;
+    // Get output layer value vectors as raw pointers for thread-safe indexed writes.
+    double* asf_vals  = (it_asf  != data.layers.end()) ? it_asf->second.values.data()  : nullptr;
+    double* abs_vals  = (it_abs  != data.layers.end()) ? it_abs->second.values.data()  : nullptr;
+    double* corr_vals = (it_corr != data.layers.end()) ? it_corr->second.values.data() : nullptr;
+    double* delt_vals = (it_delt != data.layers.end()) ? it_delt->second.values.data() : nullptr;
+    std::atomic<size_t> asf_done{0};
+    parallel_for(n, cancel, [&](size_t begin, size_t end) {
+        for (size_t i = begin; i < end; ++i) {
+            if (cancel.load()) return;
 
-        std::vector<StationGeometry> stations;
-        std::vector<double>          asf_m_vals;     // ASF in metres per station
-        std::vector<size_t>          tx_idx_map;     // station k → flat_txs[idx]
-        std::vector<double>          raw_dist_m;     // exact Airy dist (no-cache path)
+            std::vector<StationGeometry> stations;
+            std::vector<double>          asf_m_vals;
+            std::vector<size_t>          tx_idx_map;
+            std::vector<double>          raw_dist_m;
 
-        for (size_t ti = 0; ti < flat_txs.size(); ++ti) {
-            const auto& tx = flat_txs[ti];
-            if (tx.power_w <= 0.0) continue;
+            for (size_t ti = 0; ti < flat_txs.size(); ++ti) {
+                const auto& tx = flat_txs[ti];
+                if (tx.power_w <= 0.0) continue;
 
-            // Azimuth and distance: from cache or computed on-the-fly
-            double az_deg, dist_m;
-            if (use_airy_cache) {
-                az_deg = airy_az_cache[ti * n + i];
-                dist_m = airy_dist_cache[ti * n + i];
-            } else {
-                dist_m = airy_inverse(pts[i].lat, pts[i].lon,
-                                      tx.lat, tx.lon, az_deg);
-            }
-            double dist_km = std::max(dist_m / 1000.0, 0.1);
+                double az_deg, dist_m;
+                if (use_airy_cache) {
+                    az_deg = airy_az_cache[ti * n + i];
+                    dist_m = airy_dist_cache[ti * n + i];
+                } else {
+                    dist_m = airy_inverse(pts[i].lat, pts[i].lon,
+                                          tx.lat, tx.lon, az_deg);
+                }
+                double dist_km = std::max(dist_m / 1000.0, 0.1);
 
-            // Groundwave SNR: reuse cached Stage 1 result when available,
-            // otherwise fall back to computing it (should not happen in
-            // normal pipeline flow, but keeps the function self-contained).
-            double e_gw;
-            if (gw_cache[ti].values) {
-                e_gw = (*gw_cache[ti].values)[i];
-            } else {
-                e_gw = groundwave_for_model(
+                double e_gw;
+                if (gw_cache[ti].values) {
+                    e_gw = (*gw_cache[ti].values)[i];
+                } else {
+                    e_gw = groundwave_for_model(
+                        scenario.frequencies.f1_hz,
+                        tx.lat, tx.lon, pts[i].lat, pts[i].lon,
+                        *cond_map, tx.power_w,
+                        scenario.propagation_model, 20);
+                }
+                double snr = compute_snr_db(e_gw, atm_noise_v, veh_noise);
+
+                StationGeometry sg;
+                sg.slot         = tx.slot;
+                sg.lat_tx       = tx.lat;
+                sg.lon_tx       = tx.lon;
+                sg.dist_km      = dist_km;
+                sg.azimuth_deg  = az_deg;
+                sg.snr_db       = snr;
+                sg.usable       = (snr > 0.0 && dist_km <= scenario.receiver.max_range_km);
+                sg.sigma_phi_ml = phase_uncertainty_ml(snr, scenario.frequencies);
+
+                stations.push_back(sg);
+                tx_idx_map.push_back(ti);
+                if (!use_airy_cache)
+                    raw_dist_m.push_back(dist_m);
+
+                double asf_ml = monteath_asf_ml(
                     scenario.frequencies.f1_hz,
-                    tx.lat, tx.lon, pts[i].lat, pts[i].lon,
-                    *cond_map, tx.power_w,
-                    scenario.propagation_model, 20);
+                    tx.lat, tx.lon,
+                    pts[i].lat, pts[i].lon,
+                    *terrain_map, *cond_map,
+                    20);
+                asf_m_vals.push_back(asf_ml * lane_m_f1 / 1000.0);
             }
-            double snr  = compute_snr_db(e_gw, atm_noise_v, veh_noise);
 
-            StationGeometry sg;
-            sg.slot         = tx.slot;
-            sg.lat_tx       = tx.lat;
-            sg.lon_tx       = tx.lon;
-            sg.dist_km      = dist_km;
-            sg.azimuth_deg  = az_deg;
-            sg.snr_db       = snr;
-            sg.usable       = (snr > 0.0 && dist_km <= scenario.receiver.max_range_km);
-            sg.sigma_phi_ml = phase_uncertainty_ml(snr, scenario.frequencies);
-
-            stations.push_back(sg);
-            tx_idx_map.push_back(ti);
-            if (!use_airy_cache)
-                raw_dist_m.push_back(dist_m);
-
-            // Monteath ASF for this path at F1 (P4-01).
-            // The VL absolute accuracy computation uses F1 ASF only; F2 paths
-            // have similar ASF (same conductivity, marginally different |η|),
-            // so the error from this simplification is small compared with other
-            // approximations in the model.  computeAtPoint() computes ASF at
-            // both F1 and F2 separately for the single-point virtual receiver.
-            // nsamples=20 is adequate for grid computation (±2% error vs 50).
-            double asf_ml = monteath_asf_ml(
-                scenario.frequencies.f1_hz,
-                tx.lat, tx.lon,
-                pts[i].lat, pts[i].lon,
-                *terrain_map, *cond_map,
-                20);
-            asf_m_vals.push_back(asf_ml * lane_m_f1 / 1000.0);  // ml → m
-        }
-
-        // Mean ASF (millilanes) across usable stations for the ASF layer
-        double asf_sum = 0.0;
-        int asf_count  = 0;
-        for (size_t k = 0; k < stations.size(); ++k) {
-            if (stations[k].usable) {
-                asf_sum += asf_m_vals[k] * 1000.0 / lane_m_f1;  // m → ml
-                ++asf_count;
-            }
-        }
-        double asf_mean_ml = (asf_count > 0) ? asf_sum / asf_count : 0.0;
-
-        if (it_asf != data.layers.end())
-            it_asf->second.values[i] = asf_mean_ml;
-        asf_grid[i] = asf_mean_ml;
-
-        // Build per-station Airy distance vector for VL fix.
-        // When the bulk cache is active, extract from it; otherwise the
-        // distances were already computed above and stored in StationGeometry,
-        // so recompute from dist_km (which came from the on-the-fly call).
-        std::vector<double> station_dist_cache(stations.size());
-        if (use_airy_cache) {
-            for (size_t k = 0; k < stations.size(); ++k)
-                station_dist_cache[k] = airy_dist_cache[tx_idx_map[k] * n + i];
-        } else {
-            for (size_t k = 0; k < stations.size(); ++k)
-                station_dist_cache[k] = raw_dist_m[k];
-        }
-
-        // Absolute accuracy from iterated WLS VL (P4-02)
-        std::vector<int> selected;
-        {
-            double whdop_local = compute_whdop(stations,
-                                               scenario.receiver.min_stations,
-                                               scenario.receiver.max_range_km,
-                                               selected);
-            double err = std::isnan(whdop_local)
-                       ? std::numeric_limits<double>::quiet_NaN()
-                       : virtual_locator_error_m(pts[i].lat, pts[i].lon,
-                                                 asf_m_vals, stations, selected,
-                                                 station_dist_cache);
-            if (it_abs != data.layers.end())
-                it_abs->second.values[i] = err;
-        }
-
-        // Corrected absolute accuracy (P5-14): apply pattern offsets from
-        // scenario.pattern_offsets (or monitor calibration) to the pseudoranges.
-        // corrected_asf_m[k] = asf_m[k] - po_correction_for_station_k
-        // The po correction is the f1plus_ml value for pattern "{slave_slot},{master_slot}".
-        // Master stations have no correction (they define the reference).
-        if ((it_corr != data.layers.end() || it_delt != data.layers.end())
-            && !selected.empty())
-        {
-            std::vector<double> corrected_asf(asf_m_vals);
+            // Mean ASF (millilanes)
+            double asf_sum = 0.0;
+            int asf_count  = 0;
             for (size_t k = 0; k < stations.size(); ++k) {
-                const auto& tx = flat_txs[tx_idx_map[k]];
-                if (!tx.is_master && tx.master_slot > 0) {
-                    std::string pat = std::to_string(tx.slot) + ","
-                                    + std::to_string(tx.master_slot);
-                    auto pit = po_lookup.find(pat);
-                    if (pit != po_lookup.end()) {
-                        // Convert ml → metres; subtract from measured ASF
-                        double corr_m = pit->second->f1plus_ml * lane_m_f1 / 1000.0;
-                        corrected_asf[k] -= corr_m;
-                    }
+                if (stations[k].usable) {
+                    asf_sum += asf_m_vals[k] * 1000.0 / lane_m_f1;
+                    ++asf_count;
                 }
             }
-            double corr_err = virtual_locator_error_m(pts[i].lat, pts[i].lon,
-                                                       corrected_asf, stations, selected,
-                                                       station_dist_cache);
-            if (it_corr != data.layers.end())
-                it_corr->second.values[i] = corr_err;
+            double asf_mean_ml = (asf_count > 0) ? asf_sum / asf_count : 0.0;
 
-            // Delta = absolute_accuracy - absolute_accuracy_corrected
-            // Positive delta means corrections improved the fix.
-            if (it_delt != data.layers.end() && it_abs != data.layers.end()) {
-                double uncorr = it_abs->second.values[i];
-                it_delt->second.values[i] = (std::isnan(uncorr) || std::isnan(corr_err))
-                                           ? std::numeric_limits<double>::quiet_NaN()
-                                           : uncorr - corr_err;
-            }
-        }
+            if (asf_vals)
+                asf_vals[i] = asf_mean_ml;
+            asf_grid[i] = asf_mean_ml;
 
-        if (progress_fn) {
-            int pct = (int)((i + 1) * 100 / n);
-            if (pct != last_pct) {
-                progress_fn(pct);
-                last_pct = pct;
+            // Build per-station Airy distance vector for VL fix
+            std::vector<double> station_dist_vec(stations.size());
+            if (use_airy_cache) {
+                for (size_t k = 0; k < stations.size(); ++k)
+                    station_dist_vec[k] = airy_dist_cache[tx_idx_map[k] * n + i];
+            } else {
+                for (size_t k = 0; k < stations.size(); ++k)
+                    station_dist_vec[k] = raw_dist_m[k];
             }
+
+            // Absolute accuracy from iterated WLS VL (P4-02)
+            std::vector<int> selected;
+            {
+                double whdop_local = compute_whdop(stations,
+                                                   scenario.receiver.min_stations,
+                                                   scenario.receiver.max_range_km,
+                                                   selected);
+                double err = std::isnan(whdop_local)
+                           ? std::numeric_limits<double>::quiet_NaN()
+                           : virtual_locator_error_m(pts[i].lat, pts[i].lon,
+                                                     asf_m_vals, stations, selected,
+                                                     station_dist_vec);
+                if (abs_vals)
+                    abs_vals[i] = err;
+            }
+
+            // Corrected absolute accuracy (P5-14)
+            if ((corr_vals || delt_vals) && !selected.empty()) {
+                std::vector<double> corrected_asf(asf_m_vals);
+                for (size_t k = 0; k < stations.size(); ++k) {
+                    const auto& tx = flat_txs[tx_idx_map[k]];
+                    if (!tx.is_master && tx.master_slot > 0) {
+                        std::string pat = std::to_string(tx.slot) + ","
+                                        + std::to_string(tx.master_slot);
+                        auto pit = po_lookup.find(pat);
+                        if (pit != po_lookup.end()) {
+                            double corr_m = pit->second->f1plus_ml * lane_m_f1 / 1000.0;
+                            corrected_asf[k] -= corr_m;
+                        }
+                    }
+                }
+                double corr_err = virtual_locator_error_m(pts[i].lat, pts[i].lon,
+                                                           corrected_asf, stations, selected,
+                                                           station_dist_vec);
+                if (corr_vals)
+                    corr_vals[i] = corr_err;
+
+                if (delt_vals && abs_vals) {
+                    double uncorr = abs_vals[i];
+                    delt_vals[i] = (std::isnan(uncorr) || std::isnan(corr_err))
+                                   ? std::numeric_limits<double>::quiet_NaN()
+                                   : uncorr - corr_err;
+                }
+            }
+
+            asf_done.fetch_add(1, std::memory_order_relaxed);
         }
-    }
+    });
+
+    if (cancel.load()) return;
+
+    // Report final progress
+    if (progress_fn)
+        progress_fn(100);
 
     if (cancel.load()) return;
 
