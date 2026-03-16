@@ -299,10 +299,12 @@ TEST_CASE("precompute_airy_cache not written when true (default)", "[toml_io]") 
     auto path = std::filesystem::temp_directory_path() / "bp2_airy_true.toml";
     toml_io::save(s, path);
     // The key should not appear in the file when it's the default value
-    std::ifstream f(path);
-    std::string content((std::istreambuf_iterator<char>(f)),
-                         std::istreambuf_iterator<char>());
-    REQUIRE(content.find("precompute_airy_cache") == std::string::npos);
+    {
+        std::ifstream f(path);
+        std::string content((std::istreambuf_iterator<char>(f)),
+                             std::istreambuf_iterator<char>());
+        REQUIRE(content.find("precompute_airy_cache") == std::string::npos);
+    }
     // But loading it back should still give true
     auto s2 = toml_io::load(path);
     REQUIRE(s2.precompute_airy_cache == true);
