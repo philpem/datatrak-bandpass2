@@ -2,6 +2,8 @@
 #include "groundwave.h"
 #include "grwave.h"
 #include <cmath>
+#include <chrono>
+#include <cstdio>
 #include "skywave.h"
 #include "noise.h"
 #include "snr.h"
@@ -92,6 +94,21 @@ void ComputeManager::WorkerLoop() {
 
 ComputeResult ComputeManager::RunPipeline(const Scenario& scenario,
                                            const std::atomic<bool>& cancel) {
+    using Clock = std::chrono::steady_clock;
+    auto pipeline_start = Clock::now();
+
+    struct StageTiming {
+        const char* name;
+        double      ms;
+    };
+    std::vector<StageTiming> timings;
+    timings.reserve(8);
+
+    auto lap = [&](const char* name, Clock::time_point t0) {
+        double ms = std::chrono::duration<double, std::milli>(Clock::now() - t0).count();
+        timings.push_back({name, ms});
+    };
+
     ComputeResult result;
 
     // Validate frequencies
@@ -130,6 +147,7 @@ ComputeResult ComputeManager::RunPipeline(const Scenario& scenario,
     if (cancel.load()) return result;
 
     // Stage 0 – grid build
+    auto t0 = Clock::now();
     PostProgress("Building grid", 0);
     auto grid = buildGrid(scenario.grid, cancel);
     if (cancel.load() || grid.points.empty()) return result;
@@ -157,6 +175,7 @@ ComputeResult ComputeManager::RunPipeline(const Scenario& scenario,
         arr.resolution_km = scenario.grid.resolution_km;
         data->layers[name] = std::move(arr);
     }
+    lap("Grid build", t0);
 
     // Stage 1 – Groundwave (ITU P.368)
     // GRWAVE residue series is ~100x slower per grid point than the polynomial,
@@ -170,6 +189,7 @@ ComputeResult ComputeManager::RunPipeline(const Scenario& scenario,
     std::unique_ptr<GrwaveLUT> grwave_lut_f1, grwave_lut_f2;
     std::unique_ptr<GrwaveLUT::Scope> grwave_scope_f1, grwave_scope_f2;
     if (is_grwave) {
+        t0 = Clock::now();
         bool two_freqs = (scenario.frequencies.f1_hz != scenario.frequencies.f2_hz);
         PostProgress("Building GRWAVE LUT (F1)", 5);
         auto f1_progress = [this, two_freqs](int pct) {
@@ -188,6 +208,7 @@ ComputeResult ComputeManager::RunPipeline(const Scenario& scenario,
             grwave_scope_f2 = std::make_unique<GrwaveLUT::Scope>(*grwave_lut_f2);
         }
         if (cancel.load()) return result;
+        lap("GRWAVE LUT", t0);
     }
 
     const char* gw_label =
@@ -196,50 +217,73 @@ ComputeResult ComputeManager::RunPipeline(const Scenario& scenario,
                                                                                    "Groundwave (Millington)";
     const int gw_start = is_grwave ? 15 : 5;
     const int gw_end   = is_grwave ? 60 : 20;
+    t0 = Clock::now();
     PostProgress(gw_label, gw_start);
     computeGroundwave(*data, scenario, cancel, [this, gw_label, gw_start, gw_end](int pct) {
         PostProgress(gw_label, gw_start + pct * (gw_end - gw_start) / 100);
     });
     if (cancel.load()) return result;
     PostProgress(gw_label, gw_end);
+    lap("Groundwave", t0);
 
     // Stage 2 – Skywave (ITU P.684)
     const int sky_end = is_grwave ? 65 : 35;
+    t0 = Clock::now();
     PostProgress("Skywave (P.684)", gw_end);
     computeSkywave(*data, scenario, cancel);
     if (cancel.load()) return result;
     PostProgress("Skywave (P.684)", sky_end);
+    lap("Skywave", t0);
 
     // Stage 3 – Atmospheric noise (ITU P.372)
     const int noise_end = is_grwave ? 70 : 45;
+    t0 = Clock::now();
     PostProgress("Noise (P.372)", sky_end);
     computeAtmNoise(*data, scenario, cancel);
     if (cancel.load()) return result;
     PostProgress("Noise (P.372)", noise_end);
+    lap("Noise", t0);
 
     // Stages 4–6 – SNR / GDR / SGR
     const int snr_end = is_grwave ? 75 : 60;
+    t0 = Clock::now();
     PostProgress("SNR / GDR", noise_end);
     computeSNR(*data, scenario, cancel);
     if (cancel.load()) return result;
     PostProgress("SNR / GDR", snr_end);
+    lap("SNR/GDR", t0);
 
     // Stages 7–9 – WHDOP and repeatable accuracy
     const int whdop_end = is_grwave ? 80 : 75;
+    t0 = Clock::now();
     PostProgress("WHDOP / repeatable", snr_end);
     computeWHDOP(*data, scenario, cancel);
     if (cancel.load()) return result;
     PostProgress("WHDOP / repeatable", whdop_end);
+    lap("WHDOP", t0);
 
     // Stages 10–11 – ASF, absolute accuracy, confidence
+    t0 = Clock::now();
     PostProgress("ASF / accuracy", whdop_end);
     computeASF(*data, scenario, cancel, [this, whdop_end](int pct) {
         PostProgress("ASF / accuracy", whdop_end + pct * (95 - whdop_end) / 100);
     });
     if (cancel.load()) return result;
     PostProgress("ASF / accuracy", 95);
+    lap("ASF/accuracy", t0);
 
     result.data = std::move(data);
+
+    // Print timing summary to stderr
+    double total_ms = std::chrono::duration<double, std::milli>(
+        Clock::now() - pipeline_start).count();
+    std::fprintf(stderr, "\n=== Pipeline timing (%zu grid points) ===\n",
+                 grid.points.size());
+    for (const auto& st : timings)
+        std::fprintf(stderr, "  %-20s %8.1f ms\n", st.name, st.ms);
+    std::fprintf(stderr, "  %-20s %8.1f ms\n", "TOTAL", total_ms);
+    std::fprintf(stderr, "=========================================\n");
+
     PostProgress("Done", 100);
     return result;
 }
