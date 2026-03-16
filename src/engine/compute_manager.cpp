@@ -213,10 +213,16 @@ ComputeResult ComputeManager::RunPipeline(const Scenario& scenario,
     }
     if (cancel.load()) return result;
     lap("Distance cache", t0);
+    PostProgress("Distance cache", 5);
 
     // Stage 1 – Groundwave (ITU P.368)
-    // GRWAVE residue series is ~100x slower per grid point than the polynomial,
-    // so give it a much larger share of the progress bar to avoid appearing stuck.
+    // Progress budget (non-GRWAVE / GRWAVE):
+    //   groundwave  5→50  / 15→65   (dominant stage — gets the largest slice)
+    //   skywave    50→55  / 65→68   (fast)
+    //   noise      55→60  / 68→71   (fast)
+    //   SNR/GDR    60→65  / 71→75   (fast)
+    //   WHDOP      65→70  / 75→78   (fast)
+    //   ASF        70→95  / 78→95   (second-heaviest stage)
     const bool is_grwave = scenario.propagation_model == Scenario::PropagationModel::GRWAVE;
 
     // Build GRWAVE lookup tables if using the GRWAVE propagation model.
@@ -252,8 +258,8 @@ ComputeResult ComputeManager::RunPipeline(const Scenario& scenario,
         is_grwave                                                                ? "Groundwave (GRWAVE)" :
         scenario.propagation_model == Scenario::PropagationModel::Homogeneous    ? "Groundwave (Homogeneous)" :
                                                                                    "Groundwave (Millington)";
-    const int gw_start = is_grwave ? 15 : 5;
-    const int gw_end   = is_grwave ? 60 : 20;
+    const int gw_start  = is_grwave ? 15 : 5;
+    const int gw_end    = is_grwave ? 65 : 50;
     t0 = Clock::now();
     PostProgress(gw_label, gw_start);
     computeGroundwave(*data, scenario, cancel, [this, gw_label, gw_start, gw_end](int pct) {
@@ -264,7 +270,7 @@ ComputeResult ComputeManager::RunPipeline(const Scenario& scenario,
     lap("Groundwave", t0);
 
     // Stage 2 – Skywave (ITU P.684)
-    const int sky_end = is_grwave ? 65 : 35;
+    const int sky_end = is_grwave ? 68 : 55;
     t0 = Clock::now();
     PostProgress("Skywave (P.684)", gw_end);
     computeSkywave(*data, scenario, cancel);
@@ -273,7 +279,7 @@ ComputeResult ComputeManager::RunPipeline(const Scenario& scenario,
     lap("Skywave", t0);
 
     // Stage 3 – Atmospheric noise (ITU P.372)
-    const int noise_end = is_grwave ? 70 : 45;
+    const int noise_end = is_grwave ? 71 : 60;
     t0 = Clock::now();
     PostProgress("Noise (P.372)", sky_end);
     computeAtmNoise(*data, scenario, cancel);
@@ -282,7 +288,7 @@ ComputeResult ComputeManager::RunPipeline(const Scenario& scenario,
     lap("Noise", t0);
 
     // Stages 4–6 – SNR / GDR / SGR
-    const int snr_end = is_grwave ? 75 : 60;
+    const int snr_end = is_grwave ? 75 : 65;
     t0 = Clock::now();
     PostProgress("SNR / GDR", noise_end);
     computeSNR(*data, scenario, cancel);
@@ -291,7 +297,7 @@ ComputeResult ComputeManager::RunPipeline(const Scenario& scenario,
     lap("SNR/GDR", t0);
 
     // Stages 7–9 – WHDOP and repeatable accuracy
-    const int whdop_end = is_grwave ? 80 : 75;
+    const int whdop_end = is_grwave ? 78 : 70;
     t0 = Clock::now();
     PostProgress("WHDOP / repeatable", snr_end);
     computeWHDOP(*data, scenario, cancel);
