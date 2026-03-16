@@ -59,6 +59,15 @@ double homogeneous_field_dbuvm(double freq_hz,
                                 const ConductivityMap& cond,
                                 double power_w);
 
+// Overload accepting a pre-computed WGS84 distance (km), avoiding the
+// GeographicLib Inverse() call.
+double homogeneous_field_dbuvm(double freq_hz,
+                                double lat_tx, double lon_tx,
+                                double lat_rx, double lon_rx,
+                                const ConductivityMap& cond,
+                                double power_w,
+                                double precomputed_dist_km);
+
 // Per-segment field strength function type.
 // Signature matches groundwave_field_dbuvm(): (freq_hz, dist_km, gc, power_w) -> dBµV/m.
 using SegmentFieldFn = double(*)(double, double, const GroundConstants&, double);

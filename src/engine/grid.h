@@ -59,6 +59,14 @@ struct GridArray {
 
 struct GridData {
     std::map<std::string, GridArray> layers;
+
+    // Cached WGS84 geodesic distances (km) per transmitter slot.
+    // Key = slot number, value = vector of distances (one per grid point).
+    // Computed once in the distance-cache pipeline stage and reused by
+    // skywave, groundwave (homogeneous), and any other stage that needs
+    // TX-to-grid-point distances.
+    std::map<int, std::vector<double>> wgs84_dist_km;
+
     uint64_t request_id = 0;
 };
 

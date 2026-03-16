@@ -1,6 +1,7 @@
 #include "compute_manager.h"
 #include "groundwave.h"
 #include "grwave.h"
+#include "parallel.h"
 #include <cmath>
 #include <chrono>
 #include <cstdio>
@@ -9,6 +10,7 @@
 #include "snr.h"
 #include "whdop.h"
 #include "asf.h"
+#include <GeographicLib/Geodesic.hpp>
 #include <wx/app.h>
 
 namespace bp {
@@ -176,6 +178,34 @@ ComputeResult ComputeManager::RunPipeline(const Scenario& scenario,
         data->layers[name] = std::move(arr);
     }
     lap("Grid build", t0);
+
+    // Stage 0.5 – Precompute WGS84 TX-to-grid-point distances
+    // These distances are reused by skywave, groundwave (homogeneous), and
+    // potentially other stages, avoiding redundant GeographicLib Inverse() calls.
+    t0 = Clock::now();
+    {
+        const GeographicLib::Geodesic& geod = GeographicLib::Geodesic::WGS84();
+        const auto flat_txs = scenario.flatTransmitters();
+        size_t n = grid.points.size();
+        const auto& pts = grid.points;
+
+        for (const auto& tx : flat_txs) {
+            if (cancel.load()) return result;
+            if (tx.power_w <= 0.0) continue;
+
+            std::vector<double> dists(n);
+            parallel_for(n, cancel, [&](size_t begin, size_t end) {
+                for (size_t i = begin; i < end; ++i) {
+                    double dist_m = 0.0;
+                    geod.Inverse(tx.lat, tx.lon, pts[i].lat, pts[i].lon, dist_m);
+                    dists[i] = dist_m / 1000.0;
+                }
+            });
+            data->wgs84_dist_km[tx.slot] = std::move(dists);
+        }
+    }
+    if (cancel.load()) return result;
+    lap("Distance cache", t0);
 
     // Stage 1 – Groundwave (ITU P.368)
     // GRWAVE residue series is ~100x slower per grid point than the polynomial,
