@@ -38,6 +38,7 @@ enum {
     ID_TOOL_PLACE_TX,
     ID_TOOL_PLACE_RX,
     ID_TOOL_COMPUTE,
+    ID_TOOL_ONESHOT,
     ID_EDIT_DELETE_TX,
     ID_EXPORT_ALMANAC_V7,
     ID_EXPORT_ALMANAC_V16,
@@ -288,14 +289,18 @@ void MainFrame::BuildToolbar() {
                 wxBitmapBundle::FromSVG(rx_car_svg, wxSize(28, 17)),
                 "Click map to place the receiver", wxITEM_CHECK);
     tb->AddSeparator();
+    tb->AddTool(ID_TOOL_ONESHOT, "Compute",
+                wxArtProvider::GetBitmap(wxART_GO_FORWARD, wxART_TOOLBAR),
+                "Run one computation now; turns off Auto-compute");
     tb->AddTool(ID_TOOL_COMPUTE, "Auto-compute",
                 wxArtProvider::GetBitmap(wxART_EXECUTABLE_FILE, wxART_TOOLBAR),
-                "Enable/disable automatic recomputation", wxITEM_CHECK);
+                "Enable/disable automatic recomputation on parameter changes", wxITEM_CHECK);
     tb->ToggleTool(ID_TOOL_COMPUTE, true);
     tb->Realize();
     Bind(wxEVT_TOOL, &MainFrame::OnToolPlaceTx,  this, ID_TOOL_PLACE_TX);
     Bind(wxEVT_TOOL, &MainFrame::OnToolPlaceRx,  this, ID_TOOL_PLACE_RX);
     Bind(wxEVT_TOOL, &MainFrame::OnToolCompute,  this, ID_TOOL_COMPUTE);
+    Bind(wxEVT_TOOL, &MainFrame::OnToolOneShot,  this, ID_TOOL_ONESHOT);
 }
 
 void MainFrame::BuildStatusBar() {
@@ -345,7 +350,7 @@ void MainFrame::OnComputeResult(wxCommandEvent& evt) {
     if (owned->data) {
         ApplyComputeResult(*owned);
     }
-    SetStatusText("Ready", SB_STATUS);
+    SetStatusText(wxString::Format("Done (%.0f ms)", owned->duration_ms), SB_STATUS);
 }
 
 void MainFrame::OnComputeProgress(wxCommandEvent& evt) {
@@ -525,6 +530,16 @@ void MainFrame::OnToolCompute(wxCommandEvent& evt) {
         }
         SetStatusText("Computation disabled", SB_STATUS);
     }
+}
+
+void MainFrame::OnToolOneShot(wxCommandEvent& /*evt*/) {
+    // Disable auto-compute and fire one computation unconditionally
+    compute_enabled_ = false;
+    GetToolBar()->ToggleTool(ID_TOOL_COMPUTE, false);
+    if (!compute_mgr_) return;
+    net_config_->FlushPending();
+    compute_mgr_->PostRequest(std::make_shared<const Scenario>(scenario_));
+    SetStatusText("Computing...", SB_STATUS);
 }
 
 void MainFrame::OnTransmitterSelected(int id) {

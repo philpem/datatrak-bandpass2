@@ -30,7 +30,7 @@ ParamEditor::ParamEditor(wxWindow* parent)
     BuildTransmitterPage(tx_page);
     tx_page->SetScrollRate(0, 10);
     tx_page->FitInside();
-    notebook_->AddPage(tx_page, "Transmitter");
+    notebook_->AddPage(tx_page, "Transmitters");
 
     // Receiver page
     auto* rx_page = new wxScrolledWindow(notebook_);

@@ -34,6 +34,7 @@ private:
     void OnToolPlaceTx(wxCommandEvent& evt);
     void OnToolPlaceRx(wxCommandEvent& evt);
     void OnToolCompute(wxCommandEvent& evt);
+    void OnToolOneShot(wxCommandEvent& evt);
     void OnHelpAbout(wxCommandEvent& evt);
     void OnClose(wxCloseEvent& evt);
 

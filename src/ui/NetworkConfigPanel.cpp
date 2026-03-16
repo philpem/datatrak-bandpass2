@@ -168,12 +168,16 @@ NetworkConfigPanel::NetworkConfigPanel(wxWindow* parent)
         models.Add("Homogeneous (fast)"); models.Add("Millington mixed-path"); models.Add("GRWAVE (accurate)");
         prop_model_ = new wxChoice(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, models);
         prop_model_->SetSelection(1);  // Millington default
+        prop_model_->SetMinSize(wxSize(1, -1));
         prop_model_->Bind(wxEVT_CHOICE, &NetworkConfigPanel::OnOtherChanged, this);
         gs->Add(prop_model_, 1, wxEXPAND | wxBOTTOM, 2);
 
         gs->Add(new wxStaticText(this, wxID_ANY, ""), 0);
         airy_cache_cb_ = new wxCheckBox(this, wxID_ANY,
-                                         "Pre-compute Airy distance cache (faster, more memory)");
+                                         "Pre-compute Airy distance cache");
+        airy_cache_cb_->SetToolTip("Pre-computes all Airy ellipsoid distances before the "
+                                    "pipeline runs. Speeds up WHDOP and ASF stages "
+                                    "significantly at the cost of extra memory.");
         airy_cache_cb_->SetValue(true);
         airy_cache_cb_->Bind(wxEVT_CHECKBOX, &NetworkConfigPanel::OnOtherChanged, this);
         gs->Add(airy_cache_cb_, 1, wxEXPAND | wxBOTTOM, 2);
@@ -242,6 +246,7 @@ NetworkConfigPanel::NetworkConfigPanel(wxWindow* parent)
         gs->Add(new wxStaticText(this, wxID_ANY, "Source"),
                 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
         terrain_src_ = new wxChoice(this, wxID_ANY);
+        terrain_src_->SetMinSize(wxSize(1, -1));
         terrain_src_->Bind(wxEVT_CHOICE, &NetworkConfigPanel::OnTerrainSrcChanged, this);
         gs->Add(terrain_src_, 1, wxEXPAND | wxBOTTOM, 2);
 
@@ -265,6 +270,7 @@ NetworkConfigPanel::NetworkConfigPanel(wxWindow* parent)
         gs->Add(new wxStaticText(this, wxID_ANY, "Source"),
                 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
         cond_src_ = new wxChoice(this, wxID_ANY);
+        cond_src_->SetMinSize(wxSize(1, -1));
         cond_src_->Bind(wxEVT_CHOICE, &NetworkConfigPanel::OnCondSrcChanged, this);
         gs->Add(cond_src_, 1, wxEXPAND | wxBOTTOM, 2);
 
@@ -274,9 +280,11 @@ NetworkConfigPanel::NetworkConfigPanel(wxWindow* parent)
         {
             auto* row = new wxBoxSizer(wxHORIZONTAL);
             cond_file_ = new wxTextCtrl(this, wxID_ANY);
+            cond_file_->SetMinSize(wxSize(1, -1));
             cond_file_->Bind(wxEVT_TEXT, &NetworkConfigPanel::OnFilePath, this);
             cond_browse_ = new wxButton(this, wxID_ANY, "Browse...",
                                          wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
+            cond_browse_->SetMinSize(wxSize(1, -1));
             cond_browse_->Bind(wxEVT_BUTTON, &NetworkConfigPanel::OnCondBrowse, this);
             row->Add(cond_file_,   1, wxEXPAND | wxRIGHT, 4);
             row->Add(cond_browse_, 0, wxALIGN_CENTER_VERTICAL);
