@@ -98,6 +98,7 @@ MainFrame::MainFrame()
     net_config_->on_changed = [this](const Scenario&){
         param_editor_->SetFrequency(scenario_.frequencies.f1_hz);
         param_editor_->SetVelocity(scenario_.receiver.vp_ms);
+        UpdateStatusBarMl();
         SyncGridBounds();
         MarkDirty();
         TriggerRecompute();
@@ -506,7 +507,13 @@ void MainFrame::OnToolPlaceRx(wxCommandEvent& evt) {
 void MainFrame::OnToolCompute(wxCommandEvent& evt) {
     compute_enabled_ = evt.IsChecked();
     if (compute_enabled_) {
+        // Flush and save any pending NetworkConfigPanel changes so the
+        // recompute uses the latest UI state (frequency, grid bounds, etc.).
+        // FlushPending() now always saves regardless of debounce state.
         net_config_->FlushPending();
+        param_editor_->SetFrequency(scenario_.frequencies.f1_hz);
+        UpdateStatusBarMl();
+        SyncGridBounds();
         TriggerRecompute();
     } else {
         // Clear all map layers when computation is disabled

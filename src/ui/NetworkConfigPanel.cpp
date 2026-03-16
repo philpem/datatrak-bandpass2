@@ -604,25 +604,35 @@ void NetworkConfigPanel::OnOtherChanged(wxCommandEvent& /*evt*/) {
 }
 
 void NetworkConfigPanel::FlushPending() {
-    if (!debounce_.IsRunning()) return;
-    debounce_.Stop();
-    SaveToScenario();
+    if (debounce_.IsRunning()) debounce_.Stop();
+    // Always save regardless of whether the debounce was running, so that
+    // callers (e.g. OnToolCompute re-enabling auto-compute) always get the
+    // latest UI state even if the debounce already fired or was suppressed
+    // by an IsResValid() check.
+    if (scenario_) SaveToScenario();
 }
 
 void NetworkConfigPanel::OnFieldKillFocus(wxFocusEvent& evt) {
     evt.Skip();
     if (!debounce_.IsRunning()) return;
     debounce_.Stop();
-    if (!scenario_ || !on_changed) return;
-    if (!IsResValid()) return;
+    if (!scenario_) return;
+    // Always save so scenario_ reflects the latest UI state, even if the
+    // grid is currently too large to compute.  This ensures a manual
+    // re-enable of auto-compute (FlushPending) picks up all pending changes.
     SaveToScenario();
+    if (!on_changed || !IsResValid()) return;
     on_changed(*scenario_);
 }
 
 void NetworkConfigPanel::OnDebounceTimer(wxTimerEvent& /*evt*/) {
-    if (!scenario_ || !on_changed) return;
-    if (!IsResValid()) return;
+    if (!scenario_) return;
+    // Always save so scenario_ is kept in sync with the UI, even when the
+    // grid resolution is temporarily invalid (too many points).  Changes
+    // such as frequency or propagation-model edits must not be silently
+    // discarded just because the grid is oversized.
     SaveToScenario();
+    if (!on_changed || !IsResValid()) return;
     on_changed(*scenario_);
 }
 
