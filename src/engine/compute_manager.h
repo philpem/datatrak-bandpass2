@@ -20,9 +20,10 @@ struct ComputeRequest {
 };
 
 struct ComputeResult {
-    uint64_t                        request_id = 0;
+    uint64_t                        request_id  = 0;
     std::shared_ptr<const GridData> data;
-    std::string                     error;   // empty on success
+    std::string                     error;        // empty on success
+    double                          duration_ms = 0.0;
 };
 
 // Custom wxEvents for worker → UI communication

@@ -314,6 +314,7 @@ ComputeResult ComputeManager::RunPipeline(const Scenario& scenario,
     // Print timing summary to stderr
     double total_ms = std::chrono::duration<double, std::milli>(
         Clock::now() - pipeline_start).count();
+    result.duration_ms = total_ms;
     std::fprintf(stderr, "\n=== Pipeline timing (%zu grid points) ===\n",
                  grid.points.size());
     for (const auto& st : timings)
